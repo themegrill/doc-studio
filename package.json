@@ -1,0 +1,18 @@
+{
+  "name": "docs-builder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered documentation builder",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/themegrill/docs-builder.git"
+  },
+  "author": "ThemeGrill",
+  "license": "MIT",
+  "scripts": {
+    "dev": "cd packages/web && pnpm dev",
+    "build": "cd packages/web && pnpm build",
+    "start": "cd packages/web && pnpm start",
+    "lint": "cd packages/web && pnpm lint"
+  }
+}
