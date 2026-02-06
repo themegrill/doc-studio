@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
       const section = slugParts.length > 1
         ? slugParts[0]
             .split("-")
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
             .join(" ")
         : undefined;
 

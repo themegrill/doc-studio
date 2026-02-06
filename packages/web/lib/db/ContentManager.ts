@@ -113,6 +113,64 @@ export class ContentManager {
             updated_by = ${userId}
           WHERE project_id = ${projectId} AND slug = ${slug}
         `;
+
+        // Update title in navigation structure if it exists there
+        const [nav] = await this.sql`
+          SELECT id, structure FROM navigation
+          WHERE project_id = ${projectId}
+          ORDER BY updated_at DESC
+          LIMIT 1
+        `;
+
+        if (nav && nav.structure) {
+          const structure = nav.structure as Navigation;
+          const docPath = `/docs/${slug}`;
+          let titleUpdated = false;
+
+          // Ensure routes array exists
+          if (!structure.routes) {
+            structure.routes = [];
+          }
+
+          // Check if this is a section overview (slug has no "/" - it's a top-level section)
+          const isSectionOverview = !slug.includes("/");
+
+          if (isSectionOverview) {
+            // Update section title in navigation
+            const sectionIndex = structure.routes.findIndex(
+              (route) => route.path === docPath
+            );
+            if (sectionIndex !== -1) {
+              structure.routes[sectionIndex].title = title;
+              titleUpdated = true;
+            }
+          } else {
+            // Update document title in navigation (inside a section)
+            structure.routes = structure.routes.map((route) => {
+              if (route.children) {
+                const childIndex = route.children.findIndex(
+                  (child) => child.path === docPath
+                );
+                if (childIndex !== -1) {
+                  route.children[childIndex].title = title;
+                  titleUpdated = true;
+                }
+              }
+              return route;
+            });
+          }
+
+          // Only update navigation if title was found and updated
+          if (titleUpdated) {
+            await this.sql`
+              UPDATE navigation
+              SET
+                structure = ${this.sql.json(structure as any)},
+                updated_by = ${userId}
+              WHERE id = ${nav.id}
+            `;
+          }
+        }
       } else {
         // Insert new document
         await this.sql`

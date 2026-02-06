@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Save, Eye, Loader2 } from "lucide-react";
+import { Pencil, Save, Eye, Loader2, Sparkles } from "lucide-react";
 import { useSession } from "next-auth/react";
 import DeleteSectionButton from "@/components/docs/DeleteSectionButton";
+import ChatPanel from "@/components/chat/ChatPanel";
 
 interface SectionPageProps {
   projectSlug: string;
@@ -26,6 +27,29 @@ export default function SectionPage({
   const [title, setTitle] = useState(sectionTitle);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Initialize chat state from localStorage
+  const [chatOpen, setChatOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chatOpen');
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  // Save chat state to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chatOpen', String(chatOpen));
+    }
+  }, [chatOpen]);
+
+  // Document context for AI chat
+  const documentContext = {
+    title: sectionTitle,
+    description: `Section page for ${sectionTitle}`,
+    blocksPreview: "",
+  };
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -152,6 +176,26 @@ export default function SectionPage({
             )}
           </Button>
         </div>
+      )}
+
+      {/* AI Chat Assistant */}
+      {isAuthenticated && (
+        <>
+          {chatOpen ? (
+            <ChatPanel
+              documentContext={documentContext}
+              onClose={() => setChatOpen(false)}
+            />
+          ) : (
+            <Button
+              onClick={() => setChatOpen(true)}
+              className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-40 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all hover:scale-110"
+              title="Open AI Assistant"
+            >
+              <Sparkles className="h-6 w-6" />
+            </Button>
+          )}
+        </>
       )}
     </div>
   );

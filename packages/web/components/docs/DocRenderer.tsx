@@ -1,9 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { BlockNoteView } from "@blocknote/mantine";
-import { useCreateBlockNote } from "@blocknote/react";
+import {
+  useCreateBlockNote,
+  FormattingToolbarController,
+  FormattingToolbar,
+  SuggestionMenuController,
+  getDefaultReactSlashMenuItems,
+  getFormattingToolbarItems,
+} from "@blocknote/react";
+import { en as blockNoteLocale } from "@blocknote/core/locales";
+import "@blocknote/core/fonts/inter.css";
+import "@blocknote/mantine/style.css";
 import { DocContent } from "@/lib/db/ContentManager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,14 +25,21 @@ import {
   CheckCircle,
   AlertCircle,
   Link as LinkIcon,
+  Sparkles,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
-
-//@ts-expect-error Ignore missing types
-import "@blocknote/core/fonts/inter.css";
-//@ts-expect-error Ignore missing types
-import "@blocknote/mantine/style.css";
+import ChatPanel from "@/components/chat/ChatPanel";
+import {
+  AIExtension,
+  AIMenuController,
+  AIToolbarButton,
+  getAISlashMenuItems,
+} from "@blocknote/xl-ai";
+import { en as aiLocale } from "@blocknote/xl-ai/locales";
+import { DefaultChatTransport } from "ai";
+import "@blocknote/xl-ai/style.css";
+import { filterSuggestionItems } from "@blocknote/core/extensions";
 
 interface Props {
   doc: DocContent;
@@ -44,6 +61,29 @@ interface SaveState {
   error: string;
 }
 
+interface TitleAIState {
+  isGenerating: boolean;
+  error: string;
+}
+
+interface DescriptionAIState {
+  isGenerating: boolean;
+  error: string;
+}
+
+interface TextSelection {
+  field: "title" | "description";
+  text: string;
+  start: number;
+  end: number;
+  rect: DOMRect | null;
+}
+
+interface ImproveTextState {
+  isImproving: boolean;
+  error: string;
+}
+
 export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   const router = useRouter();
   const [editorState, setEditorState] = useState<EditorState>({
@@ -61,9 +101,65 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     error: "",
   });
 
+  const [titleAIState, setTitleAIState] = useState<TitleAIState>({
+    isGenerating: false,
+    error: "",
+  });
+
+  const [descriptionAIState, setDescriptionAIState] =
+    useState<DescriptionAIState>({
+      isGenerating: false,
+      error: "",
+    });
+
+  const [textSelection, setTextSelection] = useState<TextSelection | null>(
+    null,
+  );
+  const [improveTextState, setImproveTextState] = useState<ImproveTextState>({
+    isImproving: false,
+    error: "",
+  });
+
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
+
+  // Initialize chat state from localStorage
+  const [chatOpen, setChatOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chatOpen');
+      return saved === 'true';
+    }
+    return false;
+  });
+
+  // Save chat state to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chatOpen', String(chatOpen));
+    }
+  }, [chatOpen]);
+
+  // Hide selection menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      // Don't hide if clicking the improve button
+      const target = e.target as HTMLElement;
+      if (target.closest("[data-improve-button]")) {
+        return;
+      }
+      setTextSelection(null);
+    };
+
+    if (textSelection) {
+      // Use a small delay to allow the mouseup event to complete
+      setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+      }, 100);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [textSelection]);
 
   // Add anchor links to headings
   useEffect(() => {
@@ -119,6 +215,17 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
 
   const editor = useCreateBlockNote({
     initialContent: doc.blocks.length > 0 ? doc.blocks : undefined,
+    dictionary: {
+      ...blockNoteLocale,
+      ai: aiLocale, // AI dictionary should be nested under 'ai' key
+    },
+    extensions: [
+      AIExtension({
+        transport: new DefaultChatTransport({
+          api: "/api/ai/chat",
+        }),
+      }),
+    ],
     uploadFile: async (file: File) => {
       console.log("[DocRenderer] Uploading file:", file.name);
 
@@ -147,12 +254,242 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     },
   });
 
+  // Compute document context for AI chat
+  const documentContext = useMemo(
+    () => ({
+      title: editorState.title,
+      description: editorState.description || "",
+      blocksPreview: editor.document
+        .map((block: any) => {
+          if (block.content && Array.isArray(block.content)) {
+            return block.content
+              .map((c: any) => (typeof c === "string" ? c : c.text || ""))
+              .join("");
+          }
+          return "";
+        })
+        .filter((text: string) => text.trim().length > 0)
+        .join(" ")
+        .slice(0, 2000),
+    }),
+    [editorState.title, editorState.description, editor.document],
+  );
+
+  // Formatting toolbar with the `AIToolbarButton` added
+  function FormattingToolbarWithAI() {
+    return (
+      <FormattingToolbarController
+        formattingToolbar={() => (
+          <FormattingToolbar>
+            {getFormattingToolbarItems()}
+            {/* Add the AI button */}
+            <AIToolbarButton />
+          </FormattingToolbar>
+        )}
+      />
+    );
+  }
+  // Slash menu with the AI option added
+  function SuggestionMenuWithAI(props: {
+    editor: typeof editor;
+  }) {
+    return (
+      <SuggestionMenuController
+        triggerCharacter="/"
+        getItems={async (query) =>
+          filterSuggestionItems(
+            [
+              ...getDefaultReactSlashMenuItems(props.editor),
+              // add the default AI slash menu items, or define your own
+              ...getAISlashMenuItems(props.editor),
+            ],
+            query,
+          )
+        }
+      />
+    );
+  }
+
+  const handleGenerateTitle = async () => {
+    setTitleAIState({ isGenerating: true, error: "" });
+
+    try {
+      // Get document content as text
+      const blocks = editor.document;
+      const contentPreview = blocks
+        .map((block: any) => {
+          if (block.content && Array.isArray(block.content)) {
+            return block.content
+              .map((c: any) => (typeof c === "string" ? c : c.text || ""))
+              .join("");
+          }
+          return "";
+        })
+        .filter((text: string) => text.trim().length > 0)
+        .join(" ")
+        .slice(0, 1000); // Limit to first 1000 chars
+
+      // Call AI to generate title
+      const response = await fetch("/api/ai/generate-title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: contentPreview,
+          currentTitle: editorState.title,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate title");
+      }
+
+      const data = await response.json();
+      setEditorState((prev) => ({ ...prev, title: data.title }));
+      setTitleAIState({ isGenerating: false, error: "" });
+    } catch (error) {
+      console.error("Error generating title:", error);
+      setTitleAIState({
+        isGenerating: false,
+        error:
+          error instanceof Error ? error.message : "Failed to generate title",
+      });
+    }
+  };
+
+  const handleGenerateDescription = async () => {
+    setDescriptionAIState({ isGenerating: true, error: "" });
+
+    try {
+      // Get document content as text
+      const blocks = editor.document;
+      const contentPreview = blocks
+        .map((block: any) => {
+          if (block.content && Array.isArray(block.content)) {
+            return block.content
+              .map((c: any) => (typeof c === "string" ? c : c.text || ""))
+              .join("");
+          }
+          return "";
+        })
+        .filter((text: string) => text.trim().length > 0)
+        .join(" ")
+        .slice(0, 1000); // Limit to first 1000 chars
+
+      // Call AI to generate description
+      const response = await fetch("/api/ai/generate-description", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: contentPreview,
+          title: editorState.title,
+          currentDescription: editorState.description,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate description");
+      }
+
+      const data = await response.json();
+      setEditorState((prev) => ({ ...prev, description: data.description }));
+      setDescriptionAIState({ isGenerating: false, error: "" });
+    } catch (error) {
+      console.error("Error generating description:", error);
+      setDescriptionAIState({
+        isGenerating: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to generate description",
+      });
+    }
+  };
+
+  const handleTextSelect = (
+    field: "title" | "description",
+    event: React.SyntheticEvent<HTMLInputElement>,
+  ) => {
+    const input = event.currentTarget;
+    const start = input.selectionStart || 0;
+    const end = input.selectionEnd || 0;
+    const selectedText = input.value.substring(start, end);
+
+    if (selectedText.length > 0 && start !== end) {
+      const rect = input.getBoundingClientRect();
+
+      // Calculate approximate position of selection within input
+      // For better positioning, we position above the input
+      setTextSelection({
+        field,
+        text: selectedText,
+        start,
+        end,
+        rect,
+      });
+    } else {
+      setTextSelection(null);
+    }
+  };
+
+  const handleImproveText = async () => {
+    if (!textSelection) return;
+
+    setImproveTextState({ isImproving: true, error: "" });
+
+    try {
+      const response = await fetch("/api/ai/improve-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textSelection.text,
+          context: textSelection.field === "title" ? "title" : "description",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to improve text");
+      }
+
+      const data = await response.json();
+
+      // Replace selected text with improved version
+      const currentValue =
+        textSelection.field === "title"
+          ? editorState.title
+          : editorState.description;
+
+      const newValue =
+        currentValue.substring(0, textSelection.start) +
+        data.improvedText +
+        currentValue.substring(textSelection.end);
+
+      setEditorState((prev) => ({
+        ...prev,
+        [textSelection.field]: newValue,
+      }));
+
+      setTextSelection(null);
+      setImproveTextState({ isImproving: false, error: "" });
+    } catch (error) {
+      console.error("Error improving text:", error);
+      setImproveTextState({
+        isImproving: false,
+        error:
+          error instanceof Error ? error.message : "Failed to improve text",
+      });
+    }
+  };
+
   const handleSave = async () => {
     setSaveState({ isSaving: true, success: false, error: "" });
 
     try {
       // Save section title if editing a section overview
-      if (editorState.isEditingSectionTitle && isSectionOverview && projectSlug) {
+      if (
+        editorState.isEditingSectionTitle &&
+        isSectionOverview &&
+        projectSlug
+      ) {
         if (!editorState.sectionTitle?.trim()) {
           setSaveState({
             isSaving: false,
@@ -168,7 +505,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ title: editorState.sectionTitle }),
-          }
+          },
         );
 
         if (!sectionResponse.ok) {
@@ -222,13 +559,46 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       setSaveState({
         isSaving: false,
         success: false,
-        error: error instanceof Error ? error.message : "Save failed. Please try again.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Save failed. Please try again.",
       });
     }
   };
 
   return (
     <div className="max-w-[1000px] mx-auto">
+      {/* Text Selection Improve Button */}
+      {textSelection && textSelection.rect && (
+        <div
+          data-improve-button
+          className="fixed bg-white border border-gray-200 rounded-md shadow-xl px-3 py-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
+          style={{
+            left: `${textSelection.rect.left}px`,
+            top: `${textSelection.rect.top - 45}px`,
+          }}
+        >
+          <button
+            onClick={handleImproveText}
+            disabled={improveTextState.isImproving}
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {improveTextState.isImproving ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Improving...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} className="text-purple-500" />
+                <span>Improve writing</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Copy Link Notification */}
       {copiedHash && (
         <div className="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-50">
@@ -257,30 +627,80 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
             </div>
           ) : editorState.isEditing ? (
             <div className="space-y-3">
-              <Input
-                type="text"
-                value={editorState.title}
-                onChange={(e) =>
-                  setEditorState((prev) => ({
-                    ...prev,
-                    title: e.target.value,
-                  }))
-                }
-                className="text-3xl font-bold border-2 border-blue-200 focus:border-blue-400"
-                placeholder="Document title"
-              />
-              <Input
-                type="text"
-                value={editorState.description}
-                onChange={(e) =>
-                  setEditorState((prev) => ({
-                    ...prev,
-                    description: e.target.value,
-                  }))
-                }
-                className="text-gray-600 border-2 border-blue-200 focus:border-blue-400"
-                placeholder="Document description (optional)"
-              />
+              <div className="relative group">
+                <Input
+                  type="text"
+                  value={editorState.title}
+                  onChange={(e) =>
+                    setEditorState((prev) => ({
+                      ...prev,
+                      title: e.target.value,
+                    }))
+                  }
+                  onMouseUp={(e) => handleTextSelect("title", e)}
+                  onKeyUp={(e) => handleTextSelect("title", e as React.KeyboardEvent<HTMLInputElement>)}
+                  className="text-3xl font-bold border-2 border-blue-200 focus:border-blue-400 pr-12"
+                  placeholder="Document title"
+                />
+                <button
+                  onClick={handleGenerateTitle}
+                  disabled={titleAIState.isGenerating}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Write with AI"
+                  type="button"
+                >
+                  {titleAIState.isGenerating ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={16} className="text-purple-500" />
+                  )}
+                </button>
+                {/* Tooltip */}
+                <span className="absolute right-3 -top-8 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap ">
+                  Write with AI
+                </span>
+              </div>
+              {titleAIState.error && (
+                <p className="text-sm text-red-600">{titleAIState.error}</p>
+              )}
+              <div className="relative group">
+                <Input
+                  type="text"
+                  value={editorState.description}
+                  onChange={(e) =>
+                    setEditorState((prev) => ({
+                      ...prev,
+                      description: e.target.value,
+                    }))
+                  }
+                  onMouseUp={(e) => handleTextSelect("description", e)}
+                  onKeyUp={(e) => handleTextSelect("description", e as React.KeyboardEvent<HTMLInputElement>)}
+                  className="text-gray-600 border-2 border-blue-200 focus:border-blue-400 pr-12"
+                  placeholder="Document description (optional)"
+                />
+                <button
+                  onClick={handleGenerateDescription}
+                  disabled={descriptionAIState.isGenerating}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Write with AI"
+                  type="button"
+                >
+                  {descriptionAIState.isGenerating ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={16} className="text-purple-500" />
+                  )}
+                </button>
+                {/* Tooltip */}
+                <span className="absolute right-3 -top-8 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                  Write with AI
+                </span>
+              </div>
+              {descriptionAIState.error && (
+                <p className="text-sm text-red-600">
+                  {descriptionAIState.error}
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -410,7 +830,13 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
           editor={editor}
           editable={editorState.isEditing}
           theme="light"
-        />
+          formattingToolbar={false}
+        >
+          {/* Add the AI Command menu to the editor */}
+          <AIMenuController />
+          <FormattingToolbarWithAI />
+          <SuggestionMenuWithAI editor={editor} />
+        </BlockNoteView>
       </div>
 
       {/* Metadata */}
@@ -418,6 +844,26 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
         <div className="mt-8 pt-4 border-t text-sm text-gray-500">
           Last updated: {new Date(doc.updatedAt).toLocaleString()}
         </div>
+      )}
+
+      {/* AI Chat Assistant - Available in both edit and view mode */}
+      {isAuthenticated && (
+        <>
+          {chatOpen ? (
+            <ChatPanel
+              documentContext={documentContext}
+              onClose={() => setChatOpen(false)}
+            />
+          ) : (
+            <Button
+              onClick={() => setChatOpen(true)}
+              className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-40 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all hover:scale-110"
+              title="Open AI Assistant"
+            >
+              <Sparkles className="h-6 w-6" />
+            </Button>
+          )}
+        </>
       )}
     </div>
   );

@@ -10,7 +10,7 @@ import {
   Plus,
   GripVertical,
 } from "lucide-react";
-import { useState, useMemo, useCallback, memo, useEffect } from "react";
+import { useState, useMemo, useCallback, memo, useEffect, useRef } from "react";
 import AddSectionButton from "@/components/docs/AddSectionButton";
 import AddDocumentButton from "@/components/docs/AddDocumentButton";
 import {
@@ -55,6 +55,18 @@ export default function SidebarWithDnd({
   const [routes, setRoutes] = useState<NavRoute[]>(navigation?.routes || []);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [openSectionPath, setOpenSectionPath] = useState<string | null>(null);
+  const prevNavigationRef = useRef<Navigation | null>(null);
+
+  // Sync routes with navigation prop when it changes
+  // This is intentional: we need local state for DnD optimistic updates,
+  // but also need to sync with server data after router.refresh()
+  useEffect(() => {
+    if (navigation?.routes && prevNavigationRef.current !== navigation) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRoutes(navigation.routes);
+      prevNavigationRef.current = navigation;
+    }
+  }, [navigation]);
 
   // Auto-expand the section containing the current page
   useEffect(() => {
@@ -69,6 +81,7 @@ export default function SidebarWithDnd({
         : `/docs/${sectionSlug}`;
 
       if (pathname === sectionPath) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setOpenSectionPath(route.path);
         return;
       }
@@ -82,6 +95,7 @@ export default function SidebarWithDnd({
             : `/docs/${childSlug}`;
 
           if (pathname === childPath) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setOpenSectionPath(route.path);
             return;
           }
