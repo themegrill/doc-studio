@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, Save, Eye, Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { useSession } from "next-auth/react";
 import DeleteSectionButton from "@/components/docs/DeleteSectionButton";
 import ChatPanel from "@/components/chat/ChatPanel";
+import { useEditing } from "@/contexts/EditingContext";
 
 interface SectionPageProps {
   projectSlug: string;
@@ -23,10 +24,26 @@ export default function SectionPage({
   const router = useRouter();
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
+  const editingContext = useEditing();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(sectionTitle);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Use ref to store latest title without causing re-renders
+  const titleRef = useRef(title);
+
+  useEffect(() => {
+    titleRef.current = title;
+  }, [title]);
+
+  // Sync editing state with context
+  useEffect(() => {
+    if (editingContext.isEditing !== isEditing) {
+      setIsEditing(editingContext.isEditing);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingContext.isEditing]);
 
   // Initialize chat state from localStorage
   const [chatOpen, setChatOpen] = useState(() => {
@@ -51,14 +68,21 @@ export default function SectionPage({
     blocksPreview: "",
   };
 
-  const handleSave = async () => {
-    if (!title.trim()) {
-      setError("Title is required");
+  const handleSave = useCallback(async () => {
+    const currentTitle = titleRef.current;
+
+    if (!currentTitle.trim()) {
+      const errorMsg = "Title is required";
+      setError(errorMsg);
+      editingContext.setSaveError(errorMsg);
       return;
     }
 
     setError("");
     setLoading(true);
+    editingContext.setIsSaving(true);
+    editingContext.setSaveError("");
+    editingContext.setSaveSuccess(false);
 
     try {
       const response = await fetch(
@@ -66,7 +90,7 @@ export default function SectionPage({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title }),
+          body: JSON.stringify({ title: currentTitle }),
         },
       );
 
@@ -77,19 +101,43 @@ export default function SectionPage({
       }
 
       setIsEditing(false);
+      editingContext.setIsEditing(false);
+      editingContext.setIsSaving(false);
+      editingContext.setSaveSuccess(true);
       router.refresh();
+
+      setTimeout(() => {
+        editingContext.setSaveSuccess(false);
+      }, 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update section");
+      const errorMsg = err instanceof Error ? err.message : "Failed to update section";
+      setError(errorMsg);
+      editingContext.setSaveError(errorMsg);
+      editingContext.setIsSaving(false);
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectSlug, sectionSlug, editingContext, router]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setTitle(sectionTitle);
     setError("");
     setIsEditing(false);
-  };
+    editingContext.setIsEditing(false);
+    editingContext.setSaveError("");
+  }, [sectionTitle, editingContext]);
+
+  // Register save and cancel handlers - update when they change
+  useEffect(() => {
+    editingContext.setOnSave(handleSave);
+    editingContext.setOnCancel(handleCancel);
+
+    return () => {
+      editingContext.setOnSave(null);
+      editingContext.setOnCancel(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleSave, handleCancel]);
 
   return (
     <div className="max-w-[1000px] mx-auto">
@@ -122,61 +170,13 @@ export default function SectionPage({
         </div>
 
         {isAuthenticated && !isEditing && (
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => setIsEditing(true)}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Pencil size={16} />
-              Edit
-            </Button>
-            <DeleteSectionButton
-              projectSlug={projectSlug}
-              sectionSlug={sectionSlug}
-              sectionTitle={sectionTitle}
-            />
-          </div>
+          <DeleteSectionButton
+            projectSlug={projectSlug}
+            sectionSlug={sectionSlug}
+            sectionTitle={sectionTitle}
+          />
         )}
       </div>
-
-      {/* Floating Action Bar - Only in Edit Mode */}
-      {isAuthenticated && isEditing && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-30">
-          {error && (
-            <div className="flex items-center gap-1 text-red-600 text-sm">
-              {error}
-            </div>
-          )}
-
-          <Button
-            onClick={handleCancel}
-            variant="outline"
-            className="flex items-center gap-2"
-            disabled={loading}
-          >
-            <Eye size={16} />
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={loading}
-            className="flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save size={16} />
-                Save
-              </>
-            )}
-          </Button>
-        </div>
-      )}
 
       {/* AI Chat Assistant */}
       {isAuthenticated && (

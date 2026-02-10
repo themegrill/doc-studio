@@ -3,7 +3,14 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   images: {
-    domains: ["themegrill.com"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "themegrill.com",
+        port: "",
+        pathname: "/**",
+      },
+    ],
   },
 };
 

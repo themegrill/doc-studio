@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BlockNoteView } from "@blocknote/mantine";
 import {
@@ -12,23 +12,20 @@ import {
   getFormattingToolbarItems,
 } from "@blocknote/react";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
+// @ts-expect-error - CSS imports don't have type declarations
 import "@blocknote/core/fonts/inter.css";
+// @ts-expect-error - CSS imports don't have type declarations
 import "@blocknote/mantine/style.css";
 import { DocContent } from "@/lib/db/ContentManager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Pencil,
-  Eye,
-  Save,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
   Link as LinkIcon,
   Sparkles,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
+import { useEditing } from "@/contexts/EditingContext";
 import ChatPanel from "@/components/chat/ChatPanel";
 import {
   AIExtension,
@@ -38,6 +35,7 @@ import {
 } from "@blocknote/xl-ai";
 import { en as aiLocale } from "@blocknote/xl-ai/locales";
 import { DefaultChatTransport } from "ai";
+// @ts-expect-error - CSS imports don't have type declarations
 import "@blocknote/xl-ai/style.css";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
 
@@ -86,6 +84,7 @@ interface ImproveTextState {
 
 export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   const router = useRouter();
+  const editingContext = useEditing();
   const [editorState, setEditorState] = useState<EditorState>({
     isEditing: false,
     title: doc.title,
@@ -124,19 +123,54 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   const isAuthenticated = !!session?.user;
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
+  // Use refs to store latest values without causing re-renders
+  const editorStateRef = useRef(editorState);
+  const editorRef = useRef<typeof editor | null>(null);
+
+  useEffect(() => {
+    editorStateRef.current = editorState;
+  }, [editorState]);
+
+  // Sync editing state with context
+  useEffect(() => {
+    if (editingContext.isEditing !== editorState.isEditing) {
+      setEditorState((prev) => ({
+        ...prev,
+        isEditing: editingContext.isEditing,
+        ...(editingContext.isEditing &&
+          isSectionOverview && {
+            isEditingSectionTitle: true,
+            sectionTitle: prev.title,
+          }),
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingContext.isEditing]);
+
+  const handleCancel = useCallback(() => {
+    setEditorState({
+      isEditing: false,
+      title: doc.title,
+      description: doc.description || "",
+      isEditingSectionTitle: false,
+      sectionTitle: undefined,
+    });
+    editingContext.setIsEditing(false);
+  }, [doc.title, doc.description, editingContext]);
+
   // Initialize chat state from localStorage
   const [chatOpen, setChatOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('chatOpen');
-      return saved === 'true';
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("chatOpen");
+      return saved === "true";
     }
     return false;
   });
 
   // Save chat state to localStorage whenever it changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('chatOpen', String(chatOpen));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("chatOpen", String(chatOpen));
     }
   }, [chatOpen]);
 
@@ -227,8 +261,6 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       }),
     ],
     uploadFile: async (file: File) => {
-      console.log("[DocRenderer] Uploading file:", file.name);
-
       const formData = new FormData();
       formData.append("file", file);
 
@@ -245,7 +277,6 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
         }
 
         const data = await response.json();
-        console.log("[DocRenderer] Upload successful:", data.url);
         return data.url;
       } catch (error) {
         console.error("[DocRenderer] Upload error:", error);
@@ -254,16 +285,27 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     },
   });
 
+  // Update editor ref when editor is created
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
   // Compute document context for AI chat
   const documentContext = useMemo(
     () => ({
       title: editorState.title,
       description: editorState.description || "",
       blocksPreview: editor.document
-        .map((block: any) => {
+        .map((block) => {
           if (block.content && Array.isArray(block.content)) {
             return block.content
-              .map((c: any) => (typeof c === "string" ? c : c.text || ""))
+              .map((c) => {
+                if (typeof c === "string") return c;
+                if (c && typeof c === "object" && "text" in c && typeof c.text === "string") {
+                  return c.text;
+                }
+                return "";
+              })
               .join("");
           }
           return "";
@@ -290,9 +332,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     );
   }
   // Slash menu with the AI option added
-  function SuggestionMenuWithAI(props: {
-    editor: typeof editor;
-  }) {
+  function SuggestionMenuWithAI(props: { editor: typeof editor }) {
     return (
       <SuggestionMenuController
         triggerCharacter="/"
@@ -317,10 +357,16 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       // Get document content as text
       const blocks = editor.document;
       const contentPreview = blocks
-        .map((block: any) => {
+        .map((block) => {
           if (block.content && Array.isArray(block.content)) {
             return block.content
-              .map((c: any) => (typeof c === "string" ? c : c.text || ""))
+              .map((c) => {
+                if (typeof c === "string") return c;
+                if (c && typeof c === "object" && "text" in c && typeof c.text === "string") {
+                  return c.text;
+                }
+                return "";
+              })
               .join("");
           }
           return "";
@@ -363,10 +409,16 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       // Get document content as text
       const blocks = editor.document;
       const contentPreview = blocks
-        .map((block: any) => {
+        .map((block) => {
           if (block.content && Array.isArray(block.content)) {
             return block.content
-              .map((c: any) => (typeof c === "string" ? c : c.text || ""))
+              .map((c) => {
+                if (typeof c === "string") return c;
+                if (c && typeof c === "object" && "text" in c && typeof c.text === "string") {
+                  return c.text;
+                }
+                return "";
+              })
               .join("");
           }
           return "";
@@ -480,17 +532,28 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
+    const currentEditorState = editorStateRef.current;
+    const currentEditor = editorRef.current;
+
+    if (!currentEditor) {
+      console.error("[handleSave] Editor not initialized");
+      return;
+    }
+
+    editingContext.setIsSaving(true);
+    editingContext.setSaveSuccess(false);
+    editingContext.setSaveError("");
     setSaveState({ isSaving: true, success: false, error: "" });
 
     try {
       // Save section title if editing a section overview
       if (
-        editorState.isEditingSectionTitle &&
+        currentEditorState.isEditingSectionTitle &&
         isSectionOverview &&
         projectSlug
       ) {
-        if (!editorState.sectionTitle?.trim()) {
+        if (!currentEditorState.sectionTitle?.trim()) {
           setSaveState({
             isSaving: false,
             success: false,
@@ -504,7 +567,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title: editorState.sectionTitle }),
+            body: JSON.stringify({ title: currentEditorState.sectionTitle }),
           },
         );
 
@@ -517,9 +580,9 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       // Save document content
       const updatedDoc = {
         slug: doc.slug,
-        title: editorState.title,
-        description: editorState.description,
-        blocks: editor.document,
+        title: currentEditorState.title,
+        description: currentEditorState.description,
+        blocks: currentEditor.document,
       };
 
       const response = await fetch(`/api/docs/${slug}`, {
@@ -537,35 +600,57 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
           isEditingSectionTitle: false,
           sectionTitle: undefined,
         }));
+        editingContext.setIsEditing(false);
+        editingContext.setIsSaving(false);
+        editingContext.setSaveSuccess(true);
+        editingContext.setSaveError("");
         setSaveState({ isSaving: false, success: true, error: "" });
 
         // Refresh the page to show updated content
         router.refresh();
 
-        setTimeout(
-          () => setSaveState((prev) => ({ ...prev, success: false })),
-          3000,
-        );
+        setTimeout(() => {
+          setSaveState((prev) => ({ ...prev, success: false }));
+          editingContext.setSaveSuccess(false);
+        }, 3000);
       } else {
         console.error("[DocRenderer] Save failed:", responseData);
+        const errorMsg = responseData.error || `Save failed (${response.status})`;
+        editingContext.setIsSaving(false);
+        editingContext.setSaveError(errorMsg);
         setSaveState({
           isSaving: false,
           success: false,
-          error: responseData.error || `Save failed (${response.status})`,
+          error: errorMsg,
         });
       }
     } catch (error) {
       console.error("[DocRenderer] Save error:", error);
+      const errorMsg =
+        error instanceof Error
+          ? error.message
+          : "Save failed. Please try again.";
+      editingContext.setIsSaving(false);
+      editingContext.setSaveError(errorMsg);
       setSaveState({
         isSaving: false,
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Save failed. Please try again.",
+        error: errorMsg,
       });
     }
-  };
+  }, [slug, projectSlug, isSectionOverview, doc.slug, router, editingContext]);
+
+  // Register save and cancel handlers - update when they change
+  useEffect(() => {
+    editingContext.setOnSave(handleSave);
+    editingContext.setOnCancel(handleCancel);
+
+    return () => {
+      editingContext.setOnSave(null);
+      editingContext.setOnCancel(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleSave, handleCancel]);
 
   return (
     <div className="max-w-[1000px] mx-auto">
@@ -638,7 +723,12 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
                     }))
                   }
                   onMouseUp={(e) => handleTextSelect("title", e)}
-                  onKeyUp={(e) => handleTextSelect("title", e as React.KeyboardEvent<HTMLInputElement>)}
+                  onKeyUp={(e) =>
+                    handleTextSelect(
+                      "title",
+                      e as React.KeyboardEvent<HTMLInputElement>,
+                    )
+                  }
                   className="text-3xl font-bold border-2 border-blue-200 focus:border-blue-400 pr-12"
                   placeholder="Document title"
                 />
@@ -674,7 +764,12 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
                     }))
                   }
                   onMouseUp={(e) => handleTextSelect("description", e)}
-                  onKeyUp={(e) => handleTextSelect("description", e as React.KeyboardEvent<HTMLInputElement>)}
+                  onKeyUp={(e) =>
+                    handleTextSelect(
+                      "description",
+                      e as React.KeyboardEvent<HTMLInputElement>,
+                    )
+                  }
                   className="text-gray-600 border-2 border-blue-200 focus:border-blue-400 pr-12"
                   placeholder="Document description (optional)"
                 />
@@ -712,89 +807,15 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
           )}
         </div>
 
-        {isAuthenticated && !editorState.isEditing && (
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() =>
-                setEditorState((prev) => ({
-                  ...prev,
-                  isEditing: true,
-                  ...(isSectionOverview && {
-                    isEditingSectionTitle: true,
-                    sectionTitle: editorState.title,
-                  }),
-                }))
-              }
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Pencil size={16} />
-              Edit
-            </Button>
-            {projectSlug && (
-              <DeleteDocumentButton
-                projectSlug={projectSlug}
-                documentSlug={slug}
-                documentTitle={editorState.title}
-                isSectionOverview={isSectionOverview}
-              />
-            )}
-          </div>
+        {isAuthenticated && projectSlug && !editorState.isEditing && (
+          <DeleteDocumentButton
+            projectSlug={projectSlug}
+            documentSlug={slug}
+            documentTitle={editorState.title}
+            isSectionOverview={isSectionOverview}
+          />
         )}
       </div>
-
-      {/* Floating Action Bar - Only in Edit Mode */}
-      {isAuthenticated && editorState.isEditing && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3 bg-white rounded-lg shadow-lg border border-gray-200 p-4 z-30">
-          {saveState.success && (
-            <div className="flex items-center gap-1 text-green-600 text-sm">
-              <CheckCircle size={16} />
-              Saved!
-            </div>
-          )}
-
-          {saveState.error && (
-            <div className="flex items-center gap-1 text-red-600 text-sm">
-              <AlertCircle size={16} />
-              {saveState.error}
-            </div>
-          )}
-
-          <Button
-            onClick={() => {
-              setEditorState({
-                isEditing: false,
-                title: doc.title,
-                description: doc.description || "",
-                isEditingSectionTitle: false,
-                sectionTitle: undefined,
-              });
-            }}
-            variant="outline"
-            className="flex items-center gap-2"
-          >
-            <Eye size={16} />
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={saveState.isSaving}
-            className="flex items-center gap-2"
-          >
-            {saveState.isSaving ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save size={16} />
-                Save
-              </>
-            )}
-          </Button>
-        </div>
-      )}
 
       {/* Editor */}
       <div
@@ -851,8 +872,20 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
         <>
           {chatOpen ? (
             <ChatPanel
+              editor={editor}
               documentContext={documentContext}
               onClose={() => setChatOpen(false)}
+              onRequestEdit={() => {
+                // Enable edit mode when AI needs to modify content
+                setEditorState((prev) => ({
+                  ...prev,
+                  isEditing: true,
+                  ...(isSectionOverview && {
+                    isEditingSectionTitle: true,
+                    sectionTitle: editorState.title,
+                  }),
+                }));
+              }}
             />
           ) : (
             <Button

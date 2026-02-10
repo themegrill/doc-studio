@@ -6,17 +6,94 @@ import UserMenu from "@/components/auth/UserMenu";
 import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
 import Image from "next/image";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
+import { EditingProvider, useEditing } from "@/contexts/EditingContext";
+import { Button } from "@/components/ui/button";
 
 interface DocsLayoutClientProps {
   children: React.ReactNode;
   navigation: Navigation;
 }
 
-export default function DocsLayoutClient({
+function EditControls() {
+  const {
+    isEditing,
+    setIsEditing,
+    onSave,
+    onCancel,
+    isSaving,
+    saveSuccess,
+    saveError,
+  } = useEditing();
+  const pathname = usePathname();
+
+  // Only show controls on document/section pages (not on home/list pages)
+  const isDocumentPage = pathname.includes('/docs/') || pathname.includes('/projects/');
+  if (!isDocumentPage) return null;
+
+  if (!isEditing) {
+    return (
+      <Button
+        onClick={() => setIsEditing(true)}
+        variant="outline"
+        size="sm"
+        className="flex items-center gap-2"
+      >
+        <Pencil size={16} />
+        Edit
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {saveSuccess && (
+        <div className="flex items-center gap-1 text-green-600 text-sm">
+          <CheckCircle size={16} />
+          <span className="hidden sm:inline">Saved!</span>
+        </div>
+      )}
+      {saveError && (
+        <div className="flex items-center gap-1 text-red-600 text-sm max-w-[150px] truncate">
+          <AlertCircle size={16} />
+          <span className="hidden sm:inline truncate">{saveError}</span>
+        </div>
+      )}
+      <Button
+        onClick={onCancel}
+        variant="outline"
+        size="sm"
+        className="flex items-center gap-2"
+      >
+        <Eye size={16} />
+        <span className="hidden sm:inline">Cancel</span>
+      </Button>
+      <Button
+        onClick={onSave}
+        disabled={isSaving}
+        size="sm"
+        className="flex items-center gap-2"
+      >
+        {isSaving ? (
+          <>
+            <Loader2 size={16} className="animate-spin" />
+            <span className="hidden sm:inline">Saving...</span>
+          </>
+        ) : (
+          <>
+            <Save size={16} />
+            <span className="hidden sm:inline">Save & Publish</span>
+          </>
+        )}
+      </Button>
+    </div>
+  );
+}
+
+function DocsLayoutContent({
   children,
   navigation,
 }: DocsLayoutClientProps) {
@@ -77,8 +154,9 @@ export default function DocsLayoutClient({
             </div>
           </div>
 
-          {/* Right: User Menu */}
-          <div className="flex justify-end">
+          {/* Right: Edit Controls & User Menu */}
+          <div className="flex justify-end items-center gap-2">
+            {session?.user && <EditControls />}
             <UserMenu />
           </div>
         </div>
@@ -124,5 +202,13 @@ export default function DocsLayoutClient({
         <TableOfContents />
       </div>
     </div>
+  );
+}
+
+export default function DocsLayoutClient(props: DocsLayoutClientProps) {
+  return (
+    <EditingProvider>
+      <DocsLayoutContent {...props} />
+    </EditingProvider>
   );
 }
