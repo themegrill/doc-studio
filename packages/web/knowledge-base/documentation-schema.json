@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Documentation Knowledge Base Schema",
+  "description": "Schema for product documentation knowledge base files",
+  "type": "object",
+  "properties": {
+    "product": {
+      "type": "object",
+      "description": "Product information",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Product name (e.g., 'User Registration Pro')"
+        },
+        "slug": {
+          "type": "string",
+          "description": "URL-friendly slug (e.g., 'user-registration-pro')"
+        },
+        "version": {
+          "type": "string",
+          "description": "Current version (e.g., '3.2.1')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief product description"
+        }
+      },
+      "required": ["name", "slug"]
+    },
+    "writingGuidelines": {
+      "type": "object",
+      "description": "Documentation writing standards and style guide",
+      "properties": {
+        "tone": {
+          "type": "string",
+          "description": "Writing tone (e.g., 'professional and friendly', 'technical', 'casual')"
+        },
+        "voicePreference": {
+          "type": "string",
+          "enum": ["active", "passive", "mixed"],
+          "description": "Preferred grammatical voice"
+        },
+        "technicalLevel": {
+          "type": "string",
+          "enum": ["beginner", "intermediate", "advanced", "mixed"],
+          "description": "Target audience technical level"
+        },
+        "formatting": {
+          "type": "object",
+          "properties": {
+            "headingStyle": {
+              "type": "string",
+              "description": "Heading capitalization style (e.g., 'title-case', 'sentence-case')"
+            },
+            "codeBlockLanguage": {
+              "type": "string",
+              "description": "Default code block language"
+            },
+            "useEmojis": {
+              "type": "boolean",
+              "description": "Whether to use emojis in documentation"
+            }
+          }
+        }
+      }
+    },
+    "terminology": {
+      "type": "object",
+      "description": "Product-specific terms and their definitions",
+      "patternProperties": {
+        ".*": {
+          "type": "object",
+          "properties": {
+            "preferredTerm": {
+              "type": "string",
+              "description": "The term to use in documentation"
+            },
+            "avoid": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Terms to avoid using"
+            },
+            "definition": {
+              "type": "string",
+              "description": "Clear definition of the term"
+            },
+            "usage": {
+              "type": "string",
+              "description": "Example usage in a sentence"
+            }
+          }
+        }
+      }
+    },
+    "commonSections": {
+      "type": "object",
+      "description": "Standard sections to include in documentation",
+      "properties": {
+        "installation": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean" },
+            "template": { "type": "string" },
+            "subsections": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "gettingStarted": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean" },
+            "template": { "type": "string" }
+          }
+        },
+        "configuration": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "boolean" },
+            "template": { "type": "string" }
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "array",
+      "description": "List of product features with descriptions",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "category": { "type": "string" },
+          "isPro": { "type": "boolean" },
+          "relatedFeatures": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "codeExamples": {
+      "type": "object",
+      "description": "Common code snippets and examples",
+      "patternProperties": {
+        ".*": {
+          "type": "object",
+          "properties": {
+            "language": { "type": "string" },
+            "code": { "type": "string" },
+            "description": { "type": "string" },
+            "tags": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "faqs": {
+      "type": "array",
+      "description": "Frequently asked questions",
+      "items": {
+        "type": "object",
+        "properties": {
+          "question": { "type": "string" },
+          "answer": { "type": "string" },
+          "category": { "type": "string" }
+        }
+      }
+    }
+  },
+  "required": ["product", "writingGuidelines"]
+}

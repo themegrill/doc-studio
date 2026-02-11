@@ -1,0 +1,99 @@
+{
+  "product": {
+    "name": "User Registration Pro",
+    "slug": "user-registration-pro",
+    "version": "3.2.1",
+    "description": "Advanced WordPress user registration and profile management plugin"
+  },
+  "writingGuidelines": {
+    "tone": "professional and friendly",
+    "voicePreference": "active",
+    "technicalLevel": "beginner",
+    "formatting": {
+      "headingStyle": "title-case",
+      "codeBlockLanguage": "php",
+      "useEmojis": false
+    }
+  },
+  "terminology": {
+    "user_form": {
+      "preferredTerm": "registration form",
+      "avoid": ["signup form", "user form"],
+      "definition": "The form users fill out to register on the website",
+      "usage": "Create a new registration form from the dashboard"
+    },
+    "form_field": {
+      "preferredTerm": "form field",
+      "avoid": ["input field", "field"],
+      "definition": "An individual input element in a registration form",
+      "usage": "Add custom form fields to collect additional user information"
+    }
+  },
+  "commonSections": {
+    "installation": {
+      "required": true,
+      "template": "## Installation\n\n### Prerequisites\n- WordPress 5.0 or higher\n- PHP 7.4 or higher\n\n### Steps\n1. Download the plugin from your account\n2. Upload to WordPress\n3. Activate the plugin\n4. Navigate to User Registration > Settings to configure",
+      "subsections": ["Prerequisites", "Installation Steps", "Initial Setup"]
+    },
+    "gettingStarted": {
+      "required": true,
+      "template": "## Getting Started\n\nFollow these steps to create your first registration form:\n\n1. Navigate to **User Registration > Add New**\n2. Choose a template or start from scratch\n3. Customize the form fields\n4. Configure form settings\n5. Publish and embed the form"
+    },
+    "configuration": {
+      "required": true,
+      "template": "## Configuration\n\nConfigure the plugin settings to match your requirements."
+    }
+  },
+  "features": {
+    "customFields": {
+      "name": "Custom Form Fields",
+      "description": "Add custom fields to registration forms to collect additional user information",
+      "category": "Form Builder",
+      "isPro": false,
+      "keywords": ["custom fields", "form fields", "user data", "registration"],
+      "relatedFeatures": ["field-validation", "conditional-logic"]
+    },
+    "emailNotifications": {
+      "name": "Email Notifications",
+      "description": "Send automated email notifications to users and admins upon registration",
+      "category": "Notifications",
+      "isPro": false,
+      "keywords": ["email", "notifications", "alerts"],
+      "relatedFeatures": ["email-templates", "smtp-integration"]
+    },
+    "conditionalLogic": {
+      "name": "Conditional Logic",
+      "description": "Show or hide form fields based on user selections",
+      "category": "Advanced",
+      "isPro": true,
+      "keywords": ["conditional", "logic", "dynamic forms"],
+      "relatedFeatures": ["custom-fields"]
+    }
+  },
+  "codeExamples": {
+    "customHook": {
+      "language": "php",
+      "code": "add_filter( 'user_registration_form_field_value', function( $value, $field_key ) {\n    if ( $field_key === 'user_email' ) {\n        // Modify email value\n        $value = strtolower( $value );\n    }\n    return $value;\n}, 10, 2 );",
+      "description": "Modify form field values before saving",
+      "tags": ["hooks", "filters", "customization"]
+    },
+    "formShortcode": {
+      "language": "text",
+      "code": "[user_registration_form id=\"123\"]",
+      "description": "Embed a registration form using shortcode",
+      "tags": ["shortcode", "embedding"]
+    }
+  },
+  "faqs": [
+    {
+      "question": "How do I create a custom registration form?",
+      "answer": "Navigate to User Registration > Add New, then drag and drop fields to build your form. Save and use the provided shortcode to embed it.",
+      "category": "Getting Started"
+    },
+    {
+      "question": "Can I customize email notifications?",
+      "answer": "Yes, go to User Registration > Settings > Email to customize all email templates, including subject lines and content.",
+      "category": "Email Settings"
+    }
+  ]
+}

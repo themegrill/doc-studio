@@ -1,5 +1,6 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { streamText } from "ai";
+import { getKnowledgeBasePromptAsync } from "@/lib/knowledge-base-loader";
 
 export const maxDuration = 30;
 
@@ -20,6 +21,10 @@ export async function POST(req: Request) {
       );
     }
 
+    // Load knowledge base for this project (if available)
+    const projectSlug = documentContext?.projectSlug;
+    const knowledgeBasePrompt = await getKnowledgeBasePromptAsync(projectSlug);
+
     // Build system prompt with document context
     const basePrompt = `You are an AI assistant helping users improve their documentation. You are embedded in a documentation editor and have context about the current document.
 
@@ -34,7 +39,11 @@ Your role:
 - Suggest content structure, clarity improvements, and best practices
 - Provide actionable advice and recommendations
 - Be conversational and helpful
-- When users ask you to add, modify, or delete content, use the available tools to make those changes directly`;
+- When users ask you to add, modify, or delete content, use the available tools to make those changes directly${
+      knowledgeBasePrompt
+        ? `\n\n# PRODUCT KNOWLEDGE BASE\n\n${knowledgeBasePrompt}\n\n**IMPORTANT**: Follow the writing guidelines, terminology standards, and use the provided templates and examples when helping users write documentation.`
+        : ""
+    }`;
 
     const editorToolsPrompt = editorEnabled
       ? `

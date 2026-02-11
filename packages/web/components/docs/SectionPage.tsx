@@ -65,6 +65,7 @@ export default function SectionPage({
   const documentContext = {
     title: sectionTitle,
     description: `Section page for ${sectionTitle}`,
+    projectSlug: projectSlug || null,
     blocksPreview: "",
   };
 

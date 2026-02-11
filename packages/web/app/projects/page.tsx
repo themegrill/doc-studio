@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText } from "lucide-react";
+import { CreateProjectDialog } from "@/components/projects/CreateProjectDialog";
 
 export default async function ProjectsPage() {
   const session = await auth();
@@ -37,9 +38,12 @@ export default async function ProjectsPage() {
   return (
     <div className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">Documentation Projects</h1>
-          <p className="text-gray-600">Select a project to view its documentation</p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Documentation Projects</h1>
+            <p className="text-gray-600">Select a project to view its documentation</p>
+          </div>
+          {session?.user && <CreateProjectDialog />}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -295,6 +295,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     () => ({
       title: editorState.title,
       description: editorState.description || "",
+      projectSlug: projectSlug || null,
       blocksPreview: editor.document
         .map((block) => {
           if (block.content && Array.isArray(block.content)) {
@@ -314,7 +315,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
         .join(" ")
         .slice(0, 2000),
     }),
-    [editorState.title, editorState.description, editor.document],
+    [editorState.title, editorState.description, projectSlug, editor.document],
   );
 
   // Formatting toolbar with the `AIToolbarButton` added
