@@ -1,4 +1,4 @@
-# TG Docs Builder
+# Doc Studio
 
 AI-powered documentation builder with rich text editing, authentication, and PostgreSQL database.
 
@@ -58,7 +58,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 ## Project Structure
 
 ```
-tg-docs-builder/
+doc-studio/
 ├── docker-compose.yml       # PostgreSQL container setup
 ├── packages/
 │   └── web/                 # Next.js application
@@ -98,6 +98,7 @@ pnpm db:logs
 ### Database Connection
 
 Default local development credentials:
+
 - **Host:** localhost
 - **Port:** 5432
 - **Database:** tg_docs_db
@@ -137,6 +138,7 @@ pnpm start
 ### Available Scripts
 
 From `packages/web`:
+
 - `pnpm dev` - Start development server
 - `pnpm build` - Build for production
 - `pnpm start` - Start production server

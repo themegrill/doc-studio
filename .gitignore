@@ -42,3 +42,6 @@ Thumbs.db
 # Misc
 .vercel
 *.tsbuildinfo
+
+# Knowledge Base Cache
+.cache/
