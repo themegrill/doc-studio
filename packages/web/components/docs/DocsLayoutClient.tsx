@@ -6,7 +6,8 @@ import UserMenu from "@/components/auth/UserMenu";
 import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
 import Image from "next/image";
-import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye } from "lucide-react";
+import Link from "next/link";
+import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 interface DocsLayoutClientProps {
   children: React.ReactNode;
   navigation: Navigation;
+  userProjectRole?: string | null;
 }
 
 function EditControls() {
@@ -96,6 +98,7 @@ function EditControls() {
 function DocsLayoutContent({
   children,
   navigation,
+  userProjectRole,
 }: DocsLayoutClientProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session } = useSession();
@@ -154,8 +157,21 @@ function DocsLayoutContent({
             </div>
           </div>
 
-          {/* Right: Edit Controls & User Menu */}
+          {/* Right: Settings, Edit Controls & User Menu */}
           <div className="flex justify-end items-center gap-2">
+            {session?.user && projectSlug && (userProjectRole === "owner" || userProjectRole === "admin") && (
+              <Link href={`/projects/${projectSlug}/settings`}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-2"
+                  title="Project Settings"
+                >
+                  <Settings size={16} />
+                  <span className="hidden md:inline">Settings</span>
+                </Button>
+              </Link>
+            )}
             {session?.user && <EditControls />}
             <UserMenu />
           </div>
@@ -205,10 +221,19 @@ function DocsLayoutContent({
   );
 }
 
-export default function DocsLayoutClient(props: DocsLayoutClientProps) {
+export default function DocsLayoutClient({
+  children,
+  navigation,
+  userProjectRole,
+}: DocsLayoutClientProps) {
   return (
     <EditingProvider>
-      <DocsLayoutContent {...props} />
+      <DocsLayoutContent
+        navigation={navigation}
+        userProjectRole={userProjectRole}
+      >
+        {children}
+      </DocsLayoutContent>
     </EditingProvider>
   );
 }

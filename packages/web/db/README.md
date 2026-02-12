@@ -1,23 +1,27 @@
 # Database Setup
 
-This directory contains the database schema and migration files for the TG Docs Builder project.
+This directory contains the database schema and migration files for the Doc Studio project.
 
 ## Local Development with Docker Postgres
 
 ### Prerequisites
+
 - Docker and Docker Compose installed
 
 ### Starting the Database
 
 1. **Start Postgres container:**
+
    ```bash
    docker-compose up -d
    ```
 
 2. **Check if the database is running:**
+
    ```bash
    docker ps
    ```
+
    You should see `tg-docs-postgres` container running.
 
 3. **View logs:**
@@ -47,21 +51,25 @@ The `init.sql` file contains the initial schema:
 ### Useful Commands
 
 **Stop the database:**
+
 ```bash
 docker-compose down
 ```
 
 **Stop and remove all data:**
+
 ```bash
 docker-compose down -v
 ```
 
 **Access PostgreSQL CLI:**
+
 ```bash
 docker exec -it tg-docs-postgres psql -U tg_docs_user -d tg_docs_db
 ```
 
 **Reset database (recreate from scratch):**
+
 ```bash
 docker-compose down -v
 docker-compose up -d
@@ -72,11 +80,13 @@ docker-compose up -d
 When ready to connect to your Digital Ocean Postgres database:
 
 1. Update the `DATABASE_URL` in `.env.local`:
+
    ```
    DATABASE_URL=postgres://username:password@your-do-host:port/database
    ```
 
 2. Run the `init.sql` script on your DO database:
+
    ```bash
    psql $DATABASE_URL < packages/web/db/init.sql
    ```

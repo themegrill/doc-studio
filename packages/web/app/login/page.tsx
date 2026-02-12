@@ -26,7 +26,7 @@ export default function LoginPage() {
   // Redirect if already logged in
   useEffect(() => {
     if (status === "authenticated") {
-      router.push("/docs/getting-started/introduction");
+      router.push("/projects");
     }
   }, [status, router]);
 
@@ -45,7 +45,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("Invalid email or password");
       } else {
-        router.push("/docs/getting-started/introduction");
+        router.push("/projects");
         router.refresh();
       }
     } catch (error: unknown) {

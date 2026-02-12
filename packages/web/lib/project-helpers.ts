@@ -130,6 +130,7 @@ export async function getProjectByDomain(
 
 /**
  * Check if user has access to a project
+ * System admins and super_admins automatically have owner-level access to all projects
  */
 export async function checkProjectAccess(
   userId: string,
@@ -137,6 +138,20 @@ export async function checkProjectAccess(
   requiredRole?: "viewer" | "editor" | "admin" | "owner"
 ): Promise<boolean> {
   const sql = getDb();
+
+  // Check if user is system admin first
+  const [user] = await sql<{ role: string }[]>`
+    SELECT role FROM users WHERE id = ${userId}
+  `;
+
+  const isSuperAdmin = user?.role === "super_admin" || user?.role === "admin";
+
+  // Super admins have full access to all projects
+  if (isSuperAdmin) {
+    return true;
+  }
+
+  // Check project membership for regular users
   const [member] = await sql<{ role: string }[]>`
     SELECT role FROM project_members
     WHERE user_id = ${userId} AND project_id = ${projectId}

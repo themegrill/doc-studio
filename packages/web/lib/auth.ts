@@ -58,13 +58,35 @@ export const authConfig: NextAuthConfig = {
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // Initial sign in - populate token with user data
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
         token.picture = user.image;
       }
+
+      // Handle session updates from client-side update() calls
+      if (trigger === "update" && token.id) {
+        try {
+          const sql = getDb();
+          const [dbUser] = await sql`
+            SELECT id, email, name, image
+            FROM users
+            WHERE id = ${token.id as string}
+          `;
+
+          if (dbUser) {
+            token.email = dbUser.email;
+            token.name = dbUser.name;
+            token.picture = dbUser.image;
+          }
+        } catch (error) {
+          // Silent fail - continue with existing token data
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
