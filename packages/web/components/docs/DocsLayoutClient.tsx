@@ -1,7 +1,7 @@
 "use client";
 
 import { Navigation } from "@/lib/db/ContentManager";
-import SidebarWithDnd from "@/components/docs/SidebarWithDnd";
+import dynamic from "next/dynamic";
 import UserMenu from "@/components/auth/UserMenu";
 import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
@@ -13,6 +13,13 @@ import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { EditingProvider, useEditing } from "@/contexts/EditingContext";
 import { Button } from "@/components/ui/button";
+
+// Dynamically import SidebarWithDnd with ssr: false to prevent hydration mismatch
+// caused by @dnd-kit generating different IDs on server and client
+const SidebarWithDnd = dynamic(
+  () => import("@/components/docs/SidebarWithDnd"),
+  { ssr: false }
+);
 
 interface DocsLayoutClientProps {
   children: React.ReactNode;

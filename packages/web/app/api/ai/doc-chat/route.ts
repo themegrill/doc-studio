@@ -1,25 +1,30 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { streamText } from "ai";
 import { getKnowledgeBasePromptAsync } from "@/lib/knowledge-base-loader";
+import { auth } from "@/lib/auth";
+import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
+import { logAIUsage } from "@/lib/ai-usage-tracker";
 
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  const session = await auth();
+  const startTime = Date.now();
+
   try {
     const { messages, documentContext, editorEnabled } = await req.json();
 
-    // Check for API key
-    if (!process.env.ANTHROPIC_API_KEY) {
+    // Validate feature is enabled
+    const validation = await validateAIFeature("chat");
+    if (validation) {
       return new Response(
-        JSON.stringify({
-          error: "Anthropic API key not configured",
-        }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        },
+        JSON.stringify({ error: validation.error }),
+        { status: validation.status, headers: { "Content-Type": "application/json" } }
       );
     }
+
+    // Get AI configuration
+    const config = await getAIConfig();
 
     // Load knowledge base for this project (if available)
     const projectSlug = documentContext?.projectSlug;
@@ -214,10 +219,30 @@ Note: For direct editing, users can use the BlockNote AI toolbar (sparkles butto
     }));
 
     const result = streamText({
-      model: anthropic("claude-sonnet-4-5"),
+      model: anthropic(config.defaultModel),
       system: systemPrompt,
       messages: modelMessages,
-      temperature: 0.7,
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+      onFinish: async (result) => {
+        const usage = result.usage;
+        const promptTokens = usage?.promptTokens || usage?.inputTokens || 0;
+        const completionTokens = usage?.completionTokens || usage?.outputTokens || 0;
+
+        try {
+          await logAIUsage({
+            userId: session?.user?.id,
+            feature: "chat",
+            model: config.defaultModel,
+            promptTokens,
+            completionTokens,
+            durationMs: Date.now() - startTime,
+            success: true,
+          });
+        } catch (err) {
+          console.error("[Doc Chat API] Failed to log usage:", err);
+        }
+      },
     });
 
     return result.toTextStreamResponse();
@@ -227,6 +252,20 @@ Note: For direct editing, users can use the BlockNote AI toolbar (sparkles butto
       "[doc-chat] Error stack:",
       error instanceof Error ? error.stack : "No stack",
     );
+
+    // Log failed attempt
+    const config = await getAIConfig();
+    await logAIUsage({
+      userId: session?.user?.id,
+      feature: "chat",
+      model: config.defaultModel,
+      promptTokens: 0,
+      completionTokens: 0,
+      durationMs: Date.now() - startTime,
+      success: false,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    });
+
     return new Response(
       JSON.stringify({
         error: "Failed to process chat request",

@@ -5,13 +5,31 @@ import {
   toolDefinitionsToToolSet,
   aiDocumentFormats,
 } from "@blocknote/xl-ai/server";
+import { auth } from "@/lib/auth";
+import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
+import { logAIUsage } from "@/lib/ai-usage-tracker";
 
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  const session = await auth();
+  const startTime = Date.now();
+
   try {
-    // Get API key from environment
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Validate feature is enabled
+    const validation = await validateAIFeature("chat");
+    if (validation) {
+      return new Response(
+        JSON.stringify({ error: validation.error }),
+        { status: validation.status, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Get AI configuration
+    const config = await getAIConfig();
+
+    // Get API key from environment or database
+    const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
       return new Response(
@@ -22,8 +40,6 @@ export async function POST(req: Request) {
 
     // Parse request body
     const body = await req.json();
-    console.log("[AI Chat API] Request body:", JSON.stringify(body, null, 2));
-
     const { messages, toolDefinitions } = body;
 
     if (!messages || !Array.isArray(messages)) {
@@ -39,30 +55,40 @@ export async function POST(req: Request) {
       injectDocumentStateMessages(messages),
     );
 
-    console.log("[AI Chat API] Converted model messages:", modelMessages);
-
     // Convert BlockNote tool definitions to AI SDK format
     const tools = toolDefinitions
       ? toolDefinitionsToToolSet(toolDefinitions)
       : undefined;
 
-    console.log(
-      "[AI Chat API] Tools available:",
-      tools ? Object.keys(tools) : "none",
-    );
-
-    // Create streaming response using Anthropic's Claude
+    // Create streaming response using Anthropic's Claude with config settings
     const result = streamText({
-      model: anthropic("claude-sonnet-4-5"),
+      model: anthropic(config.defaultModel),
       system: aiDocumentFormats.html.systemPrompt,
       messages: modelMessages,
       tools,
       toolChoice: "auto", // Allow AI to choose: text response or tool use
-      temperature: 0.7,
-    });
+      temperature: config.temperature,
+      maxTokens: config.maxTokens,
+      onFinish: async (result) => {
+        const usage = result.usage;
+        const promptTokens = usage?.promptTokens || usage?.inputTokens || 0;
+        const completionTokens = usage?.completionTokens || usage?.outputTokens || 0;
 
-    console.log("[AI Chat API] Stream result created, returning response...");
-    console.log("[AI Chat API] Response method: toUIMessageStreamResponse");
+        try {
+          await logAIUsage({
+            userId: session?.user?.id,
+            feature: "chat",
+            model: config.defaultModel,
+            promptTokens,
+            completionTokens,
+            durationMs: Date.now() - startTime,
+            success: true,
+          });
+        } catch (err) {
+          console.error("[Chat API] Failed to log usage:", err);
+        }
+      },
+    });
 
     // Return UI message stream response for chat interfaces
     // This format is required for DefaultChatTransport to properly display messages
@@ -74,6 +100,20 @@ export async function POST(req: Request) {
     return response;
   } catch (error) {
     console.error("[AI Chat API] Error:", error);
+
+    // Log failed attempt
+    const config = await getAIConfig();
+    await logAIUsage({
+      userId: session?.user?.id,
+      feature: "chat",
+      model: config.defaultModel,
+      promptTokens: 0,
+      completionTokens: 0,
+      durationMs: Date.now() - startTime,
+      success: false,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    });
+
     return new Response(
       JSON.stringify({
         error: "Failed to process AI request",

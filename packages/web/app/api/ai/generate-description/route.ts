@@ -1,19 +1,28 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { generateText } from "ai";
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
+import { logAIUsage } from "@/lib/ai-usage-tracker";
 
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  const startTime = Date.now();
+
   try {
-    // Get API key from environment
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
+    // Validate feature is enabled
+    const validation = await validateAIFeature("descriptionGeneration");
+    if (validation) {
       return NextResponse.json(
-        { error: "Anthropic API key not configured" },
-        { status: 500 },
+        { error: validation.error },
+        { status: validation.status }
       );
     }
+
+    // Get AI configuration
+    const config = await getAIConfig();
 
     // Parse request body
     const body = await req.json();
@@ -26,11 +35,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("[Generate Description API] Generating description for:", title || "Untitled");
-
-    // Generate description using Claude
-    const { text } = await generateText({
-      model: anthropic("claude-sonnet-4-5"),
+    // Generate description using Claude with settings from database
+    const { text, usage } = await generateText({
+      model: anthropic(config.defaultModel),
       system: `You are a helpful assistant that generates concise, informative descriptions for documentation pages.
 The description should be:
 - Brief but informative (1-2 sentences, max 150 characters)
@@ -46,15 +53,40 @@ Content:
 ${content}
 
 ${currentDescription ? `Current description: "${currentDescription}"\n\n` : ""}Generate a better description that summarizes this content.`,
-      temperature: 0.7,
+      temperature: config.temperature,
+      maxTokens: Math.min(config.maxTokens, 200), // Descriptions don't need many tokens
     });
 
     const generatedDescription = text.trim();
-    console.log("[Generate Description API] Generated description:", generatedDescription);
+
+    // Log usage for tracking
+    await logAIUsage({
+      userId: session?.user?.id,
+      feature: "descriptionGeneration",
+      model: config.defaultModel,
+      promptTokens: usage?.promptTokens || usage?.inputTokens || 0,
+      completionTokens: usage?.completionTokens || usage?.outputTokens || 0,
+      durationMs: Date.now() - startTime,
+      success: true,
+    });
 
     return NextResponse.json({ description: generatedDescription });
   } catch (error) {
     console.error("[Generate Description API] Error:", error);
+
+    // Log failed attempt
+    const config = await getAIConfig();
+    await logAIUsage({
+      userId: session?.user?.id,
+      feature: "descriptionGeneration",
+      model: config.defaultModel,
+      promptTokens: 0,
+      completionTokens: 0,
+      durationMs: Date.now() - startTime,
+      success: false,
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    });
+
     return NextResponse.json(
       {
         error: "Failed to generate description",

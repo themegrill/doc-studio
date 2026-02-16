@@ -31,6 +31,7 @@ import { useEditing } from "@/contexts/EditingContext";
 import ChatPanel from "@/components/chat/ChatPanel";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
 import { Badge } from "@/components/ui/badge-pro";
+import { useAIFeatures } from "@/hooks/use-ai-features";
 import {
   AIExtension,
   AIMenuController,
@@ -89,6 +90,7 @@ interface ImproveTextState {
 export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   const router = useRouter();
   const editingContext = useEditing();
+  const { isEnabled: isFeatureEnabled } = useAIFeatures();
   const [editorState, setEditorState] = useState<EditorState>({
     isEditing: false,
     title: doc.title,
@@ -809,7 +811,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   return (
     <div className="max-w-[1000px] mx-auto">
       {/* Text Selection Improve Button */}
-      {textSelection && textSelection.rect && (
+      {textSelection && textSelection.rect && isFeatureEnabled("textGeneration") && (
         <div
           data-improve-button
           className="fixed bg-white border border-gray-200 rounded-md shadow-xl px-3 py-1.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200"
@@ -886,23 +888,27 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
                   className="text-3xl font-bold border-2 border-blue-200 focus:border-blue-400 pr-12"
                   placeholder="Document title"
                 />
-                <button
-                  onClick={handleGenerateTitle}
-                  disabled={titleAIState.isGenerating}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Write with AI"
-                  type="button"
-                >
-                  {titleAIState.isGenerating ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={16} className="text-purple-500" />
-                  )}
-                </button>
-                {/* Tooltip */}
-                <span className="absolute right-3 -top-8 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap ">
-                  Write with AI
-                </span>
+                {isFeatureEnabled("titleGeneration") && (
+                  <>
+                    <button
+                      onClick={handleGenerateTitle}
+                      disabled={titleAIState.isGenerating}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Write with AI"
+                      type="button"
+                    >
+                      {titleAIState.isGenerating ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Sparkles size={16} className="text-purple-500" />
+                      )}
+                    </button>
+                    {/* Tooltip */}
+                    <span className="absolute right-3 -top-8 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap ">
+                      Write with AI
+                    </span>
+                  </>
+                )}
               </div>
               {titleAIState.error && (
                 <p className="text-sm text-red-600">{titleAIState.error}</p>
@@ -927,23 +933,27 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
                   className="text-gray-600 border-2 border-blue-200 focus:border-blue-400 pr-12"
                   placeholder="Document description (optional)"
                 />
-                <button
-                  onClick={handleGenerateDescription}
-                  disabled={descriptionAIState.isGenerating}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Write with AI"
-                  type="button"
-                >
-                  {descriptionAIState.isGenerating ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={16} className="text-purple-500" />
-                  )}
-                </button>
-                {/* Tooltip */}
-                <span className="absolute right-3 -top-8 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                  Write with AI
-                </span>
+                {isFeatureEnabled("descriptionGeneration") && (
+                  <>
+                    <button
+                      onClick={handleGenerateDescription}
+                      disabled={descriptionAIState.isGenerating}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Write with AI"
+                      type="button"
+                    >
+                      {descriptionAIState.isGenerating ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Sparkles size={16} className="text-purple-500" />
+                      )}
+                    </button>
+                    {/* Tooltip */}
+                    <span className="absolute right-3 -top-8 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                      Write with AI
+                    </span>
+                  </>
+                )}
               </div>
               {descriptionAIState.error && (
                 <p className="text-sm text-red-600">
@@ -1025,6 +1035,14 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
           editable={editorState.isEditing}
           theme="light"
           formattingToolbar={false}
+          onChange={() => {
+            // When content changes (e.g., from AI chat), enable editing mode
+            // so the save button appears
+            if (!editorState.isEditing && isAuthenticated) {
+              setEditorState((prev) => ({ ...prev, isEditing: true }));
+              editingContext.setIsEditing(true);
+            }
+          }}
         >
           {/* Add the AI Command menu to the editor */}
           <AIMenuController />
@@ -1041,7 +1059,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       )}
 
       {/* AI Chat Assistant - Available in both edit and view mode */}
-      {isAuthenticated && (
+      {isAuthenticated && isFeatureEnabled("chat") && (
         <>
           {chatOpen ? (
             <ChatPanel
