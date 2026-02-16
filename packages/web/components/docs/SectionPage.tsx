@@ -45,20 +45,20 @@ export default function SectionPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingContext.isEditing]);
 
-  // Initialize chat state from localStorage
-  const [chatOpen, setChatOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('chatOpen');
-      return saved === 'true';
+  // Initialize chat state - always start with false to match SSR
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Load chat state from localStorage after hydration
+  useEffect(() => {
+    const saved = localStorage.getItem('chatOpen');
+    if (saved === 'true') {
+      setChatOpen(true);
     }
-    return false;
-  });
+  }, []);
 
   // Save chat state to localStorage whenever it changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('chatOpen', String(chatOpen));
-    }
+    localStorage.setItem('chatOpen', String(chatOpen));
   }, [chatOpen]);
 
   // Document context for AI chat

@@ -13,8 +13,6 @@ export default async function ProjectDocPage({
   const { projectSlug, slug: slugArray } = resolvedParams;
   const slug = slugArray.join("/");
 
-  console.log("[ProjectDocPage] Fetching document:", { projectSlug, slug });
-
   // Get project from slug
   const sql = getDb();
   const [project] = await sql`
@@ -22,7 +20,6 @@ export default async function ProjectDocPage({
   `;
 
   if (!project) {
-    console.log("[ProjectDocPage] Project not found:", { projectSlug });
     notFound();
   }
 
@@ -41,15 +38,30 @@ export default async function ProjectDocPage({
 
       if (nav?.structure?.routes) {
         const sectionPath = `/docs/${slug}`;
+
+        // Find section - either by path (old format) or by checking if first child matches (new format)
         const section = nav.structure.routes.find(
-          (route: any) => route.path === sectionPath
+          (route: any) => {
+            // Check if section has direct path match (old format)
+            if (route.path === sectionPath) {
+              return true;
+            }
+            // Check if section has children and first child's path matches (new category format)
+            if (route.children && route.children.length > 0) {
+              const firstChildPath = route.children[0].path;
+              if (firstChildPath === sectionPath || firstChildPath === `/docs/${slug}`) {
+                return true;
+              }
+            }
+            return false;
+          }
         );
 
         if (section) {
           // Get child documents for this section
           const childDocs = section.children?.map((child: any) => ({
             title: child.title,
-            slug: child.path.replace(/^\/docs\//, ""),
+            slug: child.path?.replace(/^\/docs\//, "") || child.slug,
           })) || [];
 
           return (

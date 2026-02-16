@@ -48,20 +48,27 @@ export default function ChatPanel({
   onRequestEdit,
 }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "welcome",
-      role: "assistant",
-      content:
-        "Hi! I'm here to help improve your documentation. I can also edit the content directly if you give me permission. Just ask!",
-      createdAt: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [executingTool, setExecutingTool] = useState(false);
   const [pendingPermission, setPendingPermission] =
     useState<PendingPermission | null>(null);
+
+  // Add welcome message after hydration to avoid hydration mismatch
+  useEffect(() => {
+    if (messages.length === 0) {
+      setMessages([
+        {
+          id: "welcome",
+          role: "assistant",
+          content:
+            "Hi! I'm here to help improve your documentation. I can also edit the content directly if you give me permission. Just ask!",
+          createdAt: new Date(),
+        },
+      ]);
+    }
+  }, [messages.length]);
   const [isAutoContinuing, setIsAutoContinuing] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
@@ -71,11 +78,9 @@ export default function ChatPanel({
 
   const continueConversationWithPrompt = async (prompt: string) => {
     if (isLoading || isAutoContinuing) {
-      console.log("[continueConversation] Skipping - already loading or auto-continuing");
       return;
     }
 
-    console.log("[continueConversation] Auto-continuing with prompt:", prompt);
     setIsAutoContinuing(true);
 
     // Add a hidden system message to guide the AI
@@ -102,7 +107,6 @@ export default function ChatPanel({
   };
 
   const callAI = async (messagesToSend: Message[]) => {
-    console.log("[callAI] Starting AI call with", messagesToSend.length, "messages");
     setIsLoading(true);
 
     try {
@@ -168,16 +172,12 @@ export default function ChatPanel({
           );
 
           if (toolCallMatches.length > 0) {
-            console.log(
-              `[callAI/streaming] Found ${toolCallMatches.length} tool call match(es) in buffer`
-            );
             toolCalls.length = 0;
             let cleanedBuffer = buffer;
 
             for (const match of toolCallMatches) {
               try {
                 const toolCall = JSON.parse(match[1]);
-                console.log("[callAI/streaming] Parsed tool call:", toolCall.tool);
                 toolCalls.push(toolCall);
                 cleanedBuffer = cleanedBuffer.replace(match[0], "");
               } catch (e) {
@@ -202,9 +202,6 @@ export default function ChatPanel({
 
       // Execute all tool calls sequentially (with deduplication)
       if (toolCalls.length > 0) {
-        console.log("[callAI] Found", toolCalls.length, "tool call(s)");
-        console.log("[callAI] Tool calls:", JSON.stringify(toolCalls, null, 2));
-
         // Deduplicate tool calls based on JSON stringification
         const uniqueToolCalls = toolCalls.filter(
           (call, index, self) =>
@@ -212,18 +209,9 @@ export default function ChatPanel({
             self.findIndex((c) => JSON.stringify(c) === JSON.stringify(call))
         );
 
-        if (uniqueToolCalls.length < toolCalls.length) {
-          console.log(
-            `[callAI] Deduplicated from ${toolCalls.length} to ${uniqueToolCalls.length} tool calls`
-          );
-        }
-
-        console.log("[callAI] Executing", uniqueToolCalls.length, "unique tool call(s)");
         for (const toolCall of uniqueToolCalls) {
           await handleToolExecution(assistantMessage.id, toolCall);
         }
-      } else {
-        console.log("[callAI] No tool calls to execute");
       }
     } catch (error) {
       console.error("[callAI] Error:", error);
@@ -235,7 +223,6 @@ export default function ChatPanel({
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      console.log("[callAI] Finished, setting isLoading to false");
       setIsLoading(false);
     }
   };
@@ -375,7 +362,6 @@ export default function ChatPanel({
 
           // Auto-trigger follow-up for exact matches (max 3 results to avoid ambiguity)
           if (hasExactMatch && result.data.length <= 3 && result.data.length >= 1) {
-            console.log("[handleToolExecution] Triggering auto-continue for exact matches");
             continueConversationWithPrompt(
               "The search found exact matches. Please proceed with the requested update/modification using the block IDs from the search results above."
             );
@@ -387,7 +373,6 @@ export default function ChatPanel({
           Array.isArray(result.data) &&
           result.data.length > 0
         ) {
-          console.log("[handleToolExecution] Triggering auto-continue after getting structure");
           continueConversationWithPrompt(
             "The document structure has been retrieved. Please analyze the content as requested and make any necessary updates."
           );

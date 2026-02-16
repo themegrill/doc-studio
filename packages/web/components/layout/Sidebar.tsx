@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Home, Settings, Users, User, LogOut } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -64,8 +65,15 @@ export function Sidebar({ user }: SidebarProps) {
   return (
     <div className="flex h-screen w-64 flex-col border-r bg-white">
       {/* Logo/Brand Section */}
-      <div className="flex h-16 items-center border-b px-6">
-        <h1 className="text-xl font-bold text-gray-900">Doc Studioo</h1>
+      <div className="flex h-16 items-center justify-center border-b px-6">
+        <Image
+          src="/doc-studio-final-logo.png"
+          alt="Doc Studio"
+          width={220}
+          height={50}
+          priority
+          className="object-contain"
+        />
       </div>
 
       {/* Navigation Links */}

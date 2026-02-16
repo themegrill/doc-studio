@@ -34,30 +34,78 @@ export default async function SectionPage({
     notFound();
   }
 
-  // Get navigation to find this section
+  // First, try to get this as a document (since [sectionSlug] route intercepts document requests)
   const cm = ContentManager.create();
+  const doc = await cm.getDoc(project.id, sectionSlug);
+
+  // If it's a document, render it as a document page
+  if (doc) {
+    return <DocRendererClient doc={doc} slug={sectionSlug} projectSlug={projectSlug} />;
+  }
+
+  // If not a document, try to find it as a section
   const navigation = await cm.getNavigation(project.id);
 
-  const section = navigation?.routes?.find(
-    (route) => route.path === `/docs/${sectionSlug}`,
-  );
+  // Helper to slugify section titles
+  const slugify = (text: string) => {
+    return text
+      .toLowerCase()
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+      .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+  };
+
+  const section = navigation?.routes?.find((route) => {
+    const routeTitleSlug = slugify(route.title);
+
+    // Check if route has a direct path match (old style sections)
+    if (route.path === `/docs/${sectionSlug}` || route.slug === sectionSlug) {
+      return true;
+    }
+
+    // Check if slugified title matches (for category sections with flat document structure)
+    if (routeTitleSlug === sectionSlug) {
+      return true;
+    }
+
+    // Check if this is a category section with children (hierarchical structure)
+    if (route.children && route.children.length > 0) {
+      // Extract section slug from first child's path
+      const firstChildPath = route.children[0].path || route.children[0].slug;
+
+      if (firstChildPath) {
+        const childSectionSlug = firstChildPath.replace(/^\/docs\//, '').split('/')[0];
+
+        if (childSectionSlug === sectionSlug) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  });
 
   if (!section) {
     notFound();
   }
 
-  // Try to get section description/content (document with slug matching section)
+  // Try to get section description/content
   const sectionDoc = await cm.getDoc(project.id, sectionSlug);
 
-  // Get child documents for this section
-  const documents = await sql`
+  // Get child documents from navigation structure (works with flat slugs)
+  const childSlugs = section.children?.map((child) =>
+    child.slug || child.path?.replace(/^\/docs\//, '')
+  ).filter(Boolean) || [];
+
+  // Fetch documents by their slugs
+  const documents = childSlugs.length > 0 ? await sql`
     SELECT id, slug, title, description, created_at, updated_at
     FROM documents
     WHERE project_id = ${project.id}
-      AND slug LIKE ${sectionSlug + "/%"}
+      AND slug = ANY(${sql.array(childSlugs)})
       AND published = true
     ORDER BY order_index ASC, created_at ASC
-  `;
+  ` : [];
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -122,14 +170,14 @@ export default async function SectionPage({
               key={doc.id}
               href={`/projects/${projectSlug}/docs/${doc.slug}`}
             >
-              <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="h-5 w-5" />
-                    {doc.title}
+                  <CardTitle className="flex items-start gap-2">
+                    <FileText className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                    <span className="leading-snug">{doc.title}</span>
                   </CardTitle>
                   {doc.description && (
-                    <CardDescription>{doc.description}</CardDescription>
+                    <CardDescription className="mt-2">{doc.description}</CardDescription>
                   )}
                 </CardHeader>
               </Card>

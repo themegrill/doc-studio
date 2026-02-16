@@ -12,8 +12,6 @@ export async function GET(
     const resolvedParams = await params;
     const slug = resolvedParams.slug.join("/");
 
-    console.log("[GET /api/docs] Fetching document:", { slug });
-
     // Find which project this document belongs to
     const sql = getDb();
     const [doc] = await sql`
@@ -21,7 +19,6 @@ export async function GET(
     `;
 
     if (!doc) {
-      console.warn("[GET /api/docs] Document not found:", { slug });
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -29,11 +26,9 @@ export async function GET(
     const docContent = await cm.getDoc(doc.project_id, slug);
 
     if (!docContent) {
-      console.warn("[GET /api/docs] Document content not found:", { slug });
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    console.log("[GET /api/docs] Document retrieved successfully:", { slug });
     return NextResponse.json(docContent);
   } catch (error: unknown) {
     const err = error as Error;

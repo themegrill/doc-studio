@@ -13,12 +13,31 @@ import {
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from "react";
 import AddSectionButton from "@/components/docs/AddSectionButton";
 import AddDocumentButton from "@/components/docs/AddDocumentButton";
+import { parseTitleWithBadges } from "@/lib/parse-title-badges";
+import { Badge } from "@/components/ui/badge-pro";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+// Helper component to render title with badges
+const TitleWithBadges = memo(({ title }: { title: string }) => {
+  const { cleanTitle, badges } = useMemo(() => parseTitleWithBadges(title), [title]);
+
+  return (
+    <span className="inline-flex items-center">
+      {cleanTitle}
+      {badges.map((badge, idx) => (
+        <Badge key={`badge-${idx}-${badge.text}`} variant={badge.variant} className="ml-1.5 text-[10px] px-1.5 py-0">
+          {badge.text}
+        </Badge>
+      ))}
+    </span>
+  );
+});
+TitleWithBadges.displayName = "TitleWithBadges";
 import {
   DndContext,
   closestCenter,
@@ -74,16 +93,18 @@ export default function SidebarWithDnd({
 
     // Find which section contains the current page
     for (const route of routes) {
-      // Check if current path matches the section itself
-      const sectionSlug = route.path.replace(/^\/docs\//, "");
-      const sectionPath = projectSlug
-        ? `/projects/${projectSlug}/docs/${sectionSlug}`
-        : `/docs/${sectionSlug}`;
+      // Check if current path matches the section itself (if it has a path)
+      if (route.path) {
+        const sectionSlug = route.path.replace(/^\/docs\//, "");
+        const sectionPath = projectSlug
+          ? `/projects/${projectSlug}/docs/${sectionSlug}`
+          : `/docs/${sectionSlug}`;
 
-      if (pathname === sectionPath) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setOpenSectionPath(route.path);
-        return;
+        if (pathname === sectionPath) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setOpenSectionPath(route.id || route.path);
+          return;
+        }
       }
 
       // Check if current path matches any child document
@@ -96,7 +117,7 @@ export default function SidebarWithDnd({
 
           if (pathname === childPath) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
-            setOpenSectionPath(route.path);
+            setOpenSectionPath(route.id || route.path);
             return;
           }
         }
@@ -134,9 +155,9 @@ export default function SidebarWithDnd({
     if (activeId.startsWith("section-") && overId.startsWith("section-")) {
       // Moving sections
       const oldIndex = routes.findIndex(
-        (r) => `section-${r.path}` === activeId,
+        (r) => `section-${r.id || r.path}` === activeId,
       );
-      const newIndex = routes.findIndex((r) => `section-${r.path}` === overId);
+      const newIndex = routes.findIndex((r) => `section-${r.id || r.path}` === overId);
 
       if (oldIndex !== -1 && newIndex !== -1) {
         const newRoutes = arrayMove(routes, oldIndex, newIndex).map(
@@ -259,8 +280,8 @@ export default function SidebarWithDnd({
     if (!activeId) return null;
 
     if (activeId.startsWith("section-")) {
-      const path = activeId.replace("section-", "");
-      return routes.find((r) => r.path === path);
+      const id = activeId.replace("section-", "");
+      return routes.find((r) => (r.id || r.path) === id);
     } else if (activeId.startsWith("doc-")) {
       const path = activeId.replace("doc-", "");
       for (const route of routes) {
@@ -272,7 +293,7 @@ export default function SidebarWithDnd({
   }, [activeId, routes]);
 
   const sectionIds = useMemo(
-    () => routes.map((route) => `section-${route.path}`),
+    () => routes.map((route) => `section-${route.id || route.path}`),
     [routes],
   );
 
@@ -297,21 +318,24 @@ export default function SidebarWithDnd({
               items={sectionIds}
               strategy={verticalListSortingStrategy}
             >
-              {routes.map((route) => (
-                <SortableNavItem
-                  key={route.path}
-                  route={route}
-                  pathname={pathname}
-                  isAuthenticated={isAuthenticated}
-                  projectSlug={projectSlug}
-                  isOpen={openSectionPath === route.path}
-                  onToggle={() =>
-                    setOpenSectionPath(
-                      openSectionPath === route.path ? null : route.path,
-                    )
-                  }
-                />
-              ))}
+              {routes.map((route) => {
+                const routeId = route.id || route.path;
+                return (
+                  <SortableNavItem
+                    key={routeId}
+                    route={route}
+                    pathname={pathname}
+                    isAuthenticated={isAuthenticated}
+                    projectSlug={projectSlug}
+                    isOpen={openSectionPath === routeId}
+                    onToggle={() =>
+                      setOpenSectionPath(
+                        openSectionPath === routeId ? null : routeId,
+                      )
+                    }
+                  />
+                );
+              })}
             </SortableContext>
 
             {/* Add Section button - below all navigation items */}
@@ -369,7 +393,7 @@ const SortableNavItem = memo(function SortableNavItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `section-${route.path}` });
+  } = useSortable({ id: `section-${route.id || route.path}` });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -385,7 +409,8 @@ const SortableNavItem = memo(function SortableNavItem({
   }, [pathname, propProjectSlug]);
 
   const buildLink = useCallback(
-    (path: string) => {
+    (path: string | undefined) => {
+      if (!path) return "#";
       const cleanPath = path.replace(/^\/docs\//, "");
       if (projectSlug) {
         return `/projects/${projectSlug}/docs/${cleanPath}`;
@@ -396,15 +421,32 @@ const SortableNavItem = memo(function SortableNavItem({
     [projectSlug],
   );
 
-  const parentLink = useMemo(
-    () => buildLink(route.path),
-    [buildLink, route.path],
-  );
+  // For sections without path (categories), generate slug from title
+  const parentLink = useMemo(() => {
+    if (route.path) {
+      return buildLink(route.path);
+    } else if (route.children && route.children.length > 0) {
+      // For flat document structures, slugify the section title
+      const sectionSlug = route.title
+        .toLowerCase()
+        .replace(/<[^>]*>/g, '') // Remove HTML tags
+        .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+        .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+      return buildLink(sectionSlug);
+    }
+    return "#";
+  }, [buildLink, route.path, route.children, route.title]);
+
   const isParentActive = pathname === parentLink;
-  const sectionSlug = useMemo(
-    () => route.path.replace(/^\/docs\//, ""),
-    [route.path],
-  );
+
+  const sectionSlug = useMemo(() => {
+    if (route.path) {
+      return route.path.replace(/^\/docs\//, "");
+    } else if (route.children && route.children.length > 0) {
+      return route.children[0].path.replace(/^\/docs\//, "");
+    }
+    return "";
+  }, [route.path, route.children]);
   const isExpandable = hasChildren || (isAuthenticated && projectSlug);
 
   const childrenIds = useMemo(
@@ -444,7 +486,7 @@ const SortableNavItem = memo(function SortableNavItem({
                   : "text-gray-700 hover:bg-gray-100"
               }`}
             >
-              <span>{route.title}</span>
+              <TitleWithBadges title={route.title} />
               {hasChildren &&
                 (isOpen ? (
                   <ChevronDown size={16} />
@@ -536,7 +578,7 @@ const SortableNavItem = memo(function SortableNavItem({
                 : "text-gray-600 hover:bg-gray-100"
             }`}
           >
-            {route.title}
+            <TitleWithBadges title={route.title} />
           </Link>
         </div>
       )}
@@ -597,7 +639,7 @@ const SortableDocItem = memo(function SortableDocItem({
             : "text-gray-600 hover:bg-gray-100"
         }`}
       >
-        {child.title}
+        <TitleWithBadges title={child.title} />
       </Link>
     </div>
   );

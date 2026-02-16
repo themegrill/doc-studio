@@ -5,6 +5,17 @@ import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { FolderOpen, FileText } from "lucide-react";
 
+interface NavigationSection {
+  id?: string;
+  title: string;
+  path?: string;
+  children?: NavigationSection[];
+}
+
+interface SectionWithCount extends NavigationSection {
+  count: number;
+}
+
 export default async function ProjectDocsIndexPage({
   params,
 }: {
@@ -30,18 +41,26 @@ export default async function ProjectDocsIndexPage({
 
   // Get document counts for each section
   const sectionCounts = await Promise.all(
-    sections.map(async (section) => {
-      const sectionSlug = section.path.replace("/docs/", "");
-      const [result] = await sql`
-        SELECT COUNT(*)::int as count
-        FROM documents
-        WHERE project_id = ${project.id}
-          AND slug LIKE ${sectionSlug + "/%"}
-          AND published = true
-      `;
+    sections.map(async (section: NavigationSection): Promise<SectionWithCount> => {
+      // If section has children, it's a category - count all children
+      if (section.children && Array.isArray(section.children)) {
+        return {
+          ...section,
+          count: section.children.length,
+        };
+      }
+
+      // If section has a path, it's a single document
+      if (section.path) {
+        return {
+          ...section,
+          count: 1,
+        };
+      }
+
       return {
         ...section,
-        count: result?.count || 0,
+        count: 0,
       };
     })
   );
@@ -67,20 +86,34 @@ export default async function ProjectDocsIndexPage({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {sectionCounts.map((section) => {
-            const sectionSlug = section.path.replace("/docs/", "");
+          {sectionCounts.map((section: SectionWithCount) => {
+            // Get the section slug
+            let sectionSlug;
+            if (section.path) {
+              sectionSlug = section.path.replace("/docs/", "");
+            } else {
+              // For flat document structures, slugify the section title
+              sectionSlug = section.title
+                .toLowerCase()
+                .replace(/<[^>]*>/g, '') // Remove HTML tags
+                .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+                .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+            }
+
+            if (!sectionSlug) return null;
+
             return (
               <Link
-                key={section.path}
+                key={section.id || section.path}
                 href={`/projects/${projectSlug}/docs/${sectionSlug}`}
               >
-                <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
+                <Card className="hover:shadow-lg transition-shadow cursor-pointer">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FolderOpen className="h-5 w-5" />
-                      {section.title}
+                    <CardTitle className="flex items-start gap-2">
+                      <FolderOpen className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                      <span className="leading-snug">{section.title}</span>
                     </CardTitle>
-                    <CardDescription className="flex items-center gap-1">
+                    <CardDescription className="flex items-center gap-1 mt-2">
                       <FileText className="h-4 w-4" />
                       {section.count} {section.count === 1 ? "document" : "documents"}
                     </CardDescription>

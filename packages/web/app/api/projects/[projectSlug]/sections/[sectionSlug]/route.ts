@@ -58,10 +58,23 @@ export async function PATCH(
   let structure = nav.structure;
 
   // Find and update the section
+  // Handle both sections with path (old format) and category sections (new format)
   const sectionPath = `/docs/${sectionSlug}`;
-  const sectionIndex = structure.routes.findIndex(
-    (route: any) => route.path === sectionPath
-  );
+  const sectionIndex = structure.routes.findIndex((route: any) => {
+    // Check direct path match (old format)
+    if (route.path === sectionPath) {
+      return true;
+    }
+    // Check if this is a category section by checking children (new format)
+    if (route.children && route.children.length > 0) {
+      // Check if any child's path matches this section slug
+      return route.children.some((child: any) => {
+        const childSlug = child.slug || child.path?.replace('/docs/', '');
+        return childSlug === sectionSlug || childSlug?.startsWith(sectionSlug + '/');
+      });
+    }
+    return false;
+  });
 
   if (sectionIndex === -1) {
     return Response.json({ error: "Section not found" }, { status: 404 });
@@ -134,10 +147,23 @@ export async function DELETE(
   let structure = nav.structure;
 
   // Find the section
+  // Handle both sections with path (old format) and category sections (new format)
   const sectionPath = `/docs/${sectionSlug}`;
-  const sectionIndex = structure.routes.findIndex(
-    (route: any) => route.path === sectionPath
-  );
+  const sectionIndex = structure.routes.findIndex((route: any) => {
+    // Check direct path match (old format)
+    if (route.path === sectionPath) {
+      return true;
+    }
+    // Check if this is a category section by checking children (new format)
+    if (route.children && route.children.length > 0) {
+      // Check if any child's path matches this section slug
+      return route.children.some((child: any) => {
+        const childSlug = child.slug || child.path?.replace('/docs/', '');
+        return childSlug === sectionSlug || childSlug?.startsWith(sectionSlug + '/');
+      });
+    }
+    return false;
+  });
 
   if (sectionIndex === -1) {
     return Response.json({ error: "Section not found" }, { status: 404 });

@@ -11,6 +11,7 @@ import {
   getDefaultReactSlashMenuItems,
   getFormattingToolbarItems,
 } from "@blocknote/react";
+import { defaultBlockSpecs } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
 // @ts-expect-error - CSS imports don't have type declarations
 import "@blocknote/core/fonts/inter.css";
@@ -22,11 +23,14 @@ import { Input } from "@/components/ui/input";
 import {
   Link as LinkIcon,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
 import { useEditing } from "@/contexts/EditingContext";
 import ChatPanel from "@/components/chat/ChatPanel";
+import { parseTitleWithBadges } from "@/lib/parse-title-badges";
+import { Badge } from "@/components/ui/badge-pro";
 import {
   AIExtension,
   AIMenuController,
@@ -91,8 +95,11 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     description: doc.description || "",
   });
 
-  // Check if this is a section overview (slug has no "/" - it's a top-level section)
-  const isSectionOverview = !!projectSlug && !slug.includes("/");
+  // Check if this is a section overview
+  // A section overview is a document that represents a section itself, not just any top-level doc
+  // We need to check if this document is actually used as a section in the navigation
+  const isSectionOverview = false; // Disable section overview functionality for now
+  // TODO: Properly implement section overview detection by checking navigation structure
 
   const [saveState, setSaveState] = useState<SaveState>({
     isSaving: false,
@@ -122,6 +129,11 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
+
+  // Memoize title parsing to ensure consistent server/client rendering
+  const parsedTitle = useMemo(() => {
+    return parseTitleWithBadges(editorState.title);
+  }, [editorState.title]);
 
   // Use refs to store latest values without causing re-renders
   const editorStateRef = useRef(editorState);
@@ -158,20 +170,20 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     editingContext.setIsEditing(false);
   }, [doc.title, doc.description, editingContext]);
 
-  // Initialize chat state from localStorage
-  const [chatOpen, setChatOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("chatOpen");
-      return saved === "true";
+  // Initialize chat state - always start with false to match SSR
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Load chat state from localStorage after hydration
+  useEffect(() => {
+    const saved = localStorage.getItem("chatOpen");
+    if (saved === "true") {
+      setChatOpen(true);
     }
-    return false;
-  });
+  }, []);
 
   // Save chat state to localStorage whenever it changes
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("chatOpen", String(chatOpen));
-    }
+    localStorage.setItem("chatOpen", String(chatOpen));
   }, [chatOpen]);
 
   // Hide selection menu when clicking outside
@@ -240,9 +252,150 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       });
     };
 
+    const renderImages = () => {
+      // Find all image blocks and render them
+      const editorEl = document.querySelector('.bn-editor');
+      if (!editorEl) return;
+
+      doc.blocks.forEach((block) => {
+        if (block.type === 'image' && block.props?.url && block.id) {
+          // Find the corresponding block element by ID (more reliable than index)
+          const blockElement = editorEl.querySelector(`[data-id="${block.id}"]`);
+
+          if (blockElement && !blockElement.classList.contains('custom-image-rendered')) {
+            // Mark as rendered to avoid duplicate processing
+            blockElement.classList.add('custom-image-rendered');
+
+            // Create image element
+            const imgContainer = document.createElement('div');
+            imgContainer.className = 'custom-image-block';
+            imgContainer.style.cssText = 'margin: 1.5rem 0; text-align: center;';
+
+            const img = document.createElement('img');
+            img.src = block.props.url;
+            img.alt = block.props.caption || '';
+            img.style.cssText = 'max-width: 100%; height: auto; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);';
+
+            imgContainer.appendChild(img);
+
+            if (block.props.caption) {
+              const caption = document.createElement('div');
+              caption.textContent = block.props.caption;
+              caption.style.cssText = 'margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280; font-style: italic;';
+              imgContainer.appendChild(caption);
+            }
+
+            // Replace the block element with our image
+            blockElement.replaceWith(imgContainer);
+          }
+        }
+      });
+    };
+
+    const makeLinksClickable = () => {
+      // Create a Set of all URLs from our blocks
+      const urlsInContent = new Set<string>();
+      doc.blocks.forEach(block => {
+        if (block.content && Array.isArray(block.content)) {
+          block.content.forEach(item => {
+            if (item.href) {
+              urlsInContent.add(item.href);
+            }
+          });
+        }
+      });
+
+      // Find all text nodes in the editor
+      const editorEl = document.querySelector('.bn-editor');
+      if (!editorEl) {
+        return;
+      }
+
+      const walker = document.createTreeWalker(
+        editorEl,
+        NodeFilter.SHOW_TEXT,
+        null
+      );
+
+      const nodesToReplace: Array<{node: Text; url: string}> = [];
+      let node: Text | null;
+      let textNodesChecked = 0;
+
+      while (node = walker.nextNode() as Text | null) {
+        if (node && node.textContent) {
+          textNodesChecked++;
+          const text = node.textContent.trim();
+
+          // Only match if the text node contains JUST the URL or URL with minimal surrounding text
+          // Don't replace if it's part of a larger paragraph to avoid breaking content
+          for (const url of urlsInContent) {
+            // Only linkify if:
+            // 1. Text is exactly the URL, OR
+            // 2. Text contains the URL but is short (< 200 chars) to avoid breaking paragraphs
+            if (text === url || (text.includes(url) && text.length < 200)) {
+              // Skip if already inside a link element
+              let parent = node.parentElement;
+              let isInsideLink = false;
+              while (parent) {
+                if (parent.tagName === 'A') {
+                  isInsideLink = true;
+                  break;
+                }
+                parent = parent.parentElement;
+              }
+
+              if (!isInsideLink) {
+                nodesToReplace.push({ node, url });
+                break; // Only match once per node
+              }
+            }
+          }
+        }
+      }
+
+      // Replace text nodes with links (only the URL part)
+      nodesToReplace.forEach(({ node, url }) => {
+        const text = node.textContent || '';
+        const urlIndex = text.indexOf(url);
+
+        if (urlIndex === -1 || !node.parentNode) return;
+
+        const parent = node.parentNode;
+
+        // Create text before URL (if any)
+        if (urlIndex > 0) {
+          const beforeText = document.createTextNode(text.substring(0, urlIndex));
+          parent.insertBefore(beforeText, node);
+        }
+
+        // Create the link
+        const link = document.createElement('a');
+        link.href = url;
+        link.textContent = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.className = 'bn-content-link';
+        parent.insertBefore(link, node);
+
+        // Create text after URL (if any)
+        const afterIndex = urlIndex + url.length;
+        if (afterIndex < text.length) {
+          const afterText = document.createTextNode(text.substring(afterIndex));
+          parent.insertBefore(afterText, node);
+        }
+
+        // Remove the original text node
+        parent.removeChild(node);
+      });
+    };
+
     // Run after a short delay to ensure BlockNote has rendered
     // Using a single timeout is fine - no need for polling here
-    const timer = setTimeout(addHeadingAnchors, 150);
+    const timer = setTimeout(() => {
+      addHeadingAnchors();
+      renderImages();
+      makeLinksClickable();
+    }, 150);
 
     return () => clearTimeout(timer);
   }, [editorState.isEditing, doc.blocks]);
@@ -800,7 +953,14 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
             </div>
           ) : (
             <>
-              <h1 className="text-3xl font-bold mb-2">{editorState.title}</h1>
+              <h1 className="text-3xl font-bold mb-2">
+                {parsedTitle.cleanTitle}
+                {parsedTitle.badges.map((badge, idx) => (
+                  <Badge key={`badge-${idx}`} variant={badge.variant} className="ml-3">
+                    {badge.text}
+                  </Badge>
+                ))}
+              </h1>
               {editorState.description && (
                 <p className="text-gray-600">{editorState.description}</p>
               )}
@@ -846,6 +1006,18 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
           }
           .group:hover .heading-anchor {
             opacity: 1;
+          }
+          /* Style links in read-only mode */
+          .bn-editor a[href],
+          .bn-editor .bn-content-link {
+            color: #2563eb !important;
+            text-decoration: underline;
+            cursor: pointer;
+          }
+          .bn-editor a[href]:hover,
+          .bn-editor .bn-content-link:hover {
+            color: #1d4ed8 !important;
+            text-decoration: underline;
           }
         `}</style>
         <BlockNoteView

@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ProjectMembersTable } from "@/components/projects/ProjectMembersTable";
+import { ProjectSettingsTabs } from "@/components/projects/ProjectSettingsTabs";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -77,29 +77,13 @@ export default async function ProjectSettingsPage({
           <p className="text-gray-600 mt-1">Project Settings</p>
         </div>
 
-        <div className="bg-white rounded-lg border">
-          <div className="border-b px-6 py-4">
-            <h2 className="text-xl font-semibold">Members</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Manage who has access to this project and their roles
-            </p>
-          </div>
-
-          <div className="p-6">
-            {isSuperAdmin && (
-              <div className="mb-4 bg-purple-50 border border-purple-200 rounded-md p-3">
-                <p className="text-sm text-purple-800">
-                  You have full access to this project as a system
-                  administrator.
-                </p>
-              </div>
-            )}
-            <ProjectMembersTable
-              projectSlug={project.slug}
-              currentUserRole={effectiveRole}
-            />
-          </div>
-        </div>
+        <ProjectSettingsTabs
+          projectSlug={project.slug}
+          projectId={project.id}
+          projectName={project.name}
+          currentUserRole={effectiveRole}
+          isSuperAdmin={isSuperAdmin}
+        />
       </div>
     </div>
   );

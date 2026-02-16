@@ -112,9 +112,22 @@ export async function POST(
     const structure = nav.structure;
 
     // Find the section and add the document
-    const section = structure.routes?.find(
-      (r: any) => r.path === `/docs/${sectionSlug}`
-    );
+    // Check both path (old format) and children paths (new category format)
+    const section = structure.routes?.find((r: any) => {
+      // Check direct path match (old format)
+      if (r.path === `/docs/${sectionSlug}`) {
+        return true;
+      }
+      // Check if this is a category with children that match the section (new format)
+      if (r.children && r.children.length > 0) {
+        // Check if any child's path starts with this section slug
+        return r.children.some((child: any) => {
+          const childSlug = child.slug || child.path?.replace('/docs/', '');
+          return childSlug?.startsWith(sectionSlug + '/') || childSlug === sectionSlug;
+        });
+      }
+      return false;
+    });
 
     if (section) {
       if (!section.children) {
@@ -122,8 +135,10 @@ export async function POST(
       }
 
       section.children.push({
+        id: doc.id,
         title,
         path: `/docs/${fullSlug}`,
+        slug: fullSlug,
       });
 
       // Update navigation

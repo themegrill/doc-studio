@@ -37,7 +37,12 @@ interface EditUserDialogProps {
   currentUserRole?: string;
 }
 
-export function EditUserDialog({ user, open, onOpenChange, currentUserRole }: EditUserDialogProps) {
+export function EditUserDialog({
+  user,
+  open,
+  onOpenChange,
+  currentUserRole,
+}: EditUserDialogProps) {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -68,7 +73,7 @@ export function EditUserDialog({ user, open, onOpenChange, currentUserRole }: Ed
         email,
         name,
         ...(password.trim() && { password }),
-        ...(canManageRoles && { role })
+        ...(canManageRoles && { role }),
       };
 
       const response = await fetch(`/api/users/${user.id}`, {
@@ -142,9 +147,7 @@ export function EditUserDialog({ user, open, onOpenChange, currentUserRole }: Ed
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="edit-password">
-                New Password
-              </Label>
+              <Label htmlFor="edit-password">New Password</Label>
               <Input
                 id="edit-password"
                 type="password"
@@ -174,16 +177,12 @@ export function EditUserDialog({ user, open, onOpenChange, currentUserRole }: Ed
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-gray-500">
-                  <strong>User:</strong> Regular access • <strong>Admin:</strong> Can manage users • <strong>Super Admin:</strong> Full system access
+                  <strong>User:</strong> Regular access •{" "}
+                  <strong>Admin:</strong> Can manage users •{" "}
+                  <strong>Super Admin:</strong> Full system access
                 </p>
               </div>
             )}
-
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-              <p className="text-xs text-blue-800">
-                💡 Project roles (Owner, Admin, Editor, Viewer) are managed in each project's settings.
-              </p>
-            </div>
           </div>
 
           <DialogFooter>

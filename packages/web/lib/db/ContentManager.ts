@@ -39,8 +39,10 @@ export interface Navigation {
 }
 
 export interface NavRoute {
+  id?: string;
   title: string;
-  path: string;
+  path?: string;
+  slug?: string;
   children?: NavRoute[];
   orderIndex?: number;
 }
@@ -136,21 +138,58 @@ export class ContentManager {
           const isSectionOverview = !slug.includes("/");
 
           if (isSectionOverview) {
-            // Update section title in navigation
-            const sectionIndex = structure.routes.findIndex(
-              (route) => route.path === docPath
-            );
-            if (sectionIndex !== -1) {
-              structure.routes[sectionIndex].title = title;
-              titleUpdated = true;
+            // First, check if this document exists as a child in any section
+            let isActuallyChild = false;
+            structure.routes.forEach((route) => {
+              if (route.children && route.children.length > 0) {
+                const hasMatchingChild = route.children.some((child: any) => {
+                  const childSlug = child.slug || child.path?.replace('/docs/', '');
+                  return childSlug === slug;
+                });
+                if (hasMatchingChild) {
+                  isActuallyChild = true;
+                }
+              }
+            });
+
+            // Only treat as section overview if it's NOT a child document
+            if (!isActuallyChild) {
+              // Update section title in navigation
+              const sectionIndex = structure.routes.findIndex((route) => {
+                // Only match sections with actual paths (not category sections)
+                if (route.path === docPath) {
+                  return true;
+                }
+                return false;
+              });
+
+              if (sectionIndex !== -1) {
+                structure.routes[sectionIndex].title = title;
+                titleUpdated = true;
+              }
             }
-          } else {
+          }
+
+          // If not found as section overview, or if isSectionOverview is false, try as child document
+          if (!titleUpdated) {
             // Update document title in navigation (inside a section)
             structure.routes = structure.routes.map((route) => {
-              if (route.children) {
-                const childIndex = route.children.findIndex(
-                  (child) => child.path === docPath
-                );
+              if (route.children && route.children.length > 0) {
+                const childIndex = route.children.findIndex((child) => {
+                  // Check multiple matching strategies to handle different navigation formats
+                  if (child.path === docPath) {
+                    return true;
+                  }
+                  if (child.slug === slug) {
+                    return true;
+                  }
+                  // Also check path without /docs/ prefix
+                  if (child.path === `/docs/${slug}`) {
+                    return true;
+                  }
+                  return false;
+                });
+
                 if (childIndex !== -1) {
                   route.children[childIndex].title = title;
                   titleUpdated = true;
@@ -350,7 +389,7 @@ export class ContentManager {
         await this.sql`
           UPDATE navigation
           SET
-            structure = ${JSON.stringify(navigation)}::jsonb,
+            structure = ${this.sql.json(navigation)},
             updated_by = ${session.user.id}
           WHERE id = ${current.id}
         `;
@@ -358,7 +397,7 @@ export class ContentManager {
         // Create initial navigation for project
         await this.sql`
           INSERT INTO navigation (project_id, structure, updated_by)
-          VALUES (${projectId}, ${JSON.stringify(navigation)}::jsonb, ${session.user.id})
+          VALUES (${projectId}, ${this.sql.json(navigation)}, ${session.user.id})
         `;
       }
 
