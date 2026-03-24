@@ -1,5 +1,8 @@
-export { auth as default } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
+export function proxy(req: Request) {
+  return auth(req);
+}
 export const config = {
   matcher: [
     /*

@@ -17,8 +17,10 @@ export default async function ProjectDocsLayout({
   // Get project from slug
   const sql = getDb();
   const [project] = await sql`
-    SELECT id, name, slug, metadata FROM projects WHERE slug = ${projectSlug}
-  `;
+  SELECT id, name, slug, settings AS metadata
+  FROM projects
+  WHERE slug = ${projectSlug}
+`;
 
   if (!project) {
     notFound();

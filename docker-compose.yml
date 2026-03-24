@@ -13,7 +13,7 @@ services:
       POSTGRES_DB: tg_docs_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./packages/web/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./packages/web/db:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tg_docs_user -d tg_docs_db"]
       interval: 10s

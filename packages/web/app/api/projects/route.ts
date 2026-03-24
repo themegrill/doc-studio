@@ -12,28 +12,70 @@ export async function GET() {
   try {
     let projects;
 
-    if (session?.user?.id) {
-      // Show projects user has access to
-      projects = await sql`
-        SELECT p.id, p.name, p.slug, p.description, p.domain, p.settings,
-               p.created_at, p.updated_at,
-               COUNT(d.id) as doc_count
-        FROM projects p
-        LEFT JOIN project_members pm ON p.id = pm.project_id
-        LEFT JOIN documents d ON p.id = d.project_id
-        WHERE pm.user_id = ${session.user.id}
-        GROUP BY p.id, p.name, p.slug, p.description, p.domain, p.settings, p.created_at, p.updated_at
-        ORDER BY p.created_at DESC
+    if (session?.user?.email) {
+      // Resolve the authenticated user from the database by email
+      const [dbUser] = await sql`
+        SELECT id, email, name
+        FROM users
+        WHERE email = ${session.user.email}
       `;
+
+      if (dbUser) {
+        // Show only projects the resolved DB user has access to
+        projects = await sql`
+          SELECT
+            p.id,
+            p.name,
+            p.slug,
+            p.description,
+            p.domain,
+            p.settings,
+            p.created_at,
+            p.updated_at,
+            COUNT(d.id) as doc_count
+          FROM projects p
+          LEFT JOIN project_members pm ON p.id = pm.project_id
+          LEFT JOIN documents d ON p.id = d.project_id
+          WHERE pm.user_id = ${dbUser.id}
+          GROUP BY
+            p.id,
+            p.name,
+            p.slug,
+            p.description,
+            p.domain,
+            p.settings,
+            p.created_at,
+            p.updated_at
+          ORDER BY p.created_at DESC
+        `;
+      } else {
+        // Fallback: authenticated session exists but matching DB user was not found
+        projects = [];
+      }
     } else {
       // Show all projects for non-authenticated users
       projects = await sql`
-        SELECT p.id, p.name, p.slug, p.description, p.domain, p.settings,
-               p.created_at, p.updated_at,
-               COUNT(d.id) as doc_count
+        SELECT
+          p.id,
+          p.name,
+          p.slug,
+          p.description,
+          p.domain,
+          p.settings,
+          p.created_at,
+          p.updated_at,
+          COUNT(d.id) as doc_count
         FROM projects p
         LEFT JOIN documents d ON p.id = d.project_id
-        GROUP BY p.id, p.name, p.slug, p.description, p.domain, p.settings, p.created_at, p.updated_at
+        GROUP BY
+          p.id,
+          p.name,
+          p.slug,
+          p.description,
+          p.domain,
+          p.settings,
+          p.created_at,
+          p.updated_at
         ORDER BY p.created_at DESC
       `;
     }
@@ -42,7 +84,10 @@ export async function GET() {
   } catch (error) {
     console.error("Error fetching projects:", error);
     return NextResponse.json(
-      { error: "Failed to fetch projects" },
+      {
+        error: "Failed to fetch projects",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
@@ -53,7 +98,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
 
   // Require authentication to create projects
-  if (!session?.user?.id) {
+  if (!session?.user?.email) {
     return NextResponse.json(
       { error: "Authentication required" },
       { status: 401 }
@@ -83,6 +128,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Resolve the authenticated user from the database by email
+    const [dbUser] = await sql`
+      SELECT id, email, name
+      FROM users
+      WHERE email = ${session.user.email}
+    `;
+
+    if (!dbUser) {
+      return NextResponse.json(
+        {
+          error: "Authenticated user not found in database",
+          sessionEmail: session.user.email,
+        },
+        { status: 400 }
+      );
+    }
+
     // Check if slug already exists
     const existingProject = await sql`
       SELECT id FROM projects WHERE slug = ${slug}
@@ -95,7 +157,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create the project
+    // Create the project using the resolved DB user id
     const [project] = await sql`
       INSERT INTO projects (name, slug, description, domain, settings, created_by)
       VALUES (
@@ -104,15 +166,23 @@ export async function POST(req: NextRequest) {
         ${description || null},
         ${domain || null},
         ${settings ? JSON.stringify(settings) : "{}"},
-        ${session.user.id}
+        ${dbUser.id}
       )
-      RETURNING id, name, slug, description, domain, settings, created_at, updated_at
+      RETURNING
+        id,
+        name,
+        slug,
+        description,
+        domain,
+        settings,
+        created_at,
+        updated_at
     `;
 
-    // Add the creator as project owner
+    // Add the creator as project owner using the resolved DB user id
     await sql`
       INSERT INTO project_members (project_id, user_id, role)
-      VALUES (${project.id}, ${session.user.id}, 'owner')
+      VALUES (${project.id}, ${dbUser.id}, 'owner')
     `;
 
     // If knowledge base data is provided, save it to file
@@ -145,7 +215,10 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Error creating project:", error);
     return NextResponse.json(
-      { error: "Failed to create project" },
+      {
+        error: "Failed to create project",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

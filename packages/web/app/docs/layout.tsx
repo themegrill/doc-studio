@@ -3,6 +3,7 @@ import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
 import { headers } from "next/headers";
 import { getProjectFromRequest } from "@/lib/project-helpers";
 import { notFound } from "next/navigation";
+import { getDb } from "@/lib/db/postgres";
 
 export default async function DocsLayout({
   children,
@@ -10,13 +11,23 @@ export default async function DocsLayout({
   children: React.ReactNode;
 }) {
   const cm = ContentManager.create();
+  const sql = getDb();
 
-  // Get project from domain
   const headersList = await headers();
   const hostname = headersList.get("host") || "localhost";
   const pathname = headersList.get("x-pathname") || "/docs";
 
-  const project = await getProjectFromRequest(hostname, pathname);
+  const projectFromRequest = await getProjectFromRequest(hostname, pathname);
+
+  if (!projectFromRequest) {
+    notFound();
+  }
+
+  const [project] = await sql`
+    SELECT id, name, slug, settings AS metadata
+    FROM projects
+    WHERE slug = ${projectFromRequest.slug}
+  `;
 
   if (!project) {
     notFound();
