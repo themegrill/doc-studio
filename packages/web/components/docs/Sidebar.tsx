@@ -95,12 +95,17 @@ const NavItem = memo(function NavItem({
     }
   }, [projectSlug]);
 
-  const parentLink = useMemo(() => buildLink(route.path), [buildLink, route.path]);
-  const isParentActive = pathname === parentLink;
+const parentLink = useMemo(
+  () => (route.path ? buildLink(route.path) : "#"),
+  [buildLink, route.path]
+);
+const isParentActive = route.path ? pathname === parentLink : false;
 
   // Extract section slug from route path for AddDocumentButton
-  const sectionSlug = useMemo(() => route.path.replace(/^\/docs\//, ""), [route.path]);
-
+const sectionSlug = useMemo(
+  () => route.path?.replace(/^\/docs\//, "") ?? "",
+  [route.path]
+);
   // Show as expandable if has children OR if authenticated (so they can add documents)
   const isExpandable = hasChildren || (isAuthenticated && projectSlug);
 
@@ -161,7 +166,7 @@ const NavItem = memo(function NavItem({
           {isOpen && hasChildren && (
             <div className="ml-4 mt-1 space-y-1">
               {route.children?.map((child) => {
-                const childLink = buildLink(child.path);
+               	const childLink = child.path ? buildLink(child.path) : "#";
                 return (
                   <Link
                     key={child.path}
@@ -194,13 +199,13 @@ const NavItem = memo(function NavItem({
         </>
       ) : (
         <Link
-          href={buildLink(route.path)}
-          className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
-            pathname === buildLink(route.path)
-              ? "bg-blue-100 text-blue-700 font-medium"
-              : "text-gray-600 hover:bg-gray-100"
-          }`}
-        >
+			href={route.path ? buildLink(route.path) : "#"}
+			className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+				route.path && pathname === buildLink(route.path)
+				? "bg-blue-100 text-blue-700 font-medium"
+				: "text-gray-600 hover:bg-gray-100"
+			}`}
+			>
           <FileText size={14} />
           {route.title}
         </Link>

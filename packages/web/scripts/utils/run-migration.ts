@@ -5,7 +5,7 @@
  * Runs the user roles migration
  */
 
-import { getDb } from "../lib/db/postgres";
+import { getDb } from "../../lib/db/postgres";
 
 async function runMigration() {
   console.log("🔄 Running database migration...\n");

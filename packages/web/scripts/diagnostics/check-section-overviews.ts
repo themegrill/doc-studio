@@ -1,4 +1,4 @@
-import { getDb } from '../lib/db/postgres';
+import { getDb } from "../../lib/db/postgres";
 
 /**
  * Check which sections have overview documents
@@ -6,7 +6,7 @@ import { getDb } from '../lib/db/postgres';
 async function checkSectionOverviews() {
   const sql = getDb();
 
-  console.log('\n=== Checking Section Overview Documents ===\n');
+  console.log("\n=== Checking Section Overview Documents ===\n");
 
   const projects = await sql`SELECT id, name, slug FROM projects`;
 
@@ -29,11 +29,12 @@ async function checkSectionOverviews() {
       if (route.children && route.children.length > 0) {
         // Check if first child is a section overview
         const firstChild = route.children[0];
-        const firstChildSlug = firstChild.slug || firstChild.path?.replace('/docs/', '');
+        const firstChildSlug =
+          firstChild.slug || firstChild.path?.replace("/docs/", "");
 
         // Check if there's a document that matches the section name
         // (section overview would have a slug without slash)
-        const sectionSlug = firstChildSlug?.split('/')[0];
+        const sectionSlug = firstChildSlug?.split("/")[0];
 
         const [overviewDoc] = await sql`
           SELECT id, slug, title FROM documents
@@ -42,7 +43,9 @@ async function checkSectionOverviews() {
         `;
 
         if (overviewDoc) {
-          console.log(`    ✓ HAS OVERVIEW: ${overviewDoc.slug} - "${overviewDoc.title}"`);
+          console.log(
+            `    ✓ HAS OVERVIEW: ${overviewDoc.slug} - "${overviewDoc.title}"`
+          );
         } else {
           console.log(`    ✗ NO OVERVIEW (first child: ${firstChildSlug})`);
         }
@@ -50,11 +53,11 @@ async function checkSectionOverviews() {
     }
   }
 
-  console.log('\n');
+  console.log("\n");
   process.exit(0);
 }
 
-checkSectionOverviews().catch(err => {
-  console.error('❌ Error:', err);
+checkSectionOverviews().catch((err) => {
+  console.error("❌ Error:", err);
   process.exit(1);
 });

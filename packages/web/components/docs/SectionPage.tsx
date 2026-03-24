@@ -10,16 +10,24 @@ import DeleteSectionButton from "@/components/docs/DeleteSectionButton";
 import ChatPanel from "@/components/chat/ChatPanel";
 import { useEditing } from "@/contexts/EditingContext";
 
+type ChildDoc = {
+  id: string
+  slug: string
+  title: string
+  order_index?: number
+}
 interface SectionPageProps {
   projectSlug: string;
   sectionSlug: string;
   sectionTitle: string;
+  childDocs?: ChildDoc[]
 }
 
 export default function SectionPage({
   projectSlug,
   sectionSlug,
   sectionTitle,
+  childDocs
 }: SectionPageProps) {
   const router = useRouter();
   const { data: session } = useSession();

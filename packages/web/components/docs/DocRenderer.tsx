@@ -13,9 +13,7 @@ import {
 } from "@blocknote/react";
 import { defaultBlockSpecs } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
-// @ts-expect-error - CSS imports don't have type declarations
 import "@blocknote/core/fonts/inter.css";
-// @ts-expect-error - CSS imports don't have type declarations
 import "@blocknote/mantine/style.css";
 import { DocContent } from "@/lib/db/ContentManager";
 import { Button } from "@/components/ui/button";
@@ -40,7 +38,6 @@ import {
 } from "@blocknote/xl-ai";
 import { en as aiLocale } from "@blocknote/xl-ai/locales";
 import { DefaultChatTransport } from "ai";
-// @ts-expect-error - CSS imports don't have type declarations
 import "@blocknote/xl-ai/style.css";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
 
@@ -149,14 +146,15 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   useEffect(() => {
     if (editingContext.isEditing !== editorState.isEditing) {
       setEditorState((prev) => ({
-        ...prev,
-        isEditing: editingContext.isEditing,
-        ...(editingContext.isEditing &&
-          isSectionOverview && {
-            isEditingSectionTitle: true,
-            sectionTitle: prev.title,
-          }),
-      }));
+		...prev,
+		isEditing: editingContext.isEditing,
+		...(editingContext.isEditing && isSectionOverview
+			? {
+				isEditingSectionTitle: true,
+				sectionTitle: prev.title,
+			}
+			: {}),
+		}));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingContext.isEditing]);
@@ -1071,10 +1069,12 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
                 setEditorState((prev) => ({
                   ...prev,
                   isEditing: true,
-                  ...(isSectionOverview && {
-                    isEditingSectionTitle: true,
-                    sectionTitle: editorState.title,
-                  }),
+                  ...(isSectionOverview
+						? {
+							isEditingSectionTitle: true,
+							sectionTitle: editorState.title,
+							}
+						: {}),
                 }));
               }}
             />

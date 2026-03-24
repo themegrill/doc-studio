@@ -4,7 +4,7 @@
  * Set a password for a user
  */
 
-import { getDb } from "../lib/db/postgres";
+import { getDb } from "../../lib/db/postgres";
 import bcrypt from "bcryptjs";
 
 async function setUserPassword() {

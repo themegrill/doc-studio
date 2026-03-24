@@ -39,9 +39,10 @@ export async function POST(req: NextRequest) {
     const { text: improvedText, usage } = await generateText({
       model: anthropic(config.defaultModel),
       system: `You are a helpful writing assistant that improves text clarity, grammar, and professionalism.
-${context === "title"
-  ? "You are improving a document title. Keep it concise (3-8 words) and professional."
-  : "You are improving a document description. Keep it brief (1-2 sentences) and informative."
+${
+  context === "title"
+    ? "You are improving a document title. Keep it concise (3-8 words) and professional."
+    : "You are improving a document description. Keep it brief (1-2 sentences) and informative."
 }
 
 Rules:
@@ -54,7 +55,7 @@ Rules:
 
 ${text}`,
       temperature: config.temperature,
-      maxTokens: Math.min(config.maxTokens, 300),
+      maxOutputTokens: Math.min(config.maxTokens, 300),
     });
 
     const result = improvedText.trim();
@@ -64,8 +65,8 @@ ${text}`,
       userId: session?.user?.id,
       feature: "textGeneration",
       model: config.defaultModel,
-      promptTokens: usage?.promptTokens || usage?.inputTokens || 0,
-      completionTokens: usage?.completionTokens || usage?.outputTokens || 0,
+      promptTokens: usage?.inputTokens || 0,
+      completionTokens: usage?.outputTokens || 0,
       durationMs: Date.now() - startTime,
       success: true,
     });

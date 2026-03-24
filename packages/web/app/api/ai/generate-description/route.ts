@@ -52,9 +52,11 @@ Title: ${title || "Untitled"}
 Content:
 ${content}
 
-${currentDescription ? `Current description: "${currentDescription}"\n\n` : ""}Generate a better description that summarizes this content.`,
+${
+  currentDescription ? `Current description: "${currentDescription}"\n\n` : ""
+}Generate a better description that summarizes this content.`,
       temperature: config.temperature,
-      maxTokens: Math.min(config.maxTokens, 200), // Descriptions don't need many tokens
+      maxOutputTokens: Math.min(config.maxTokens, 200), // Descriptions don't need many tokens
     });
 
     const generatedDescription = text.trim();
@@ -64,8 +66,8 @@ ${currentDescription ? `Current description: "${currentDescription}"\n\n` : ""}G
       userId: session?.user?.id,
       feature: "descriptionGeneration",
       model: config.defaultModel,
-      promptTokens: usage?.promptTokens || usage?.inputTokens || 0,
-      completionTokens: usage?.completionTokens || usage?.outputTokens || 0,
+      promptTokens: usage?.inputTokens || 0,
+      completionTokens: usage?.outputTokens || 0,
       durationMs: Date.now() - startTime,
       success: true,
     });

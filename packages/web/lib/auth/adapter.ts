@@ -99,13 +99,31 @@ export function PostgresAdapter(): Adapter {
     },
 
     async linkAccount(account) {
-      const refreshToken = account.refresh_token || null;
-      const accessToken = account.access_token || null;
-      const expiresAt = account.expires_at || null;
-      const tokenType = account.token_type || null;
-      const scope = account.scope || null;
-      const idToken = account.id_token || null;
-      const sessionState = account.session_state || null;
+      	const refreshToken =
+          typeof account.refresh_token === "string"
+            ? account.refresh_token
+            : null;
+
+        const accessToken =
+          typeof account.access_token === "string"
+            ? account.access_token
+            : null;
+
+        const expiresAt =
+          typeof account.expires_at === "number" ? account.expires_at : null;
+
+        const tokenType =
+          typeof account.token_type === "string" ? account.token_type : null;
+
+        const scope = typeof account.scope === "string" ? account.scope : null;
+
+        const idToken =
+          typeof account.id_token === "string" ? account.id_token : null;
+
+        const sessionState =
+          typeof account.session_state === "string"
+            ? account.session_state
+            : null;
 
       await sql`
         INSERT INTO accounts (

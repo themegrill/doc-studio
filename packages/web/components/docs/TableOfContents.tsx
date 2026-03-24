@@ -8,7 +8,7 @@ interface Heading {
   id: string;
   text: string;
   level: number;
-  element?: Element; // Store reference to actual DOM element for duplicates
+  element?: HTMLElement; // Store reference to actual DOM element for duplicates
 }
 
 export default function TableOfContents() {
@@ -43,22 +43,21 @@ export default function TableOfContents() {
       );
 
       // Extract all headings and keep duplicates (store element references)
-      const headingData: Heading[] = Array.from(headingElements)
-        .map((heading) => {
-          const text = heading.textContent?.trim().replace(/^#+\s*/, "") || "";
-          const id = heading.id;
+      const headingData: Heading[] = Array.from(headingElements).flatMap((heading) => {
+		const text = heading.textContent?.trim().replace(/^#+\s*/, "") || "";
+		const id = heading.id;
 
-          // Skip if no text or ID
-          if (!text || !id) return null;
+		if (!text || !id) return [];
 
-          return {
-            id,
-            text,
-            level: parseInt(heading.tagName.substring(1)),
-            element: heading, // Store element reference for duplicates
-          };
-        })
-        .filter((h): h is Heading => h !== null);
+		return [
+			{
+			id,
+			text,
+			level: parseInt(heading.tagName.substring(1)),
+			element: heading as HTMLElement,
+			},
+		];
+	});
 
       // Check if we're in view mode (headings have IDs)
       if (headingData.length > 0) {

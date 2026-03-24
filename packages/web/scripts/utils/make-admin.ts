@@ -4,7 +4,7 @@
  * Make a user a system admin
  */
 
-import { getDb } from "../lib/db/postgres";
+import { getDb } from "../../lib/db/postgres";
 
 async function makeAdmin() {
   const sql = getDb();

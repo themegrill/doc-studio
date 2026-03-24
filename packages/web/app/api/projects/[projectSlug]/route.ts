@@ -111,19 +111,16 @@ export async function DELETE(
   }
 
   // Delete all associated data (CASCADE should handle this, but being explicit)
-  await sql.begin(async (sql) => {
-    // Delete documents
-    await sql`DELETE FROM documents WHERE project_id = ${project.id}`;
-
-    // Delete navigation
-    await sql`DELETE FROM navigation WHERE project_id = ${project.id}`;
-
-    // Delete project members
-    await sql`DELETE FROM project_members WHERE project_id = ${project.id}`;
-
-    // Delete project
-    await sql`DELETE FROM projects WHERE id = ${project.id}`;
-  });
+ await sql.begin(async (tx) => {
+   await tx.unsafe(`DELETE FROM documents WHERE project_id = $1`, [project.id]);
+   await tx.unsafe(`DELETE FROM navigation WHERE project_id = $1`, [
+     project.id,
+   ]);
+   await tx.unsafe(`DELETE FROM project_members WHERE project_id = $1`, [
+     project.id,
+   ]);
+   await tx.unsafe(`DELETE FROM projects WHERE id = $1`, [project.id]);
+ });
 
   return Response.json({ success: true });
 }

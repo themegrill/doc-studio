@@ -18,7 +18,10 @@ import path from "path";
 // Load environment variables from .env.local
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
-import { syncAllKnowledgeBases, clearKnowledgeBaseCache } from "../lib/github-kb-fetcher";
+import {
+  syncAllKnowledgeBases,
+  clearKnowledgeBaseCache,
+} from "../../lib/github-kb-fetcher";
 
 async function main() {
   const args = process.argv.slice(2);

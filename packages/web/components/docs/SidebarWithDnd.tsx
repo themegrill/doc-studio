@@ -110,14 +110,16 @@ export default function SidebarWithDnd({
       // Check if current path matches any child document
       if (route.children) {
         for (const child of route.children) {
-          const childSlug = child.path.replace(/^\/docs\//, "");
-          const childPath = projectSlug
+			if (!child.path) continue;
+
+			const childSlug = child.path.replace(/^\/docs\//, "");
+			const childPath = projectSlug
             ? `/projects/${projectSlug}/docs/${childSlug}`
             : `/docs/${childSlug}`;
 
           if (pathname === childPath) {
             // eslint-disable-next-line react-hooks/set-state-in-effect
-            setOpenSectionPath(route.id || route.path);
+            setOpenSectionPath(route.id ?? route.path ?? null);
             return;
           }
         }
@@ -330,7 +332,7 @@ export default function SidebarWithDnd({
                     isOpen={openSectionPath === routeId}
                     onToggle={() =>
                       setOpenSectionPath(
-                        openSectionPath === routeId ? null : routeId,
+                        openSectionPath === routeId ? null : ( routeId ?? null ),
                       )
                     }
                   />
@@ -440,13 +442,18 @@ const SortableNavItem = memo(function SortableNavItem({
   const isParentActive = pathname === parentLink;
 
   const sectionSlug = useMemo(() => {
-    if (route.path) {
-      return route.path.replace(/^\/docs\//, "");
-    } else if (route.children && route.children.length > 0) {
-      return route.children[0].path.replace(/^\/docs\//, "");
-    }
-    return "";
-  }, [route.path, route.children]);
+		if (route.path) {
+			return route.path.replace(/^\/docs\//, "");
+		}
+
+		const firstChild = route.children?.[0];
+
+		if (firstChild?.path) {
+			return firstChild.path.replace(/^\/docs\//, "");
+		}
+
+		return "";
+	}, [route.path, route.children]);
   const isExpandable = hasChildren || (isAuthenticated && projectSlug);
 
   const childrenIds = useMemo(
@@ -614,7 +621,7 @@ const SortableDocItem = memo(function SortableDocItem({
     cursor: isDragging ? "grabbing" : "default",
   };
 
-  const childLink = buildLink(child.path);
+  const childLink = child.path ? buildLink(child.path) : "#";
 
   return (
     <div

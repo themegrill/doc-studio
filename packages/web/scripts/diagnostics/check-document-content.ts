@@ -1,11 +1,11 @@
-import { getDb } from '../lib/db/postgres';
+import { getDb } from "../../lib/db/postgres";
 
 /**
  * Check document content to diagnose rendering issues
  */
 async function checkDocumentContent() {
   const sql = getDb();
-  const slug = 'managing-users-in-user-registration-membership';
+  const slug = "managing-users-in-user-registration-membership";
 
   console.log(`\n=== Checking document: ${slug} ===\n`);
 
@@ -16,7 +16,7 @@ async function checkDocumentContent() {
   `;
 
   if (!doc) {
-    console.log('❌ Document not found');
+    console.log("❌ Document not found");
     process.exit(1);
   }
 
@@ -36,8 +36,12 @@ async function checkDocumentContent() {
     if (block.content) {
       console.log(`  Content (${block.content.length} items):`);
       block.content.forEach((item: any, i: number) => {
-        if (item.type === 'text') {
-          console.log(`    ${i + 1}. Text: "${item.text?.substring(0, 100)}${item.text?.length > 100 ? '...' : ''}"`);
+        if (item.type === "text") {
+          console.log(
+            `    ${i + 1}. Text: "${item.text?.substring(0, 100)}${
+              item.text?.length > 100 ? "..." : ""
+            }"`
+          );
           if (item.styles) {
             console.log(`       Styles:`, item.styles);
           }
@@ -56,13 +60,13 @@ async function checkDocumentContent() {
       console.log(`  Children: ${block.children.length} blocks`);
     }
 
-    console.log('');
+    console.log("");
   });
 
   process.exit(0);
 }
 
-checkDocumentContent().catch(err => {
-  console.error('❌ Error:', err);
+checkDocumentContent().catch((err) => {
+  console.error("❌ Error:", err);
   process.exit(1);
 });

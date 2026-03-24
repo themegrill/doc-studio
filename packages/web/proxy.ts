@@ -1,8 +1,9 @@
 import { auth } from "@/lib/auth";
 
-export function proxy(req: Request) {
-  return auth(req);
-}
+export default auth((req) => {
+  // req.auth is available here if needed
+});
+
 export const config = {
   matcher: [
     /*
@@ -11,7 +12,7 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder
+     * - png files
      */
     "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.png$).*)",
   ],

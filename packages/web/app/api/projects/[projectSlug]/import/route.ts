@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db/postgres";
 import { parseBetterDocsCSV, getDocumentStats, ParsedDocument } from "@/lib/migration/csv-parser";
 import { convertHTMLToBlockNote } from "@/lib/migration/html-to-blocknote";
+import type { JSONValue } from "postgres";
 
 interface RouteParams {
   params: Promise<{
@@ -53,7 +54,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       WHERE project_id = ${project.id} AND user_id = ${session.user.id}
     `;
 
-    if (!isSuperAdmin && (!membership || !["owner", "admin"].includes(membership.role))) {
+    if (
+      !isSuperAdmin &&
+      (!membership || !["owner", "admin"].includes(membership.role))
+    ) {
       return NextResponse.json(
         { error: "You don't have permission to import into this project" },
         { status: 403 }
@@ -96,7 +100,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   } catch (error) {
     console.error("[POST /api/projects/[projectSlug]/import] Error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      {
+        error: error instanceof Error ? error.message : "Internal server error",
+      },
       { status: 500 }
     );
   }
@@ -107,7 +113,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  */
 async function importDocuments(
   documents: ParsedDocument[],
-  categories: Record<string, import("@/lib/migration/csv-parser").CategoryDefinition>,
+  categories: Record<
+    string,
+    import("@/lib/migration/csv-parser").CategoryDefinition
+  >,
   projectId: string,
   userId: string,
   sql: ReturnType<typeof getDb>
@@ -125,6 +134,7 @@ async function importDocuments(
     try {
       // Convert HTML to BlockNote JSON
       const blocks = convertHTMLToBlockNote(doc.content);
+      const jsonBlocks = blocks as unknown as JSONValue;
 
       // Check if document with slug already exists
       const [existing] = await sql`
@@ -139,8 +149,8 @@ async function importDocuments(
           SET
             title = ${doc.title},
             description = ${doc.excerpt || null},
-            blocks = ${sql.json(blocks)},
-            published = ${doc.status === 'publish'},
+            blocks = ${sql.json(jsonBlocks)},
+            published = ${doc.status === "publish"},
             order_index = ${doc.order},
             updated_by = ${userId},
             updated_at = NOW()
@@ -164,8 +174,8 @@ async function importDocuments(
             ${doc.slug},
             ${doc.title},
             ${doc.excerpt || null},
-            ${sql.json(blocks)},
-            ${doc.status === 'publish'},
+            ${sql.json(jsonBlocks)},
+            ${doc.status === "publish"},
             ${doc.order},
             ${userId},
             ${userId}
@@ -206,7 +216,10 @@ async function importDocuments(
 async function updateNavigationStructure(
   projectId: string,
   parsedDocuments: ParsedDocument[],
-  categories: Record<string, import("@/lib/migration/csv-parser").CategoryDefinition>,
+  categories: Record<
+    string,
+    import("@/lib/migration/csv-parser").CategoryDefinition
+  >,
   sql: ReturnType<typeof getDb>
 ): Promise<void> {
   // Get all documents from database to get their IDs
@@ -218,12 +231,24 @@ async function updateNavigationStructure(
   `;
 
   // Create a map of slug -> document ID
-  const slugToIdMap: Record<string, { id: string; title: string; order: number }> = {};
-  dbDocs.forEach((doc: { id: string; slug: string; title: string; order_index: number }) => {
-    slugToIdMap[doc.slug] = {
-      id: doc.id,
-      title: doc.title,
-      order: doc.order_index,
+  const slugToIdMap: Record<
+    string,
+    { id: string; title: string; order: number }
+  > = {};
+  type DocRow = {
+    id: string;
+    slug: string;
+    title: string;
+    order_index: number;
+  };
+
+  dbDocs.forEach((doc) => {
+    const d = doc as DocRow;
+
+    slugToIdMap[d.slug] = {
+      id: d.id,
+      title: d.title,
+      order: d.order_index,
     };
   });
 
@@ -299,13 +324,20 @@ async function updateNavigationStructure(
     routes,
   };
 
-  console.log("[Import] Created navigation structure with", routes.length, "routes");
-  console.log("[Import] First 3 routes:", routes.slice(0, 3).map((r: any) => ({
-    title: r.title,
-    id: r.id,
-    path: r.path,
-    childrenCount: r.children?.length || 0
-  })));
+  console.log(
+    "[Import] Created navigation structure with",
+    routes.length,
+    "routes"
+  );
+  console.log(
+    "[Import] First 3 routes:",
+    routes.slice(0, 3).map((r: any) => ({
+      title: r.title,
+      id: r.id,
+      path: r.path,
+      childrenCount: r.children?.length || 0,
+    }))
+  );
 
   // Update or insert navigation
   const [existingNav] = await sql`
@@ -313,17 +345,21 @@ async function updateNavigationStructure(
     WHERE project_id = ${projectId}
   `;
 
+  const jsonNavigation = JSON.parse(
+    JSON.stringify(navigationStructure)
+  ) as JSONValue;
+
   if (existingNav) {
     await sql`
       UPDATE navigation
-      SET structure = ${sql.json(navigationStructure)},
+      SET structure = ${sql.json(jsonNavigation)},
           updated_at = NOW()
       WHERE id = ${existingNav.id}
     `;
   } else {
     await sql`
       INSERT INTO navigation (project_id, structure)
-      VALUES (${projectId}, ${sql.json(navigationStructure)})
+      VALUES (${projectId}, ${sql.json(jsonNavigation)})
     `;
   }
 }

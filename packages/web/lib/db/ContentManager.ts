@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
+import type { JSONValue } from "postgres";
 
 export interface DocMeta {
   id?: string;
@@ -84,7 +85,11 @@ export class ContentManager {
     }
   }
 
-  async saveDoc(projectId: string, slug: string, content: Partial<DocContent>): Promise<boolean> {
+  async saveDoc(
+    projectId: string,
+    slug: string,
+    content: Partial<DocContent>
+  ): Promise<boolean> {
     try {
       // Get current user from NextAuth
       const session = await auth();
@@ -143,7 +148,8 @@ export class ContentManager {
             structure.routes.forEach((route) => {
               if (route.children && route.children.length > 0) {
                 const hasMatchingChild = route.children.some((child: any) => {
-                  const childSlug = child.slug || child.path?.replace('/docs/', '');
+                  const childSlug =
+                    child.slug || child.path?.replace("/docs/", "");
                   return childSlug === slug;
                 });
                 if (hasMatchingChild) {
@@ -272,7 +278,9 @@ export class ContentManager {
           if (route.children) {
             return {
               ...route,
-              children: route.children.filter((child) => child.path !== docPath)
+              children: route.children.filter(
+                (child) => child.path !== docPath
+              ),
             };
           }
           return route;
@@ -280,7 +288,7 @@ export class ContentManager {
 
         const updatedStructure = {
           ...structure,
-          routes: updatedRoutes
+          routes: updatedRoutes,
         };
 
         // Update navigation using sql.json() for proper JSONB handling
@@ -367,7 +375,10 @@ export class ContentManager {
     }
   }
 
-  async updateNavigation(projectId: string, navigation: Navigation): Promise<boolean> {
+  async updateNavigation(
+    projectId: string,
+    navigation: Navigation
+  ): Promise<boolean> {
     try {
       // Get current user from NextAuth
       const session = await auth();
@@ -385,11 +396,14 @@ export class ContentManager {
         LIMIT 1
       `;
 
+      const jsonNavigation = JSON.parse(
+        JSON.stringify(navigation)
+      ) as JSONValue;
       if (current) {
         await this.sql`
           UPDATE navigation
           SET
-            structure = ${this.sql.json(navigation)},
+            structure = ${this.sql.json(jsonNavigation)},
             updated_by = ${session.user.id}
           WHERE id = ${current.id}
         `;
@@ -397,7 +411,9 @@ export class ContentManager {
         // Create initial navigation for project
         await this.sql`
           INSERT INTO navigation (project_id, structure, updated_by)
-          VALUES (${projectId}, ${this.sql.json(navigation)}, ${session.user.id})
+          VALUES (${projectId}, ${this.sql.json(jsonNavigation)}, ${
+          session.user.id
+        })
         `;
       }
 

@@ -68,11 +68,11 @@ export async function POST(req: Request) {
       tools,
       toolChoice: "auto", // Allow AI to choose: text response or tool use
       temperature: config.temperature,
-      maxTokens: config.maxTokens,
+      maxOutputTokens: config.maxTokens,
       onFinish: async (result) => {
         const usage = result.usage;
-        const promptTokens = usage?.promptTokens || usage?.inputTokens || 0;
-        const completionTokens = usage?.completionTokens || usage?.outputTokens || 0;
+        const promptTokens = usage?.inputTokens || 0;
+        const completionTokens = usage?.outputTokens || 0;
 
         try {
           await logAIUsage({

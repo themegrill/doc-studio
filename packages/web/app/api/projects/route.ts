@@ -10,7 +10,17 @@ export async function GET() {
   const sql = getDb();
 
   try {
-    let projects;
+
+  type ProjectRow = {
+    id: string;
+    name: string;
+    slug: string;
+    created_at: string | Date;
+    updated_at: string | Date;
+    metadata: unknown;
+  };
+
+  let projects: ProjectRow[] = [];
 
     if (session?.user?.email) {
       // Resolve the authenticated user from the database by email

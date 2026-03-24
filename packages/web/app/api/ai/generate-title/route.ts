@@ -49,9 +49,11 @@ The title should be:
 
 ${content}
 
-${currentTitle ? `Current title: "${currentTitle}"\n\n` : ""}Generate a better title that accurately describes this content.`,
+${
+  currentTitle ? `Current title: "${currentTitle}"\n\n` : ""
+}Generate a better title that accurately describes this content.`,
       temperature: config.temperature,
-      maxTokens: Math.min(config.maxTokens, 100), // Titles don't need many tokens
+      maxOutputTokens: Math.min(config.maxTokens, 100), // Titles don't need many tokens
     });
 
     const generatedTitle = text.trim();
@@ -61,8 +63,8 @@ ${currentTitle ? `Current title: "${currentTitle}"\n\n` : ""}Generate a better t
       userId: session?.user?.id,
       feature: "titleGeneration",
       model: config.defaultModel,
-      promptTokens: usage?.promptTokens || usage?.inputTokens || 0,
-      completionTokens: usage?.completionTokens || usage?.outputTokens || 0,
+      promptTokens: usage?.inputTokens || 0,
+      completionTokens: usage?.outputTokens || 0,
       durationMs: Date.now() - startTime,
       success: true,
     });

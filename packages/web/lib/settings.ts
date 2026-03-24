@@ -5,17 +5,47 @@ import { getDb } from "./db/postgres";
  * Supports namespaced key-value storage with JSONB values
  */
 
+type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JSONValue }
+  | JSONValue[];
+
+type AIFeatures = {
+  chat: boolean;
+  textGeneration: boolean;
+  titleGeneration: boolean;
+  descriptionGeneration: boolean;
+};
+
+type AIConfig = {
+  apiKey: string;
+  defaultModel: string;
+  temperature: number;
+  maxTokens: number;
+};
+
 export interface SettingsManager {
-  get<T = any>(key: string, defaultValue?: T): Promise<T | null>;
-  set(key: string, value: any, category: string, description?: string): Promise<void>;
-  getCategory(category: string): Promise<Record<string, any>>;
+  get<T>(key: string): Promise<T | null>;
+  get<T>(key: string, defaultValue: T): Promise<T>;
+  set(
+    key: string,
+    value: JSONValue,
+    category: string,
+    description?: string
+  ): Promise<void>;
+  getCategory(category: string): Promise<Record<string, unknown>>;
   delete(key: string): Promise<void>;
 }
 
 /**
  * Get a setting value by key
  */
-export async function getSetting<T = any>(
+export async function getSetting<T>(key: string): Promise<T | null>;
+export async function getSetting<T>(key: string, defaultValue: T): Promise<T>;
+export async function getSetting<T>(
   key: string,
   defaultValue?: T
 ): Promise<T | null> {
@@ -23,7 +53,9 @@ export async function getSetting<T = any>(
 
   try {
     const [setting] = await sql`
-      SELECT value FROM global_settings WHERE key = ${key}
+      SELECT value
+      FROM global_settings
+      WHERE key = ${key}
     `;
 
     if (!setting) {
@@ -42,7 +74,7 @@ export async function getSetting<T = any>(
  */
 export async function setSetting(
   key: string,
-  value: any,
+  value: JSONValue,
   category: string,
   description?: string
 ): Promise<void> {
@@ -54,12 +86,14 @@ export async function setSetting(
       ${key},
       ${sql.json(value)},
       ${category},
-      ${description || ""},
+      ${description ?? ""},
       NOW()
     )
     ON CONFLICT (key)
     DO UPDATE SET
-      value = ${sql.json(value)},
+      value = EXCLUDED.value,
+      category = EXCLUDED.category,
+      description = EXCLUDED.description,
       updated_at = NOW()
   `;
 }
@@ -69,20 +103,20 @@ export async function setSetting(
  */
 export async function getCategorySettings(
   category: string
-): Promise<Record<string, any>> {
+): Promise<Record<string, unknown>> {
   const sql = getDb();
 
   const settings = await sql`
-    SELECT key, value FROM global_settings
+    SELECT key, value
+    FROM global_settings
     WHERE category = ${category}
   `;
 
-  return settings.reduce((acc, setting) => {
-    // Remove category prefix from key for easier access
-    const shortKey = setting.key.replace(`${category}.`, "");
+  return settings.reduce<Record<string, unknown>>((acc, setting) => {
+    const shortKey = String(setting.key).replace(`${category}.`, "");
     acc[shortKey] = setting.value;
     return acc;
-  }, {} as Record<string, any>);
+  }, {});
 }
 
 /**
@@ -92,22 +126,25 @@ export async function deleteSetting(key: string): Promise<void> {
   const sql = getDb();
 
   await sql`
-    DELETE FROM global_settings WHERE key = ${key}
+    DELETE FROM global_settings
+    WHERE key = ${key}
   `;
 }
 
 /**
  * Get AI configuration settings
  */
-export async function getAIConfig() {
-  const config = await getSetting("ai.config", {
+export async function getAIConfig(): Promise<
+  AIConfig & { enabledFeatures: AIFeatures }
+> {
+  const config = await getSetting<AIConfig>("ai.config", {
     apiKey: process.env.ANTHROPIC_API_KEY || "",
     defaultModel: "claude-sonnet-4-5",
     temperature: 0.7,
     maxTokens: 4096,
   });
 
-  const features = await getSetting("ai.features", {
+  const features = await getSetting<AIFeatures>("ai.features", {
     chat: true,
     textGeneration: true,
     titleGeneration: true,
@@ -124,20 +161,29 @@ export async function getAIConfig() {
  * Check if an AI feature is enabled
  */
 export async function isAIFeatureEnabled(
-  feature: "chat" | "textGeneration" | "titleGeneration" | "descriptionGeneration"
+  feature: keyof AIFeatures
 ): Promise<boolean> {
-  const features = await getSetting("ai.features", {});
+  const features = await getSetting<AIFeatures>("ai.features", {
+    chat: true,
+    textGeneration: true,
+    titleGeneration: true,
+    descriptionGeneration: true,
+  });
+
   return features[feature] ?? false;
 }
 
 // Export a settings object for easier usage
-export const Settings = {
+export const Settings: SettingsManager & {
+  ai: {
+    getConfig: typeof getAIConfig;
+    isFeatureEnabled: typeof isAIFeatureEnabled;
+  };
+} = {
   get: getSetting,
   set: setSetting,
   getCategory: getCategorySettings,
   delete: deleteSetting,
-
-  // Namespaced helpers
   ai: {
     getConfig: getAIConfig,
     isFeatureEnabled: isAIFeatureEnabled,

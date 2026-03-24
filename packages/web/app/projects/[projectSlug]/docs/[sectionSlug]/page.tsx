@@ -97,12 +97,15 @@ export default async function SectionPage({
     child.slug || child.path?.replace(/^\/docs\//, '')
   ).filter(Boolean) || [];
 
+  const validChildSlugs = childSlugs.filter(
+  (slug): slug is string => typeof slug === "string" && slug.length > 0
+);
   // Fetch documents by their slugs
-  const documents = childSlugs.length > 0 ? await sql`
+  const documents = validChildSlugs.length > 0 ? await sql`
     SELECT id, slug, title, description, created_at, updated_at
     FROM documents
     WHERE project_id = ${project.id}
-      AND slug = ANY(${sql.array(childSlugs)})
+      AND slug = ANY(${sql.array(validChildSlugs)})
       AND published = true
     ORDER BY order_index ASC, created_at ASC
   ` : [];
