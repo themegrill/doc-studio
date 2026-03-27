@@ -11,9 +11,10 @@
     "db:stop": "cd ../.. && docker-compose down",
     "db:reset": "cd ../.. && docker-compose down -v && docker-compose up -d",
     "db:logs": "cd ../.. && docker-compose logs -f postgres",
-    "db:migrate": "tsx scripts/run-migration.ts",
-    "sync-kb": "tsx scripts/sync-knowledge-bases.ts",
-    "sync-kb:clear": "tsx scripts/sync-knowledge-bases.ts --clear"
+    "db:migrate": "tsx scripts/utils/run-migration.ts",
+    "sync-kb": "tsx scripts/utils/sync-knowledge-bases.ts",
+    "sync-kb:clear": "tsx scripts/utils/sync-knowledge-bases.ts --clear",
+	"create-missed-tables": "tsx scripts/utils/create-ai-usage-table.ts && tsx scripts/utils/create-global-settings-table.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.35",

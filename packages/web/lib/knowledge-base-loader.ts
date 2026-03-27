@@ -65,10 +65,7 @@ export async function loadKnowledgeBaseAsync(
       return githubKB;
     }
   } catch (error) {
-    console.error(
-      `[KB] Error fetching from GitHub for ${projectSlug}:`,
-      error
-    );
+    console.error(`[KB] Error fetching from GitHub for ${projectSlug}:`, error);
   }
 
   console.log(`[KB] No knowledge base found for project: ${projectSlug}`);
@@ -78,181 +75,163 @@ export async function loadKnowledgeBaseAsync(
 /**
  * Format knowledge base into a prompt string for the AI assistant
  *
- * This converts the structured knowledge base into natural language
- * that the AI can understand and use when generating documentation.
+ * Produces a system prompt that gives the AI product context and instructs
+ * it to write documentation following the plugin documentation guidelines
+ * (sections A–P: overview, availability, prerequisites, steps, settings, etc.)
  */
 export function formatKnowledgeBasePrompt(
   kb: DocumentationKnowledgeBase
 ): string {
   const sections: string[] = [];
 
-  // Product Information
-  sections.push(`## Product: ${kb.product.name}`);
-  if (kb.product.description) {
-    sections.push(kb.product.description);
+  // ─── Product Context ────────────────────────────────────────────────────────
+
+  sections.push(`# Product: ${kb.plugin.name}`);
+
+  if (kb.plugin.description) {
+    sections.push(kb.plugin.description);
   }
-  if (kb.product.version) {
-    sections.push(`Current Version: ${kb.product.version}`);
-  }
 
-  // Writing Guidelines
-  if (kb.writingGuidelines) {
-    sections.push("\n## Writing Guidelines");
+  const meta: string[] = [];
+  if (kb.plugin.version) meta.push(`Version: ${kb.plugin.version}`);
+  if (kb.plugin.author) meta.push(`Author: ${kb.plugin.author}`);
+  if (meta.length > 0) sections.push(meta.join(" | "));
 
-    if (kb.writingGuidelines.tone) {
-      sections.push(`**Tone:** ${kb.writingGuidelines.tone}`);
-    }
-
-    if (kb.writingGuidelines.voicePreference) {
+  if (kb.plugin.product_summary) {
+    const ps = kb.plugin.product_summary;
+    sections.push("");
+    if (ps.whatItDoes) sections.push(ps.whatItDoes);
+    if (ps.targetUsers && ps.targetUsers.length > 0) {
       sections.push(
-        `**Voice:** Use ${kb.writingGuidelines.voicePreference} voice`
+        `Target users: ${ps.targetUsers.join(", ")}.`
       );
     }
-
-    if (kb.writingGuidelines.technicalLevel) {
-      sections.push(
-        `**Audience Level:** ${kb.writingGuidelines.technicalLevel}`
-      );
-    }
-
-    if (kb.writingGuidelines.formatting) {
-      const fmt = kb.writingGuidelines.formatting;
-      if (fmt.headingStyle) {
-        sections.push(`**Heading Style:** ${fmt.headingStyle}`);
-      }
-      if (fmt.codeBlockLanguage) {
-        sections.push(
-          `**Default Code Language:** ${fmt.codeBlockLanguage}`
-        );
-      }
-      if (fmt.useEmojis !== undefined) {
-        sections.push(
-          `**Use Emojis:** ${fmt.useEmojis ? "Yes" : "No"}`
-        );
-      }
-    }
   }
 
-  // Terminology
-  if (kb.terminology && Object.keys(kb.terminology).length > 0) {
-    sections.push("\n## Terminology Standards");
-    sections.push(
-      "Use these exact terms in documentation (avoid the alternatives):"
-    );
+  // ─── Documentation Writing Guidelines ───────────────────────────────────────
 
-    for (const [key, term] of Object.entries(kb.terminology)) {
-      sections.push(`\n**${term.preferredTerm}**`);
-      if (term.definition) {
-        sections.push(`- Definition: ${term.definition}`);
-      }
-      if (term.avoid && term.avoid.length > 0) {
-        sections.push(`- Avoid using: ${term.avoid.join(", ")}`);
-      }
-      if (term.usage) {
-        sections.push(`- Example: "${term.usage}"`);
-      }
-    }
-  }
+  sections.push(`
+## Documentation Guidelines
 
-  // Common Sections
-  if (kb.commonSections && Object.keys(kb.commonSections).length > 0) {
-    sections.push("\n## Standard Documentation Sections");
-    sections.push(
-      "Include these sections in documentation when relevant:"
-    );
+When writing documentation for ${kb.plugin.name}, follow these rules. Only include sections that are relevant to the topic being documented.
 
-    for (const [sectionName, sectionInfo] of Object.entries(
-      kb.commonSections
-    )) {
-      if (!sectionInfo) continue;
+### A. Feature Overview
+Begin every document with a short explanation of what the feature does and why a user would need it. Keep it to 1–2 paragraphs. Avoid technical jargon unless necessary. If the feature behaves differently in different contexts, mention that upfront.
 
-      sections.push(
-        `\n**${sectionName}**${sectionInfo.required ? " (Required)" : ""}`
-      );
+### B. Availability
+State clearly whether the feature is Free or Pro. If Pro, add a \`(PRO)\` label to the headline and mention the plan required (e.g., "This is a Pro feature available in the Personal plan and above.").
 
-      if (sectionInfo.subsections && sectionInfo.subsections.length > 0) {
-        sections.push(
-          `Subsections: ${sectionInfo.subsections.join(", ")}`
-        );
-      }
+### C. Notes and Limitations
+Add this section when there are dependencies, edge cases, or special behavior users should know before they start. Keep it short and factual.
 
-      if (sectionInfo.template) {
-        sections.push("Template:");
-        sections.push("```");
-        sections.push(sectionInfo.template);
-        sections.push("```");
-      }
-    }
-  }
+### D. Prerequisites
+If the feature requires prior setup, list what must be configured first. This prevents confusion and reduces user errors.
+
+### E. Enable the Feature
+Explain where the user goes, what they click, and what happens after enabling. Use step-by-step instructions.
+
+### F. Create or Configure the Feature
+Describe the main workflow after enabling. Keep each step short — one action per step. Do not combine multiple actions in one step.
+
+### G. Settings Explained
+If the feature has multiple options or fields, explain each one under its own subheading. For each setting: explain what it does and how it affects behavior. Avoid vague descriptions like "Used to configure X" — instead say what the setting actually controls.
+
+### H. Usage Sections
+If the feature can be used in multiple ways or contexts, add a separate section for each. Each section should include a short explanation, the steps, and what the user will see.
+
+### I. Managing the Feature
+After creation, explain where users find and manage the feature. List the available actions (edit, enable/disable, delete, view details, etc.).
+
+### J. Steps Formatting
+Whenever listing steps: add a **Steps** heading, keep each step to one action, and use numbered lists.
+
+### K. Navigation Format
+Write navigation paths clearly so users know exactly where to go before each step.
+
+### L. Image Placement
+Add image placeholders after completing steps, when explaining UI elements, or when showing results. Do not overload with images. Each image must match the steps directly above it.
+
+### M. Writing Style and Tone
+- Use simple, clear, professional language.
+- Keep sentences short.
+- Avoid unnecessary words and marketing tone.
+- Focus on helping the user complete the task.
+- Avoid AI cliché phrasing (e.g., "It's not just A, it's B").
+- Write as if guiding someone step-by-step.
+
+### N. Content Flow
+Follow a logical order: overview → availability → prerequisites → enable → configure → settings → manage. Only include sections that apply.
+
+### P. Optional Sections
+Add FAQs, Troubleshooting, or Related Documentation only when needed.`);
+
+  // ─── Product Knowledge ───────────────────────────────────────────────────────
+
+  sections.push(`\n## Product Knowledge\n\nUse the information below when writing documentation. Only reference what is relevant to the topic.`);
 
   // Features
-  if (kb.features && Object.keys(kb.features).length > 0) {
-    sections.push("\n## Product Features");
-    sections.push("Reference these features when writing documentation:");
-
-    for (const [featureKey, feature] of Object.entries(kb.features)) {
-      sections.push(`\n**${feature.name}**`);
-      sections.push(`- ${feature.description}`);
-
-      if (feature.category) {
-        sections.push(`- Category: ${feature.category}`);
+  if (kb.knowledge.features && kb.knowledge.features.length > 0) {
+    sections.push("\n### Features");
+    const featuresWithDesc = kb.knowledge.features.filter((f) => f.description);
+    if (featuresWithDesc.length > 0) {
+      for (const feature of featuresWithDesc) {
+        sections.push(`\n**${feature.title}**\n${feature.description}`);
       }
+    } else {
+      sections.push(kb.knowledge.features.map((f) => `- ${f.title}`).join("\n"));
+    }
+  }
 
-      if (feature.isPro) {
-        sections.push("- **Pro Feature** (requires premium version)");
-      }
+  // Use Cases
+  if (kb.knowledge.use_cases && kb.knowledge.use_cases.length > 0) {
+    sections.push("\n### Use Cases");
+    for (const useCase of kb.knowledge.use_cases) {
+      sections.push(`\n**${useCase.title}**`);
+      if (useCase.description) sections.push(useCase.description);
+    }
+  }
 
-      if (feature.keywords && feature.keywords.length > 0) {
-        sections.push(`- Keywords: ${feature.keywords.join(", ")}`);
-      }
-
-      if (
-        feature.relatedFeatures &&
-        feature.relatedFeatures.length > 0
-      ) {
-        sections.push(
-          `- Related: ${feature.relatedFeatures.join(", ")}`
-        );
+  // How-To Guides (steps reference for sections E, F, J)
+  if (kb.knowledge.how_tos && kb.knowledge.how_tos.length > 0) {
+    sections.push("\n### How-To Guides");
+    for (const howTo of kb.knowledge.how_tos) {
+      sections.push(`\n**${howTo.title}**`);
+      if (howTo.description) sections.push(howTo.description);
+      if (howTo.steps && howTo.steps.length > 0) {
+        sections.push("\n**Steps**");
+        howTo.steps.forEach((step, i) => sections.push(`${i + 1}. ${step}`));
       }
     }
   }
 
-  // Code Examples
-  if (kb.codeExamples && Object.keys(kb.codeExamples).length > 0) {
-    sections.push("\n## Common Code Examples");
-    sections.push(
-      "Use these code examples as references when users ask for implementation details:"
-    );
-
-    for (const [exampleKey, example] of Object.entries(kb.codeExamples)) {
-      if (example.description) {
-        sections.push(`\n**${example.description}**`);
+  // UI Screens (reference for sections E, F, G, K, L)
+  if (kb.knowledge.screens && kb.knowledge.screens.length > 0) {
+    sections.push("\n### UI Screens");
+    for (const screen of kb.knowledge.screens) {
+      sections.push(`\n**${screen.title}**`);
+      if (screen.purpose) sections.push(`Purpose: ${screen.purpose}`);
+      if (screen.user_goal) sections.push(`User goal: ${screen.user_goal}`);
+      if (screen.actions?.primary && screen.actions.primary.length > 0) {
+        sections.push(`Primary actions: ${screen.actions.primary.join(", ")}`);
       }
-
-      sections.push("```" + example.language);
-      sections.push(example.code);
-      sections.push("```");
-
-      if (example.tags && example.tags.length > 0) {
-        sections.push(`Tags: ${example.tags.join(", ")}`);
+      if (screen.actions?.secondary && screen.actions.secondary.length > 0) {
+        sections.push(`Secondary actions: ${screen.actions.secondary.join(", ")}`);
+      }
+      if (screen.fields && screen.fields.length > 0) {
+        sections.push("Fields:");
+        for (const field of screen.fields) {
+          const required = field.required ? " (required)" : "";
+          const help = field.help_text ? ` — ${field.help_text}` : "";
+          sections.push(`- **${field.label}** [${field.type}]${required}${help}`);
+        }
       }
     }
   }
 
-  // FAQs
-  if (kb.faqs && kb.faqs.length > 0) {
-    sections.push("\n## Frequently Asked Questions");
-    sections.push(
-      "Reference these common questions and answers when helping users:"
-    );
-
-    for (const faq of kb.faqs) {
-      sections.push(`\n**Q: ${faq.question}**`);
-      sections.push(`A: ${faq.answer}`);
-      if (faq.category) {
-        sections.push(`Category: ${faq.category}`);
-      }
-    }
+  // UI Components (reference for sections G, L)
+  if (kb.knowledge.components && kb.knowledge.components.length > 0) {
+    sections.push("\n### UI Components");
+    sections.push(kb.knowledge.components.map((c) => `- ${c}`).join("\n"));
   }
 
   return sections.join("\n");

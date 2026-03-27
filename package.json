@@ -14,5 +14,8 @@
     "build": "cd packages/web && pnpm build",
     "start": "cd packages/web && pnpm start",
     "lint": "cd packages/web && pnpm lint"
+  },
+  "dependencies": {
+    "pg": "^8.20.0"
   }
 }

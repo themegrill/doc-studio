@@ -5,75 +5,107 @@
  * that help the AI assistant write consistent, accurate documentation.
  */
 
-export interface ProductInfo {
-  name: string;
-  slug: string;
+export interface PluginMetadata {
+  requires_php?: string | null;
+  tested_up_to?: string;
+  stable_tag?: string;
+  requires_at_least?: string;
+  contributors?: string[];
+  tags?: string[];
   version?: string;
   description?: string;
+  author?: string;
+  text_domain?: string;
+  domain_path?: string;
+  short_description?: string;
 }
 
-export interface WritingGuidelines {
-  tone?: string;
-  voicePreference?: "active" | "passive" | "mixed";
-  technicalLevel?: "beginner" | "intermediate" | "advanced" | "mixed";
-  formatting?: {
-    headingStyle?: string;
-    codeBlockLanguage?: string;
-    useEmojis?: boolean;
-  };
+export interface ProductSummary {
+  productName: string;
+  oneSentenceSummary: string;
+  whatItDoes: string;
+  targetUsers: string[];
 }
 
-export interface Terminology {
-  preferredTerm: string;
-  avoid?: string[];
-  definition?: string;
-  usage?: string;
-}
-
-export interface SectionTemplate {
-  required?: boolean;
-  template?: string;
-  subsections?: string[];
-}
-
-export interface CommonSections {
-  installation?: SectionTemplate;
-  gettingStarted?: SectionTemplate;
-  configuration?: SectionTemplate;
-  [key: string]: SectionTemplate | undefined;
-}
-
-export interface Feature {
+export interface PluginInfo {
   name: string;
   description: string;
-  category?: string;
-  isPro?: boolean;
-  keywords?: string[];
-  relatedFeatures?: string[];
+  version: string;
+  author: string;
+  metadata?: PluginMetadata;
+  product_summary?: ProductSummary;
 }
 
-export interface CodeExample {
-  language: string;
-  code: string;
-  description?: string;
-  tags?: string[];
+export interface KnowledgeBaseFeature {
+  title: string;
+  description: string;
+  source: string;
+  raw?: Record<string, unknown>;
 }
 
-export interface FAQ {
-  question: string;
-  answer: string;
-  category?: string;
+export interface KnowledgeBaseUseCase {
+  title: string;
+  description: string;
+  source: string;
+  raw?: Record<string, unknown>;
+}
+
+export interface KnowledgeBaseHowTo {
+  title: string;
+  description: string;
+  steps: string[];
+  source: string;
+  raw?: Record<string, unknown>;
+}
+
+export interface ScreenField {
+  label: string;
+  type: string;
+  required: boolean;
+  placeholder: string;
+  help_text: string;
+}
+
+export interface ScreenNavigation {
+  trigger: string;
+  destination: string;
+  confidence: string;
+}
+
+export interface KnowledgeBaseScreen {
+  id: string;
+  title: string;
+  purpose: string;
+  user_goal: string;
+  source_file?: string;
+  source_type?: string;
+  actions?: {
+    primary?: string[];
+    secondary?: string[];
+  };
+  fields?: ScreenField[];
+  navigation?: ScreenNavigation[];
+}
+
+export interface Knowledge {
+  features: KnowledgeBaseFeature[];
+  use_cases: KnowledgeBaseUseCase[];
+  how_tos: KnowledgeBaseHowTo[];
+  components: string[];
+  screens: KnowledgeBaseScreen[];
+  navigation_flows?: unknown[];
+  open_questions?: unknown[];
 }
 
 /**
  * Main knowledge base structure
  */
 export interface DocumentationKnowledgeBase {
-  product: ProductInfo;
-  writingGuidelines?: WritingGuidelines;
-  terminology?: Record<string, Terminology>;
-  commonSections?: CommonSections;
-  features?: Record<string, Feature>;
-  codeExamples?: Record<string, CodeExample>;
-  faqs?: FAQ[];
+  schema_version?: string;
+  generated_at?: string;
+  plugin: PluginInfo;
+  sources?: Record<string, unknown>;
+  knowledge: Knowledge;
+  implementation?: Record<string, unknown>;
+  provenance?: unknown;
 }
