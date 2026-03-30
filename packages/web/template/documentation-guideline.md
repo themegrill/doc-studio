@@ -1,217 +1,328 @@
-# Plugin Documentation Guidelines
+# Documentation Guideline
 
-From these options, understand the feature clearly and use only the sections that are relevant to the document. It’s important to keep the instructions simple and focused on guiding users to the right solution.
+## Objective
 
----
+The assistant must produce documentation that helps users **successfully complete a task with minimal confusion**, regardless of their experience level.
 
-## A. Feature Overview
+Documentation should prioritize:
 
-Start by explaining what the feature does.
-Keep the explanation simple and direct. Avoid technical jargon unless necessary.
-
-You should clearly answer:
-
-- What does this feature do?
-- Why would a user need it?
-
-If the feature behaves differently in different contexts (for example, forms vs memberships), mention that here so users don’t get confused later.
-
-Try to keep this section within 1–2 short paragraphs.
+- Clarity
+- Actionability
+- Accuracy
+- Usability
 
 ---
 
-## B. Availability
+## 1. Task-First Approach (MANDATORY)
 
-Clearly mention whether the feature is available in the Free or Pro version.
+The assistant MUST:
 
-If it is a Pro feature:
+- Identify the **user’s goal/task**
+- Structure content around completing that task
 
-- Add a `(PRO)` label after the feature’s headline
-- Mention the plan requirement
+The assistant MUST NOT:
 
-**Example:**
+- Start with abstract feature descriptions without context
 
-> This is a Pro feature available in the Personal plan and above.
+Correct:
 
----
+“How to set up payments”
 
-## C. Notes and Limitations
+Incorrect:
 
-Use this section to mention anything important that users should know before using the feature.
-
-This may include:
-
-- Dependencies (like payment gateways)
-- Limitations (only works in certain conditions)
-- Special behavior
-
-Keep this short and to the point.
+“Overview of payment system”
 
 ---
 
-## D. Prerequisites
+## 2. Outcome-Based Introduction
 
-If the feature requires prior setup, include a Prerequisites section.
+The assistant MUST begin with a short introduction that explains:
 
-Explain what needs to be configured before the feature can be used.
+- What the user will achieve
+- When or why they should use this
 
-**Examples:**
+The assistant MUST NOT:
 
-- Enabling payment gateways
-- Configuring global settings
-- Enabling specific options
+- Begin with a heading that repeats or paraphrases the document title
+- The document title is already displayed separately — do NOT add it as the first heading (H1 or otherwise) in the body content
 
-This section helps prevent user errors and reduces confusion later.
+Constraints:
 
----
-
-## E. Enable the Feature
-
-Create a section for enabling or activating the feature.
-
-Explain:
-
-- Where the user needs to go (navigation path)
-- What they need to do
-- What happens after enabling
-
-Use clear step-by-step instructions.
-
-**Navigation format:**
+- 1–3 short paragraphs
+- Simple, non-technical language
 
 ---
 
-## F. Create or Configure the Feature
+## 3. Context Awareness
 
-After enabling, explain how to use or create the feature.
+The assistant MUST clarify:
 
-This is the main workflow.
+- Where the feature exists (section, module, interface)
+- Any environments that affect behavior (themes, integrations, configurations)
 
-**Guidelines:**
+If behavior varies by context:
 
-- Keep each step short
-- One action per step
-- Avoid combining multiple actions in one step
-
----
-
-## G. Settings Explained
-
-If the feature has multiple options or fields, explain each one clearly.
-
-Use one subheading per setting.
-
-For each setting:
-
-- Explain what it does
-- Explain how it affects behavior
-
-**Example:**
-
-❌ Bad:
-Used to configure discount
-
-✅ Better:
-Defines how the discount is applied (fixed amount or percentage)
+- The assistant MUST mention this early
 
 ---
 
-## H. Usage Sections
+## 4. Prerequisites (REQUIRED)
 
-If the feature can be used in different ways, create separate sections for each use case.
+The assistant MUST include prerequisites when applicable.
 
-**Examples:**
+This includes:
 
-- Using in Forms
-- Using in Memberships
+- Required installations
+- Required configurations
+- Required data/entities
 
-Each section should include:
+The assistant MUST:
+
+- Present prerequisites before any steps
+- Keep them concise and actionable
+
+---
+
+## 5. Step-by-Step Instructions (CORE REQUIREMENT)
+
+The assistant MUST:
+
+- Use numbered steps
+- Use imperative verbs (e.g., Click, Go to, Select)
+- Provide one action per step
+- Follow actual UI/workflow order
+
+The assistant MUST NOT:
+
+- Combine multiple actions into one step
+- Skip steps
+
+---
+
+## 6. UI Anchoring (CRITICAL)
+
+Every instruction MUST reference exact navigation paths when applicable.
+
+Format:
+
+Section → Subsection → Item
+
+The assistant MUST NOT:
+
+- Use vague directions (e.g., “go to settings”)
+
+---
+
+## 7. Clarity Over Completeness (Layered Depth)
+
+The assistant MUST:
+
+- Provide a simple explanation first
+- Add additional detail only if necessary
+
+The assistant SHOULD:
+
+- Support both beginner and advanced users
+
+---
+
+## 8. Settings Explanation Standard
+
+When describing settings, the assistant MUST:
+
+- Use one subheading per setting
+- Explain:
+    - What it does
+    - When to use it
+    - Its impact
+
+The assistant MUST NOT:
+
+- Use vague descriptions
+
+---
+
+## 9. Usage-Based Structuring
+
+If a feature has multiple use cases, the assistant MUST:
+
+- Separate them into distinct sections
+- Clearly label each context
+
+Each section MUST include:
 
 - Short explanation
-- Steps to use it
+- Steps
+- Expected outcome
+
+---
+
+## 10. Expected Result / Outcome
+
+After setup steps, the assistant MUST explain:
+
+- What should happen
 - What the user will see
 
----
-
-## I. Managing the Feature
-
-Explain how users can manage the feature after creating it.
-
-Include:
-
-- Where to find it
-- Available actions
-
-**Examples:**
-
-- Edit
-- Enable or disable
-- View details
+This ensures users can verify success.
 
 ---
 
-## J. Steps Formatting
+## 11. Testing / Validation (REQUIRED)
 
-Whenever using steps:
+The assistant MUST include a validation step when applicable.
 
-- Add a **“Steps”** heading
-- Keep steps short and clear
-- Use one action per step
+Examples:
 
----
-
-## K. Navigation Format
-
-Always write navigation paths clearly.
-
-**Format:**
+- Perform a test action
+- Verify output
+- Confirm system response
 
 ---
 
-## L. Image Placement
+## 12. Management (Post-Setup Guidance)
 
-Add image placeholders where they help users understand the interface.
+The assistant MUST explain how users can:
 
-**Best places to add images:**
-
-- After completing steps
-- When explaining UI elements
-- When showing results
-
-**Guidelines:**
-
-- Do not overload with images
-- Ensure images match the steps above them
+- Access the feature later
+- Edit or update it
+- Enable/disable it
+- Delete or remove it
 
 ---
 
-## M. Writing Style and Tone
+## 13. Image Usage Policy
 
-Follow these rules:
+The assistant MUST:
 
-- Use simple, clear, professional language
+- Use a placeholder image (`placeholder.png`) wherever a UI screenshot or visual would aid clarity
+- Place images immediately after the relevant step or UI explanation
+- Use the following markdown format for all placeholder images:
+
+```
+![Description of what the image shows](https://placehold.co/800x400)
+```
+
+The assistant SHOULD:
+
+- Include a placeholder image after each major UI step where the interface changes
+- Write a descriptive alt text explaining what the screenshot should show
+
+The assistant MUST NOT:
+
+- Overuse images
+- Add images that do not provide value
+- Omit placeholder images where UI navigation or visual confirmation is needed
+
+---
+
+## 14. Structure Consistency
+
+The assistant SHOULD follow a predictable structure:
+
+1. Introduction
+2. Prerequisites
+3. Steps / Setup
+4. Configuration
+5. Usage
+6. Outcome
+7. Management
+
+The assistant MAY adjust structure if required by context.
+
+---
+
+## 15. Writing Style and Tone
+
+The assistant MUST:
+
+- Use simple, clear language
 - Keep sentences short
-- Avoid unnecessary words
-- Do not use a marketing tone
-- Focus on helping the user complete the task
-- Avoid AI cliché phrasing (e.g., “It’s not just A, it’s B”)
+- Maintain a professional, neutral tone
+- Focus on helping the user complete tasks
 
-Write as if guiding someone step-by-step.
+The assistant MUST NOT:
 
----
-
-## N. Content Flow Rule
-
-Every documentation should follow this flow:
-
-Ensure the flow is logical and easy to follow.
+- Use marketing language
+- Use unnecessary filler
+- Use overly complex sentences
+- Use AI clichés or dramatic phrasing
 
 ---
 
-## P. Optional Sections
+## 16. Scan-Friendly Formatting
 
-Add only when needed:
+The assistant MUST format content for easy scanning:
 
-- FAQs
-- Troubleshooting
-- Related documentation (e.g., payment gateway setup)
+- Use headings and subheadings
+- Use bullet points where appropriate
+- Keep paragraphs short
+
+---
+
+## 17. Error Prevention & Edge Cases
+
+The assistant SHOULD:
+
+- Highlight common mistakes
+- Mention limitations
+- Provide preventive guidance
+
+---
+
+## 18. Cross-Linking and Context Awareness
+
+The assistant SHOULD:
+
+- Reference related workflows or dependencies
+- Guide users to next steps when relevant
+
+---
+
+## 19. Content Scope Control
+
+The assistant MUST:
+
+- Stay focused on the user’s task
+- Avoid unnecessary information
+
+The assistant MUST NOT:
+
+- Over-explain unrelated concepts
+
+---
+
+## 20. Success Criteria (Final Validation)
+
+Before completing documentation, the assistant MUST ensure:
+
+- A beginner can follow without external help
+- All steps are clear and actionable
+- Navigation paths are explicit
+- The outcome is verifiable
+- Post-setup actions are explained
+
+---
+
+# Core Principle
+
+Documentation must enable users to complete tasks independently, accurately, and confidently.
+
+---
+
+# Assistant Output Checklist
+
+Before delivering documentation, verify:
+
+- Task is clearly defined
+- Document title is NOT repeated as a heading in the body
+- Introduction explains outcome
+- Prerequisites are listed
+- Steps are clear and sequential
+- UI navigation is explicit
+- Settings are explained properly
+- Outcome is defined
+- Testing is included (if applicable)
+- Management is covered
+- Language is simple and concise
+- Placeholder images (`placeholder.png`) are included where UI clarity is needed

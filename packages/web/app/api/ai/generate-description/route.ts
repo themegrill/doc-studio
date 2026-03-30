@@ -56,7 +56,7 @@ ${
   currentDescription ? `Current description: "${currentDescription}"\n\n` : ""
 }Generate a better description that summarizes this content.`,
       temperature: config.temperature,
-      maxOutputTokens: Math.min(config.maxTokens, 200), // Descriptions don't need many tokens
+      maxOutputTokens: config.maxTokens, // Descriptions don't need many tokens
     });
 
     const generatedDescription = text.trim();

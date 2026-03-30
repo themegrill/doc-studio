@@ -4,6 +4,8 @@ import { getKnowledgeBasePromptAsync } from "@/lib/knowledge-base-loader";
 import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
 import { logAIUsage } from "@/lib/ai-usage-tracker";
+import fs from "fs";
+import path from "path";
 
 export const maxDuration = 30;
 
@@ -25,6 +27,17 @@ export async function POST(req: Request) {
 
     // Get AI configuration
     const config = await getAIConfig();
+
+    // Load documentation writing guideline
+    let documentationGuidelinePrompt = "";
+    try {
+      const guidelinePath = path.join(process.cwd(), "template", "documentation-guideline.md");
+      if (fs.existsSync(guidelinePath)) {
+        documentationGuidelinePrompt = fs.readFileSync(guidelinePath, "utf-8");
+      }
+    } catch (error) {
+      console.error("[Doc Chat API] Failed to load documentation guideline:", error);
+    }
 
     // Load knowledge base for this project (if available)
     const projectSlug = documentContext?.projectSlug;
@@ -312,7 +325,11 @@ Use only explicit product-specific user statements.
 Do not guess missing product details.
 `;
 
-    const systemPrompt = `${basePrompt}\n${kbPolicy}\n${editorToolsPrompt}`;
+    const guidelineSection = documentationGuidelinePrompt
+      ? `\n\n# DOCUMENTATION WRITING STANDARDS\n\nWhen writing or improving documentation, you MUST follow these standards:\n\n${documentationGuidelinePrompt}`
+      : "";
+
+    const systemPrompt = `${basePrompt}\n${kbPolicy}${guidelineSection}\n${editorToolsPrompt}`;
     // Convert to model messages
     if (!messages || messages.length === 0) {
       throw new Error("No messages provided");

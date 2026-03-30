@@ -137,6 +137,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
   // Use refs to store latest values without causing re-renders
   const editorStateRef = useRef(editorState);
   const editorRef = useRef<typeof editor | null>(null);
+  const isTransformingRef = useRef(false);
 
   useEffect(() => {
     editorStateRef.current = editorState;
@@ -252,45 +253,45 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
       });
     };
 
-    const renderImages = () => {
-      // Find all image blocks and render them
-      const editorEl = document.querySelector('.bn-editor');
-      if (!editorEl) return;
+    // const renderImages = () => {
+    //   // Find all image blocks and render them
+    //   const editorEl = document.querySelector('.bn-editor');
+    //   if (!editorEl) return;
 
-      doc.blocks.forEach((block) => {
-        if (block.type === 'image' && block.props?.url && block.id) {
-          // Find the corresponding block element by ID (more reliable than index)
-          const blockElement = editorEl.querySelector(`[data-id="${block.id}"]`);
+    //   doc.blocks.forEach((block) => {
+    //     if (block.type === 'image' && block.props?.url && block.id) {
+    //       // Find the corresponding block element by ID (more reliable than index)
+    //       const blockElement = editorEl.querySelector(`[data-id="${block.id}"]`);
 
-          if (blockElement && !blockElement.classList.contains('custom-image-rendered')) {
-            // Mark as rendered to avoid duplicate processing
-            blockElement.classList.add('custom-image-rendered');
+    //       if (blockElement && !blockElement.classList.contains('custom-image-rendered')) {
+    //         // Mark as rendered to avoid duplicate processing
+    //         blockElement.classList.add('custom-image-rendered');
 
-            // Create image element
-            const imgContainer = document.createElement('div');
-            imgContainer.className = 'custom-image-block';
-            imgContainer.style.cssText = 'margin: 1.5rem 0; text-align: center;';
+    //         // Create image element
+    //         const imgContainer = document.createElement('div');
+    //         imgContainer.className = 'custom-image-block';
+    //         imgContainer.style.cssText = 'margin: 1.5rem 0; text-align: center;';
 
-            const img = document.createElement('img');
-            img.src = block.props.url;
-            img.alt = block.props.caption || '';
-            img.style.cssText = 'max-width: 100%; height: auto; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);';
+    //         const img = document.createElement('img');
+    //         img.src = block.props.url;
+    //         img.alt = block.props.caption || '';
+    //         img.style.cssText = 'max-width: 100%; height: auto; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);';
 
-            imgContainer.appendChild(img);
+    //         imgContainer.appendChild(img);
 
-            if (block.props.caption) {
-              const caption = document.createElement('div');
-              caption.textContent = block.props.caption;
-              caption.style.cssText = 'margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280; font-style: italic;';
-              imgContainer.appendChild(caption);
-            }
+    //         if (block.props.caption) {
+    //           const caption = document.createElement('div');
+    //           caption.textContent = block.props.caption;
+    //           caption.style.cssText = 'margin-top: 0.5rem; font-size: 0.875rem; color: #6b7280; font-style: italic;';
+    //           imgContainer.appendChild(caption);
+    //         }
 
-            // Replace the block element with our image
-            blockElement.replaceWith(imgContainer);
-          }
-        }
-      });
-    };
+    //         // Replace the block element with our image
+    //         blockElement.replaceWith(imgContainer);
+    //       }
+    //     }
+    //   });
+    // };
 
     const makeLinksClickable = () => {
       // Create a Set of all URLs from our blocks
@@ -393,15 +394,173 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     // Using a single timeout is fine - no need for polling here
     const timer = setTimeout(() => {
       addHeadingAnchors();
-      renderImages();
+    //   renderImages();
       makeLinksClickable();
     }, 150);
 
     return () => clearTimeout(timer);
   }, [editorState.isEditing, doc.blocks]);
 
+  function normalizeLegacyMarkdownBlocks(blocks: any[]) {
+  const output: any[] = [];
+
+  for (const block of blocks) {
+    if (!Array.isArray(block.content)) {
+      output.push(block);
+      continue;
+    }
+
+    const text = block.content
+      .map((item: any) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item.text === "string") return item.text;
+        return "";
+      })
+      .join("");
+
+    // Only transform paragraph blocks that are really markdown blobs
+    if (block.type !== "paragraph" || !text.includes("\n")) {
+      output.push(block);
+      continue;
+    }
+
+    const lines = text.split(/\r?\n/);
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const imageMatch = line.match(/^!\[(.*?)\]\((.*?)\)$/);
+      if (imageMatch) {
+        const [, caption, url] = imageMatch;
+        output.push({
+          type: "image",
+          props: {
+            url,
+            caption,
+          },
+        });
+        continue;
+      }
+
+      const h2Match = line.match(/^##\s+(.*)$/);
+      if (h2Match) {
+        output.push({
+          type: "heading",
+          props: { level: 2 },
+          content: [{ type: "text", text: h2Match[1] }],
+        });
+        continue;
+      }
+
+      const h1Match = line.match(/^#\s+(.*)$/);
+      if (h1Match) {
+        output.push({
+          type: "heading",
+          props: { level: 1 },
+          content: [{ type: "text", text: h1Match[1] }],
+        });
+        continue;
+      }
+
+      const h3Match = line.match(/^###\s+(.*)$/);
+      if (h3Match) {
+        output.push({
+          type: "heading",
+          props: { level: 3 },
+          content: [{ type: "text", text: h3Match[1] }],
+        });
+        continue;
+      }
+
+      output.push({
+        type: "paragraph",
+        content: [{ type: "text", text: line }],
+      });
+    }
+  }
+
+  // Strip trailing empty paragraphs — they show as placeholder text in the editor
+  while (output.length > 0) {
+    const last = output[output.length - 1];
+    const isEmpty =
+      last.type === "paragraph" &&
+      (!Array.isArray(last.content) ||
+        last.content.every((item: unknown) => !(item as { text?: string })?.text?.trim()));
+    if (isEmpty) output.pop();
+    else break;
+  }
+
+  return output;
+}
+ function transformMarkdownImages(blocks: any[]) {
+  const imageRegex = /!\[(.*?)\]\((.*?)\)/g;
+
+  return blocks.flatMap((block) => {
+    if (
+      block.type !== "paragraph" ||
+      !Array.isArray(block.content) ||
+      block.content.length === 0
+    ) {
+      return [block];
+    }
+
+    const fullText = block.content
+      .map((item: any) =>
+        typeof item === "string" ? item : item?.text || ""
+      )
+      .join("");
+
+    if (!imageRegex.test(fullText)) {
+      imageRegex.lastIndex = 0;
+      return [block];
+    }
+
+    imageRegex.lastIndex = 0;
+
+    const result: any[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = imageRegex.exec(fullText)) !== null) {
+      const [fullMatch, caption, url] = match;
+      const start = match.index;
+      const end = start + fullMatch.length;
+
+      const before = fullText.slice(lastIndex, start).trim();
+      if (before) {
+        result.push({
+          type: "paragraph",
+          content: [{ type: "text", text: before }],
+        });
+      }
+
+      result.push({
+        type: "image",
+        props: {
+          url,
+          caption,
+        },
+      });
+
+      lastIndex = end;
+    }
+
+    const after = fullText.slice(lastIndex).trim();
+    if (after) {
+      result.push({
+        type: "paragraph",
+        content: [{ type: "text", text: after }],
+      });
+    }
+
+    return result.length ? result : [block];
+  });
+}
+
+
   const editor = useCreateBlockNote({
-    initialContent: doc.blocks.length > 0 ? doc.blocks : undefined,
+    initialContent: doc.blocks.length > 0 ? transformMarkdownImages(normalizeLegacyMarkdownBlocks(doc.blocks)) : undefined,
     dictionary: {
       ...blockNoteLocale,
       ai: aiLocale, // AI dictionary should be nested under 'ai' key
@@ -736,8 +895,8 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
         slug: doc.slug,
         title: currentEditorState.title,
         description: currentEditorState.description,
-        blocks: currentEditor.document,
-      };
+		blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
+	  };
 
       const response = await fetch(`/api/docs/${slug}`, {
         method: "PUT",
@@ -1039,6 +1198,27 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
             if (!editorState.isEditing && isAuthenticated) {
               setEditorState((prev) => ({ ...prev, isEditing: true }));
               editingContext.setIsEditing(true);
+            }
+
+            // Transform markdown image paragraphs inserted by AI into proper image blocks
+            if (!isTransformingRef.current) {
+              isTransformingRef.current = true;
+              try {
+                const imageRegex = /^!\[(.*?)\]\((.*?)\)$/;
+                for (const block of editor.document) {
+                  if (block.type !== "paragraph" || !Array.isArray(block.content)) continue;
+                  const fullText = block.content
+                    .map((item) => (typeof item === "string" ? item : (item as { text?: string })?.text || ""))
+                    .join("");
+                  const match = fullText.match(imageRegex);
+                  if (match) {
+                    const [, caption, url] = match;
+                    editor.updateBlock(block, { type: "image", props: { url, caption } });
+                  }
+                }
+              } finally {
+                isTransformingRef.current = false;
+              }
             }
           }}
         >

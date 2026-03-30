@@ -209,8 +209,17 @@ export default function ChatPanel({
             self.findIndex((c) => JSON.stringify(c) === JSON.stringify(call))
         );
 
+        const hasInsertBlocks = uniqueToolCalls.some(tc => tc.tool === "insert_blocks");
+        let searchAutoContinuePrompt: string | null = null;
+
         for (const toolCall of uniqueToolCalls) {
-          await handleToolExecution(assistantMessage.id, toolCall);
+          const autoContinue = await handleToolExecution(assistantMessage.id, toolCall);
+          if (autoContinue) searchAutoContinuePrompt = autoContinue;
+        }
+
+        // Only auto-continue after a search if insert_blocks didn't already write content
+        if (searchAutoContinuePrompt && !hasInsertBlocks) {
+          continueConversationWithPrompt(searchAutoContinuePrompt);
         }
       }
     } catch (error) {
@@ -266,7 +275,7 @@ export default function ChatPanel({
   const handleToolExecution = async (
     messageId: string,
     toolCall: EditorToolCall,
-  ) => {
+  ): Promise<string | null> => {
     // Check if editor exists (not available for sections)
     if (!editor) {
       setMessages((prev) => [...prev, {
@@ -275,7 +284,7 @@ export default function ChatPanel({
         content: "⚠️ Editor tools are not available for section pages",
         createdAt: new Date(),
       }]);
-      return;
+      return null;
     }
 
     // Check if editor is editable - if not, request permission
@@ -310,7 +319,7 @@ export default function ChatPanel({
         toolCall,
         description: getToolDescription(toolCall),
       });
-      return;
+      return null;
     }
 
     // Execute the tool
@@ -348,36 +357,22 @@ export default function ChatPanel({
 
       setMessages((prev) => [...prev, systemMessage]);
 
-      // Auto-continue for search results or structure retrieval (only if not already auto-continuing)
-      if (!isAutoContinuing && result.success && result.data) {
-        // Handle search_blocks with exact matches
-        if (
+      // Return auto-continue prompt for search_blocks exact matches so the caller
+      // can decide whether to trigger it (after all tool calls have completed).
+      if (result.success && result.data &&
           toolCall.tool === "search_blocks" &&
           Array.isArray(result.data) &&
-          result.data.length > 0
-        ) {
-          const hasExactMatch = result.data.some(
-            (item: { matchType?: string }) => !item.matchType || item.matchType === "exact"
-          );
-
-          // Auto-trigger follow-up for exact matches (max 3 results to avoid ambiguity)
-          if (hasExactMatch && result.data.length <= 3 && result.data.length >= 1) {
-            continueConversationWithPrompt(
-              "The search found exact matches. Please proceed with the requested update/modification using the block IDs from the search results above."
-            );
-          }
-        }
-        // Handle get_blocks_structure when user wants to check/update content
-        else if (
-          toolCall.tool === "get_blocks_structure" &&
-          Array.isArray(result.data) &&
-          result.data.length > 0
-        ) {
-          continueConversationWithPrompt(
-            "The document structure has been retrieved. Please analyze the content as requested and make any necessary updates."
-          );
+          result.data.length >= 1 &&
+          result.data.length <= 3) {
+        const hasExactMatch = result.data.some(
+          (item: { matchType?: string }) => !item.matchType || item.matchType === "exact"
+        );
+        if (hasExactMatch) {
+          return "The search found exact matches. Please proceed with the requested update/modification using the block IDs from the search results above.";
         }
       }
+
+      return null;
     } catch (error) {
       console.error("Tool execution error:", error);
       const errorMessage: Message = {
@@ -387,6 +382,7 @@ export default function ChatPanel({
         createdAt: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
+      return null;
     } finally {
       setExecutingTool(false);
     }

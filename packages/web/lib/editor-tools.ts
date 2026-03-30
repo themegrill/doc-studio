@@ -130,6 +130,11 @@ function normalizeBlocks(blocks: PartialBlock[]): Array<{ minimal: PartialBlock;
       textContent = contentToString(block.content);
     }
 
+    // Skip empty paragraph blocks — they render as the "Start writing..." placeholder
+    if (blockType === 'paragraph' && (!textContent || !textContent.trim())) {
+      continue;
+    }
+
     results.push({ minimal, textContent });
   }
 
@@ -174,23 +179,40 @@ async function insertBlocks(
     const minimalBlocks = normalizedData.map(d => d.minimal);
     const insertedBlockIds: string[] = [];
 
+    // Helper: check if a block is an empty paragraph (the default placeholder)
+    const isEmptyParagraph = (block: { type: string; content: unknown }) =>
+      block.type === "paragraph" && extractTextFromBlock(block as Parameters<typeof extractTextFromBlock>[0]).trim() === "";
+
     try {
       if (position === "start") {
-        // Insert at the beginning
         const firstBlock = editor.document[0];
-        if (firstBlock && firstBlock.id) {
+        // If document has only one empty paragraph, replace it entirely
+        if (editor.document.length === 1 && firstBlock && isEmptyParagraph(firstBlock)) {
+          editor.replaceBlocks(editor.document, minimalBlocks);
+        } else if (firstBlock && firstBlock.id) {
           editor.insertBlocks(minimalBlocks, firstBlock.id, "before");
         } else {
-          // If document is empty, replace it
           editor.replaceBlocks(editor.document, minimalBlocks);
         }
       } else if (position === "end") {
-        // Insert at the end
         const lastBlock = editor.document[editor.document.length - 1];
-        if (lastBlock && lastBlock.id) {
-          editor.insertBlocks(minimalBlocks, lastBlock.id, "after");
+        // If document has only one empty paragraph, replace it entirely
+        if (editor.document.length === 1 && lastBlock && isEmptyParagraph(lastBlock)) {
+          editor.replaceBlocks(editor.document, minimalBlocks);
+        } else if (lastBlock && lastBlock.id) {
+          // Remove a trailing empty paragraph before appending new content
+          if (isEmptyParagraph(lastBlock) && editor.document.length > 1) {
+            editor.removeBlocks([lastBlock.id]);
+            const newLast = editor.document[editor.document.length - 1];
+            if (newLast && newLast.id) {
+              editor.insertBlocks(minimalBlocks, newLast.id, "after");
+            } else {
+              editor.replaceBlocks(editor.document, minimalBlocks);
+            }
+          } else {
+            editor.insertBlocks(minimalBlocks, lastBlock.id, "after");
+          }
         } else {
-          // If document is empty, replace it
           editor.replaceBlocks(editor.document, minimalBlocks);
         }
       } else if (position === "before" || position === "after") {

@@ -132,14 +132,6 @@ export function ProjectSettingsTabs({
               </p>
             </div>
 
-            {isSuperAdmin && (
-              <div className="mb-4 bg-purple-50 border border-purple-200 rounded-md p-3">
-                <p className="text-sm text-purple-800">
-                  You have full access to this project as a system administrator.
-                </p>
-              </div>
-            )}
-
             <KnowledgeBaseSettings
 			  projectName={projectName}
               projectSlug={projectSlug}
