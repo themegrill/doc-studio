@@ -1,0 +1,126 @@
+[
+  {
+    "productSummary": {
+      "productName": "ContentGate",
+      "oneSentenceSummary": "ContentGate is a WordPress plugin that allows site owners to restrict access to pages, posts, or entire websites based on user roles, login status, and other conditions.",
+      "whatItDoes": "ContentGate provides a visual rule builder to control who can view specific WordPress content without requiring any coding. It allows users to create access rules based on user role, logged-in status, registration date, and other criteria, and apply restrictions to individual pages, posts, post types, taxonomies, menu items, or the entire website.",
+      "targetUsers": [
+        "WordPress site owners",
+        "Content creators with private or member content",
+        "Businesses managing client areas or intranets",
+        "Online course creators",
+        "Community managers running private forums",
+        "Anyone needing content restriction on WordPress"
+      ]
+    },
+    "features": [
+      {
+        "name": "Visual Rule Builder",
+        "description": "Create access rules using a visual interface without writing any code. Build conditional logic like 'IF visitor is logged out → hide this page' through a simple interface.",
+        "evidence": [
+          "Easy Rule Builder: Make rules like 'IF visitor is logged out → hide this page.' Build complex logic visually with zero code.",
+          "ContentGate is built for WordPress users, not developers. No shortcodes, no PHP, no headaches.",
+          "Use the visual rule builder to define your condition — like user login status and user role."
+        ]
+      },
+      {
+        "name": "Role-Based Access Control",
+        "description": "Target specific WordPress user roles including built-in roles (Contributors, Editors, Admins) or any custom roles created on the site.",
+        "evidence": [
+          "Role-Based Control: Target specific WordPress user roles — Contributors, Editors, Admins, or any custom role you've created.",
+          "Choose who sees content based on user role, logged-in status, registration date and more."
+        ]
+      },
+      {
+        "name": "Instant Rule Activation",
+        "description": "Toggle any access rule on or off instantly to test restrictions in real-time without modifying theme files or functions.php.",
+        "evidence": [
+          "Instant Activation: Toggle any rule on or off instantly. Test restrictions in real-time without touching theme files or functions.php.",
+          "Toggle the rule on. Your content is now protected — instantly, reliably, beautifully."
+        ]
+      },
+      {
+        "name": "Custom Restriction Messages",
+        "description": "Display fully editable messages to visitors when they don't have access to restricted content. Messages can be branded and include links.",
+        "evidence": [
+          "Simple Restriction Message: Add fully editable message that visitors see when they don't have access to a post or page.",
+          "Write the message visitors see when they're restricted. Brand it, link it, make it yours."
+        ]
+      },
+      {
+        "name": "Whole Site Lock",
+        "description": "Apply a single access rule to protect the entire WordPress site, requiring approval for users to view any content.",
+        "evidence": [
+          "Whole Site Lock: Put your entire WordPress site behind a single access rule. Only approved users can view anything at all.",
+          "Select specific pages, posts, or toggle on 'Whole Site' to protect everything at once."
+        ]
+      },
+      {
+        "name": "Granular Content Protection",
+        "description": "Restrict access to specific pages, posts, post types, taxonomies (categories, tags, custom taxonomies), or menu items.",
+        "evidence": [
+          "Pages: Hide any page you want. Perfect for private lessons, dashboards, or client pages.",
+          "Posts: Keep certain blog posts private so only the right people can read them.",
+          "Post Type: Control who sees specific content types, like pages or posts.",
+          "Taxonomy: Hide categories, tags, or custom taxonomies to control access to specific topics.",
+          "Menu Items: Restrict access to specific menu items: keep some pages hidden from certain users."
+        ]
+      },
+      {
+        "name": "Multiple Restriction Criteria",
+        "description": "Create rules based on user role, logged-in status, registration date, and other user attributes.",
+        "evidence": [
+          "Choose who sees content based on user role, logged-in status, registration date and more.",
+          "Restrict Who You Want: Choose who sees content based on user role, logged-in status, registration date and more."
+        ]
+      }
+    ],
+    "useCases": [
+      {
+        "title": "Private Pages and Member Content",
+        "description": "Restrict specific pages or posts to members only, creating exclusive content areas for registered users or paying members."
+      },
+      {
+        "title": "Client Area",
+        "description": "Create private client portals where only specific clients can access their dedicated pages, dashboards, or resources."
+      },
+      {
+        "title": "Intranet Sites",
+        "description": "Build internal company websites where all content is restricted to employees or approved users only."
+      },
+      {
+        "title": "Private Forums",
+        "description": "Restrict forum access to specific user groups or members, creating exclusive community spaces."
+      },
+      {
+        "title": "Online Courses",
+        "description": "Protect course content and lessons so only enrolled students can access the material."
+      },
+      {
+        "title": "Exclusive Sites",
+        "description": "Create entirely private websites where all content requires authentication or specific user roles to view."
+      }
+    ],
+    "howTos": [
+      {
+        "title": "Set Up Content Restriction in ContentGate",
+        "steps": [
+          "Install the Plugin: Download and activate ContentGate from the WordPress plugin directory",
+          "Create what to Protect: Use the visual rule builder to define your condition (such as user login status and user role)",
+          "Choose what to Protect: Select specific pages, posts, or toggle on 'Whole Site' to protect everything at once",
+          "Customize the Message: Write the message visitors see when they're restricted, including branding and links as needed",
+          "Activate & Done: Toggle the rule on to immediately protect your content"
+        ]
+      }
+    ],
+    "openQuestions": [
+      "What is the relationship between ContentGate and 'User Registration & Membership' mentioned in the FAQ section? Are they separate products or integrated?",
+      "What specific criteria can be used beyond user role, logged-in status, and registration date for creating access rules?",
+      "What happens when a restricted page is accessed directly via URL - is the user redirected or shown the restriction message in place?",
+      "Can multiple rules be applied to the same piece of content, and if so, how are conflicting rules resolved?",
+      "Is there a free version available as mentioned ('try the free version'), and what are the differences between free and paid versions?",
+      "Does ContentGate work with custom post types created by other plugins or themes?",
+      "How does ContentGate handle SEO for restricted content - is it hidden from search engines?"
+    ]
+  }
+]

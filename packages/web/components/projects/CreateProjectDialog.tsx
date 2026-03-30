@@ -24,6 +24,7 @@ export function CreateProjectDialog() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
+  const [siteLink, setSiteLink] = useState("");
   const [knowledgeBaseFile, setKnowledgeBaseFile] = useState<File | null>(null);
   const [knowledgeBaseData, setKnowledgeBaseData] = useState<any>(null);
   const router = useRouter();
@@ -94,6 +95,7 @@ export function CreateProjectDialog() {
           name,
           slug,
           description,
+		  siteLink,
           knowledgeBase: knowledgeBaseData,
         }),
       });
@@ -130,6 +132,7 @@ export function CreateProjectDialog() {
     setName("");
     setSlug("");
     setDescription("");
+	setSiteLink("");
     setKnowledgeBaseFile(null);
     setKnowledgeBaseData(null);
   };
@@ -190,6 +193,16 @@ export function CreateProjectDialog() {
                 placeholder="A brief description of your project..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Site Link (Optional)</Label>
+              <Input
+                id="site-link"
+                placeholder="Link to your project's site homepage"
+                value={description}
+                onChange={(e) => setSiteLink(e.target.value)}
                 rows={3}
               />
             </div>

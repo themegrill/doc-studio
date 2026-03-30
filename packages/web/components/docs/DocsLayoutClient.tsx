@@ -148,13 +148,15 @@ function DocsLayoutContent({
               <Menu size={20} />
             </button>
 
-            <Image
-              src={projectMetadata?.logo || "https://themegrill.com/wp-content/uploads/2021/08/tg-logo-black.png"}
-              alt="Logo"
-              width={150}
-              height={40}
-              className="object-contain max-h-10"
-            />
+            <Link href="/projects">
+              <Image
+                src={projectMetadata?.logo || "https://themegrill.com/wp-content/uploads/2021/08/tg-logo-black.png"}
+                alt="Logo"
+                width={150}
+                height={40}
+                className="object-contain max-h-10"
+              />
+            </Link>
             <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               v{navigation.version}
             </span>

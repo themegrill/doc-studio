@@ -4,8 +4,8 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Upload, Settings } from "lucide-react";
-
+import { Users, Upload, Settings, BookOpen} from "lucide-react";
+import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
 interface ProjectSettingsTabsProps {
   projectSlug: string;
   projectId: string;
@@ -15,7 +15,7 @@ interface ProjectSettingsTabsProps {
   isSuperAdmin: boolean;
 }
 
-type TabType = "general" | "members" | "import";
+type TabType = "general" | "members" | "knowledge-base" | "import";
 
 export function ProjectSettingsTabs({
   projectSlug,
@@ -37,6 +37,11 @@ export function ProjectSettingsTabs({
       id: "members" as const,
       label: "Members",
       icon: Users,
+    },
+    {
+      id: "knowledge-base" as const,
+      label: "Knowledge Base",
+      icon: BookOpen,
     },
     {
       id: "import" as const,
@@ -115,6 +120,31 @@ export function ProjectSettingsTabs({
             <ProjectMembersTable
               projectSlug={projectSlug}
               currentUserRole={currentUserRole}
+            />
+          </div>
+        )}
+        {activeTab === "knowledge-base" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">Knowledge Base</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Maintain knowledge base for the project
+              </p>
+            </div>
+
+            {isSuperAdmin && (
+              <div className="mb-4 bg-purple-50 border border-purple-200 rounded-md p-3">
+                <p className="text-sm text-purple-800">
+                  You have full access to this project as a system administrator.
+                </p>
+              </div>
+            )}
+
+            <KnowledgeBaseSettings
+			  projectName={projectName}
+              projectSlug={projectSlug}
+			  projectMetadata={projectMetadata}
+              isSuperAdmin={isSuperAdmin}
             />
           </div>
         )}

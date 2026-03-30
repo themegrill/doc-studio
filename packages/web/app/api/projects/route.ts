@@ -119,7 +119,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, slug, description, domain, settings, knowledgeBase } = body;
+    const {
+      name,
+      slug,
+      description,
+      domain,
+      settings,
+      knowledgeBase,
+      siteLink,
+    } = body;
 
     // Validate required fields
     if (!name || !slug) {
@@ -218,6 +226,27 @@ export async function POST(req: NextRequest) {
       } catch (kbError) {
         console.error("Error saving knowledge base:", kbError);
         // Don't fail the whole request if KB save fails
+      }
+    }
+
+    if (siteLink) {
+      const metadata = project.metadata;
+      const updatedMetadata = { ...metadata, siteLink: siteLink };
+
+      const saveResponse = await fetch(`/api/projects/${project.slug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: project.name, // Use props instead of state
+          slug: project.slug,
+          metadata: updatedMetadata,
+        }),
+      });
+
+      if (!saveResponse.ok) {
+        const errorData = await saveResponse.json();
+        console.error("Save error:", errorData);
+        throw new Error(errorData.error || "Failed to save site link");
       }
     }
 
