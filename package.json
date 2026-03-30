@@ -16,6 +16,7 @@
     "lint": "cd packages/web && pnpm lint"
   },
   "dependencies": {
+    "domhandler": "^6.0.1",
     "pg": "^8.20.0"
   }
 }

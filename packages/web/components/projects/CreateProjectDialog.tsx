@@ -203,7 +203,6 @@ export function CreateProjectDialog() {
                 placeholder="Link to your project's site homepage"
                 value={description}
                 onChange={(e) => setSiteLink(e.target.value)}
-                rows={3}
               />
             </div>
 
