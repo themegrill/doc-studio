@@ -167,6 +167,10 @@
   color: #383838 !important;
 }
 
+.bn-editor strong {
+  font-weight: 500;
+}
+
 .bn-editor [data-content-type="heading"] h1 {
   font-size: var(--doc-h1-size);
   font-weight: var(--doc-h1-weight);
