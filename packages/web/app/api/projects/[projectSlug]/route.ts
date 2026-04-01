@@ -3,6 +3,27 @@ import { getDb } from "@/lib/db/postgres";
 import { NextRequest } from "next/server";
 
 /**
+ * Get public project details (name, slug, description)
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ projectSlug: string }> }
+) {
+  const { projectSlug } = await params;
+  const sql = getDb();
+
+  const [project] = await sql`
+    SELECT name, slug, description, settings, metadata AS metadata FROM projects WHERE slug = ${projectSlug} LIMIT 1
+  `;
+
+  if (!project) {
+    return Response.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  return Response.json(project);
+}
+
+/**
  * Update project details (name, slug)
  */
 export async function PATCH(
