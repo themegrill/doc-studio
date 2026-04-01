@@ -4,24 +4,39 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Upload, Settings, BookOpen} from "lucide-react";
+import { Users, Upload, Settings, BookOpen, Globe } from "lucide-react";
 import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
+import { DeploySettings } from "./DeploySettings";
+
+interface DeployState {
+  domain: string;
+  status: "pending_dns" | "verified" | "active";
+  dnsRecords: Array<{ type: string; name: string; value: string; purpose: string }>;
+  verification: Array<{ type: string; domain: string; value: string }>;
+  addedAt: string;
+  verifiedAt: string | null;
+}
+
 interface ProjectSettingsTabsProps {
   projectSlug: string;
   projectId: string;
   projectName: string;
   projectMetadata: Record<string, any>;
+  projectDomain: string | null;
+  projectDeploy: DeployState | null;
   currentUserRole: string;
   isSuperAdmin: boolean;
 }
 
-type TabType = "general" | "members" | "knowledge-base" | "import";
+type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy";
 
 export function ProjectSettingsTabs({
   projectSlug,
   projectId,
   projectName,
   projectMetadata,
+  projectDomain,
+  projectDeploy,
   currentUserRole,
   isSuperAdmin,
 }: ProjectSettingsTabsProps) {
@@ -42,6 +57,11 @@ export function ProjectSettingsTabs({
       id: "knowledge-base" as const,
       label: "Knowledge Base",
       icon: BookOpen,
+    },
+    {
+      id: "deploy" as const,
+      label: "Deploy",
+      icon: Globe,
     },
     {
       id: "import" as const,
@@ -136,6 +156,24 @@ export function ProjectSettingsTabs({
 			  projectName={projectName}
               projectSlug={projectSlug}
 			  projectMetadata={projectMetadata}
+              isSuperAdmin={isSuperAdmin}
+            />
+          </div>
+        )}
+
+        {activeTab === "deploy" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">Deploy</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Configure a custom domain for this project&apos;s documentation site
+              </p>
+            </div>
+
+            <DeploySettings
+              projectSlug={projectSlug}
+              initialDomain={projectDomain}
+              initialDeploy={projectDeploy}
               isSuperAdmin={isSuperAdmin}
             />
           </div>
