@@ -24,6 +24,23 @@ const nextConfig: NextConfig = {
         port: "3000",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+        port: "",
+        pathname: "/**",
+      },
+      // Allow images from the configured API base URL (production main app)
+      ...(apiBaseUrl.startsWith("https://")
+        ? [
+            {
+              protocol: "https" as const,
+              hostname: new URL(apiBaseUrl).hostname,
+              port: "",
+              pathname: "/**",
+            },
+          ]
+        : []),
     ],
   },
   async rewrites() {

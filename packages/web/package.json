@@ -39,6 +39,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-toast": "^1.2.15",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@vercel/blob": "^2.3.2",
     "ai": "^6.0.68",
     "axios": "^1.14.0",
     "bcryptjs": "^3.0.3",

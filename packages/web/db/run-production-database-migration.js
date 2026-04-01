@@ -19,7 +19,6 @@ function findDbDir() {
 
   for (const dir of candidates) {
     if (!fs.existsSync(dir)) continue;
-
     const sqlFiles = fs.readdirSync(dir).filter((f) => f.endsWith(".sql"));
     if (sqlFiles.length > 0) return dir;
   }
@@ -45,20 +44,35 @@ async function run() {
   console.log("Using db directory:", dbDir);
   console.log("SQL files found:", files);
 
-  const client = new Client({
-    connectionString: process.env.NEON_DATABASE_URL,
-  });
-
+  const client = new Client({ connectionString: process.env.NEON_DATABASE_URL });
   await client.connect();
   console.log("Connected to database");
 
   try {
+    // Ensure migration tracking table exists
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        filename   VARCHAR(255) PRIMARY KEY,
+        applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+
+    // Load already-applied migrations
+    const { rows } = await client.query("SELECT filename FROM _migrations");
+    const applied = new Set(rows.map((r) => r.filename));
+
     for (const file of files) {
+      if (applied.has(file)) {
+        console.log(`Skipping ${file} (already applied)`);
+        continue;
+      }
+
       const sql = fs.readFileSync(path.join(dbDir, file), "utf8").trim();
       if (!sql) continue;
 
       console.log(`Running ${file}...`);
       await client.query(sql);
+      await client.query("INSERT INTO _migrations (filename) VALUES ($1)", [file]);
       console.log(`Done: ${file}`);
     }
 

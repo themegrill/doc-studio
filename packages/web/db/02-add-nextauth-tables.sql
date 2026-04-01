@@ -51,9 +51,11 @@ CREATE INDEX IF NOT EXISTS idx_sessions_session_token ON sessions(session_token)
 CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);
 
 -- Add triggers for updated_at
+DROP TRIGGER IF EXISTS update_accounts_updated_at ON accounts;
 CREATE TRIGGER update_accounts_updated_at BEFORE UPDATE ON accounts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_sessions_updated_at ON sessions;
 CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON sessions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
