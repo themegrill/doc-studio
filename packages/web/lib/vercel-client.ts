@@ -7,6 +7,27 @@ const VERCEL_ADMIN_PROJECT_ID =
 const VERCEL_TEAM_ID =
   process.env.VERCEL_TEAM_ID ?? "team_MudjARP3AD3hyR0PoMUCcRLD";
 
+/**
+ * Returns the public URL of this web app (used as API_BASE_URL for deployed clients).
+ * Priority:
+ *   1. WEB_APP_URL — explicit override (set this in .env.local for local dev)
+ *   2. VERCEL_PROJECT_PRODUCTION_URL — auto-set by Vercel for every production deployment
+ *   3. NEXTAUTH_URL — user-configured, valid when not localhost
+ *   4. requestOrigin — last resort (will be localhost when running locally)
+ */
+export function getWebAppUrl(requestOrigin: string): string {
+  if (process.env.WEB_APP_URL) {
+    return process.env.WEB_APP_URL;
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.NEXTAUTH_URL && !process.env.NEXTAUTH_URL.includes("localhost")) {
+    return process.env.NEXTAUTH_URL;
+  }
+  return requestOrigin;
+}
+
 export function vercelHeaders() {
   return {
     Authorization: `Bearer ${VERCEL_API_TOKEN}`,

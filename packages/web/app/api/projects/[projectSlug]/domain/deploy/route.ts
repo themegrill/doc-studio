@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db/postgres";
 import {
   getOrCreateVercelClientProjectId,
+  getWebAppUrl,
   isVercelConfigured,
   resolveGitSource,
   upsertVercelEnvVars,
@@ -72,7 +73,7 @@ export async function POST(
     gitSource = await resolveGitSource();
     await upsertVercelEnvVars(vercelProjectId, {
       PROJECT_SLUG: projectSlug,
-      API_BASE_URL: new URL(request.url).origin,
+      API_BASE_URL: getWebAppUrl(new URL(request.url).origin),
     });
   } catch (err) {
     return Response.json(
