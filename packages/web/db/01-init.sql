@@ -136,19 +136,11 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- USERS
 INSERT INTO users (email, name, hashed_password, role)
 SELECT
-    'dev@example.com',
-    'Development User',
-    '$2b$10$fFg52Tpz9aqdHE8a/72vJOeH9lGqjNL5H.zYFmKpgm7H4jHOF05PW',
+    'team@themegrill.com',
+    'Super Admin User',
+    '$2y$10$oX1//5zMcxqXCngLBJ4FF.BFr2eJ9sYgbEqzs7wXEHkptnCB.ZNyu',
     'super_admin'
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'dev@example.com');
-
-INSERT INTO users (email, name, hashed_password, role)
-SELECT
-    'test@example.com',
-    'Test User',
-    '$2b$10$fFg52Tpz9aqdHE8a/72vJOeH9lGqjNL5H.zYFmKpgm7H4jHOF05PW',
-    'admin'
-WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'test@example.com');
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'team@themegrill.com');
 
 -- PROJECT
 INSERT INTO projects (name, slug, description, domain, settings, created_by)
@@ -160,7 +152,7 @@ SELECT
     '{}'::jsonb,
     u.id
 FROM users u
-WHERE u.email = 'dev@example.com'
+WHERE u.email = 'team@themegrill.com'
   AND NOT EXISTS (
       SELECT 1 FROM projects WHERE slug = 'default-project'
   );
@@ -169,7 +161,7 @@ WHERE u.email = 'dev@example.com'
 INSERT INTO project_members (project_id, user_id, role)
 SELECT p.id, u.id, 'owner'
 FROM projects p
-JOIN users u ON u.email = 'dev@example.com'
+JOIN users u ON u.email = 'team@themegrill.com'
 WHERE p.slug = 'default-project'
   AND NOT EXISTS (
       SELECT 1 FROM project_members pm

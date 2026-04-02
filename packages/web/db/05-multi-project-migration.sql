@@ -76,14 +76,3 @@ ALTER COLUMN project_id SET NOT NULL;
 
 ALTER TABLE navigation
 ALTER COLUMN project_id SET NOT NULL;
-
--- 11. Add test user to default project
-INSERT INTO project_members (project_id, user_id, role)
-SELECT
-    p.id,
-    u.id,
-    'owner'
-FROM projects p
-JOIN users u ON u.email = 'test@example.com'
-WHERE p.slug = 'default'
-ON CONFLICT (project_id, user_id) DO NOTHING;

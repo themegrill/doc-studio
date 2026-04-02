@@ -118,10 +118,6 @@ export default function LoginPage() {
                 <>Sign In</>
               )}
             </Button>
-
-            <div className="text-center text-sm text-gray-600">
-              Test credentials: test@example.com / password123
-            </div>
           </form>
         </CardContent>
       </Card>

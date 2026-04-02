@@ -61,12 +61,3 @@ CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON sessions
 
 -- Insert a test user with password "password123" (hashed with bcrypt)
 -- This is for development only - remove in production
-INSERT INTO users (email, name, hashed_password)
-VALUES (
-    'test@example.com',
-    'Test User',
-    '$2a$10$rXKqUJNqQZWqPqCf.xL0KuN3Z6uZHzVKFYPGPKGNmJLPnQVVZV3/a'
-)
-ON CONFLICT (email) DO UPDATE SET
-    hashed_password = EXCLUDED.hashed_password,
-    name = EXCLUDED.name;
