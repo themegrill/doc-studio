@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { put } from "@vercel/blob";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -68,11 +69,16 @@ export async function POST(request: NextRequest) {
 
     // Use Vercel Blob in production, local filesystem in development
     if (process.env.BLOB_READ_WRITE_TOKEN) {
-      const { put } = await import("@vercel/blob");
       const pathname = `uploads/${username}/${filename}`;
-      const blob = await put(pathname, file, {
+      console.log("[POST /api/upload] Uploading to Vercel Blob:", { pathname });
+
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      const blob = await put(pathname, buffer, {
         access: "public",
         contentType: file.type,
+        token: process.env.BLOB_READ_WRITE_TOKEN,
       });
 
       console.log("[POST /api/upload] File uploaded to blob:", blob.url);
@@ -107,10 +113,11 @@ export async function POST(request: NextRequest) {
     const err = error as Error;
     console.error("[POST /api/upload] Unexpected error:", {
       error: err.message,
+      name: err.name,
       stack: err.stack,
     });
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: err.message || "Internal server error" },
       { status: 500 },
     );
   }
