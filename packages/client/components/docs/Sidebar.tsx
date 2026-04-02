@@ -14,10 +14,10 @@ export default function Sidebar({ navigation }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-72 border-r bg-gray-50 p-6 overflow-y-auto h-full flex flex-col">
-      <div className="flex items-center gap-2 mb-4">
-        <Book size={16} className="text-gray-600" />
-        <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+    <aside className="w-96 border-r bg-gray-50 px-4 py-6 overflow-y-auto h-full flex flex-col">
+      <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
+        <Book size={18} className="text-gray-600" />
+        <h4 className="text-md font-semibold text-gray-900 uppercase tracking-wider">
           Documentation
         </h4>
       </div>
@@ -40,7 +40,7 @@ const NavItem = memo(function NavItem({
   const hasChildren = !!route.children?.length;
   const [isOpen, setIsOpen] = useState(true);
 
-  const buildLink = (path: string) => `/docs/${path.replace(/^\/docs\//, "")}`;
+  const buildLink = (path: string) => path.replace(/^\/docs/, "");
 
   const parentLink = useMemo(
     () => (route.path ? buildLink(route.path) : "#"),

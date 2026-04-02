@@ -20,8 +20,6 @@ const FALLBACK_LOGO = "https://themegrill.com/wp-content/uploads/2021/08/tg-logo
 export default function DocsLayoutClient({ children, navigation, logo }: DocsLayoutClientProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  console.log(logo);
-
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) setIsSidebarOpen(false);

@@ -95,7 +95,7 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
   const handleSelect = useCallback((result: SearchResult) => {
     const url = projectSlug
       ? `/projects/${projectSlug}/docs/${result.slug}`
-      : `/docs/${result.slug}`;
+      : `/${result.slug}`;
     router.push(url);
     setOpen(false);
   }, [projectSlug, router]);

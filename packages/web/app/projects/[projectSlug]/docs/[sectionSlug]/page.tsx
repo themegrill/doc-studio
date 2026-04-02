@@ -24,7 +24,6 @@ export default async function SectionPage({
   const session = await auth();
   const isAuthenticated = !!session?.user;
 
-  // Get project
   const sql = getDb();
   const [project] = await sql`
     SELECT id, name, slug FROM projects WHERE slug = ${projectSlug}
@@ -34,43 +33,32 @@ export default async function SectionPage({
     notFound();
   }
 
-  // First, try to get this as a document (since [sectionSlug] route intercepts document requests)
   const cm = ContentManager.create();
-  const doc = await cm.getDoc(project.id, sectionSlug);
-
-  // If it's a document, render it as a document page
-  if (doc) {
-    return <DocRendererClient doc={doc} slug={sectionSlug} projectSlug={projectSlug} />;
-  }
-
-  // If not a document, try to find it as a section
-  const navigation = await cm.getNavigation(project.id);
 
   // Helper to slugify section titles
   const slugify = (text: string) => {
     return text
       .toLowerCase()
-      .replace(/<[^>]*>/g, '') // Remove HTML tags
-      .replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
-      .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
+      .replace(/<[^>]*>/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
   };
+
+  // Check navigation sections first — sections take priority over same-slug documents
+  const navigation = await cm.getNavigation(project.id);
 
   const section = navigation?.routes?.find((route) => {
     const routeTitleSlug = slugify(route.title);
 
-    // Check if route has a direct path match (old style sections)
     if (route.path === `/docs/${sectionSlug}` || route.slug === sectionSlug) {
       return true;
     }
 
-    // Check if slugified title matches (for category sections with flat document structure)
     if (routeTitleSlug === sectionSlug) {
       return true;
     }
 
-    // Check if this is a category section with children (hierarchical structure)
     if (route.children && route.children.length > 0) {
-      // Extract section slug from first child's path
       const firstChildPath = route.children[0].path || route.children[0].slug;
 
       if (firstChildPath) {
@@ -85,30 +73,39 @@ export default async function SectionPage({
     return false;
   });
 
+  // If no section match, fall back to rendering it as a document
   if (!section) {
-    notFound();
+    const doc = await cm.getDoc(project.id, sectionSlug);
+
+    if (!doc) {
+      notFound();
+    }
+
+    return <DocRendererClient doc={doc} slug={sectionSlug} projectSlug={projectSlug} />;
   }
 
-  // Try to get section description/content
-  const sectionDoc = await cm.getDoc(project.id, sectionSlug);
-
-  // Get child documents from navigation structure (works with flat slugs)
+  // It's a section — fetch overview doc and child documents in parallel
   const childSlugs = section.children?.map((child) =>
     child.slug || child.path?.replace(/^\/docs\//, '')
   ).filter(Boolean) || [];
 
   const validChildSlugs = childSlugs.filter(
-  (slug): slug is string => typeof slug === "string" && slug.length > 0
-);
-  // Fetch documents by their slugs
-  const documents = validChildSlugs.length > 0 ? await sql`
-    SELECT id, slug, title, description, created_at, updated_at
-    FROM documents
-    WHERE project_id = ${project.id}
-      AND slug = ANY(${sql.array(validChildSlugs)})
-      AND published = true
-    ORDER BY order_index ASC, created_at ASC
-  ` : [];
+    (slug): slug is string => typeof slug === "string" && slug.length > 0
+  );
+
+  const [sectionDoc, documents] = await Promise.all([
+    cm.getDoc(project.id, sectionSlug),
+    validChildSlugs.length > 0
+      ? sql`
+          SELECT id, slug, title, description, created_at, updated_at
+          FROM documents
+          WHERE project_id = ${project.id}
+            AND slug = ANY(${sql.array(validChildSlugs)})
+            AND published = true
+          ORDER BY order_index ASC, created_at ASC
+        `
+      : Promise.resolve([]),
+  ]);
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -117,7 +114,6 @@ export default async function SectionPage({
         <div className="mb-12">
           <DocRendererClient doc={sectionDoc} slug={sectionSlug} projectSlug={projectSlug} />
 
-          {/* Remove Overview Button for authenticated users */}
           {isAuthenticated && (
             <RemoveSectionOverviewButton
               projectSlug={projectSlug}
@@ -134,7 +130,6 @@ export default async function SectionPage({
             sectionTitle={section.title}
           />
 
-          {/* Add Overview Button for authenticated users */}
           {isAuthenticated && (
             <AddSectionOverviewButton
               projectSlug={projectSlug}
@@ -145,15 +140,7 @@ export default async function SectionPage({
         </>
       )}
 
-      {/* Child documents section */}
-      {documents.length > 0 && (
-        <div className="mb-4">
-          <h2 className="text-2xl font-semibold mb-4">
-            {sectionDoc ? "Documents in this section" : ""}
-          </h2>
-        </div>
-      )}
-
+      {/* Child documents list */}
       {documents.length === 0 && !sectionDoc ? (
         isAuthenticated ? (
           <div className="text-center py-12 border-2 border-dashed rounded-lg">
@@ -167,26 +154,33 @@ export default async function SectionPage({
           </div>
         ) : null
       ) : documents.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {documents.map((doc) => (
-            <Link
-              key={doc.id}
-              href={`/projects/${projectSlug}/docs/${doc.slug}`}
-              className="h-full"
-            >
-              <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer flex flex-col">
-                <CardHeader className="flex-1">
-                  <CardTitle className="line-clamp-2 leading-snug">
-                    {doc.title}
-                  </CardTitle>
-                  <CardDescription className="mt-2 line-clamp-2 min-h-[2.5rem]">
-                    {doc.description || "No description available"}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        <>
+          {sectionDoc && (
+            <h2 className="text-2xl font-semibold mb-4">Documents in this section</h2>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {documents.map((doc) => (
+              <Link
+                key={doc.id}
+                href={`/projects/${projectSlug}/docs/${doc.slug}`}
+                className="h-full"
+              >
+                <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer flex flex-col">
+                  <CardHeader className="flex-1">
+                    <CardTitle className="line-clamp-2 leading-snug">
+                      {doc.title}
+                    </CardTitle>
+                    {doc.description && (
+                      <CardDescription className="mt-2 line-clamp-2">
+                        {doc.description}
+                      </CardDescription>
+                    )}
+                  </CardHeader>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
       ) : null}
     </div>
   );
