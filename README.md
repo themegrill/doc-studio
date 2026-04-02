@@ -167,7 +167,12 @@ NEXTAUTH_SECRET=your-secret-key-here
 # Add your OAuth providers here
 # GITHUB_CLIENT_ID=
 # GITHUB_CLIENT_SECRET=
+
 ```
+
+## Deployment
+
+See full guide: [Deployment Guide](./DEPLOYMENT.md)
 
 ## Contributing
 
