@@ -52,24 +52,6 @@ CREATE TRIGGER update_projects_updated_at
 BEFORE UPDATE ON projects
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- 8. Create a default project for existing data
-INSERT INTO projects (name, slug, description)
-VALUES (
-    'Default Project',
-    'default',
-    'Default project for existing documents'
-)
-ON CONFLICT (slug) DO NOTHING;
-
--- 9. Move existing records to default project
-UPDATE documents
-SET project_id = (SELECT id FROM projects WHERE slug = 'default')
-WHERE project_id IS NULL;
-
-UPDATE navigation
-SET project_id = (SELECT id FROM projects WHERE slug = 'default')
-WHERE project_id IS NULL;
-
 -- 10. Make project_id required after backfill
 ALTER TABLE documents
 ALTER COLUMN project_id SET NOT NULL;

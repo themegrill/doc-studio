@@ -175,6 +175,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Merge siteLink into settings if provided
+    const projectSettings = {
+      ...(settings || {}),
+      ...(siteLink ? { siteLink } : {}),
+    };
+
     // Create the project using the resolved DB user id
     const [project] = await sql`
       INSERT INTO projects (name, slug, description, domain, settings, created_by)
@@ -183,7 +189,7 @@ export async function POST(req: NextRequest) {
         ${slug},
         ${description || null},
         ${domain || null},
-        ${settings ? JSON.stringify(settings) : "{}"},
+        ${JSON.stringify(projectSettings)},
         ${dbUser.id}
       )
       RETURNING
@@ -226,27 +232,6 @@ export async function POST(req: NextRequest) {
       } catch (kbError) {
         console.error("Error saving knowledge base:", kbError);
         // Don't fail the whole request if KB save fails
-      }
-    }
-
-    if (siteLink) {
-      const metadata = project.metadata;
-      const updatedMetadata = { ...metadata, siteLink: siteLink };
-
-      const saveResponse = await fetch(`/api/projects/${project.slug}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: project.name, // Use props instead of state
-          slug: project.slug,
-          metadata: updatedMetadata,
-        }),
-      });
-
-      if (!saveResponse.ok) {
-        const errorData = await saveResponse.json();
-        console.error("Save error:", errorData);
-        throw new Error(errorData.error || "Failed to save site link");
       }
     }
 

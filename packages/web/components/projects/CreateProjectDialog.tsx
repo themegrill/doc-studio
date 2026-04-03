@@ -114,9 +114,6 @@ export function CreateProjectDialog() {
       setOpen(false);
       resetForm();
       router.refresh();
-
-      // Navigate to the new project
-      router.push(`/projects/${slug}/docs`);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -201,7 +198,7 @@ export function CreateProjectDialog() {
               <Input
                 id="site-link"
                 placeholder="Link to your project's site homepage"
-                value={description}
+                value={siteLink}
                 onChange={(e) => setSiteLink(e.target.value)}
               />
             </div>
