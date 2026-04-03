@@ -5,10 +5,22 @@ import { notFound } from "next/navigation";
 import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
 import { getNavigation, getProject } from "@/lib/api";
 
-export const metadata: Metadata = {
-  title: "Documentation",
-  description: "Documentation",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const project = await getProject();
+  const favicon = project?.metadata?.favicon;
+
+  return {
+    title: project?.name || "Documentation",
+    description: "Documentation",
+    ...(favicon && {
+      icons: {
+        icon: favicon,
+        shortcut: favicon,
+        apple: favicon,
+      },
+    }),
+  };
+}
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [navigation, project] = await Promise.all([getNavigation(), getProject()]);

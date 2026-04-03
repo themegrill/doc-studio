@@ -47,7 +47,7 @@ export interface Project {
   name: string;
   slug: string;
   description?: string;
-  metadata?: { logo?: string; [key: string]: any };
+  metadata?: { logo?: string; favicon?: string; [key: string]: any };
 }
 
 export async function getProject(): Promise<Project | null> {

@@ -41,6 +41,7 @@ export function ProjectGeneralSettings({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
 
   const [formData, setFormData] = useState({
     name: projectName,
@@ -246,6 +247,88 @@ export function ProjectGeneralSettings({
     }
   };
 
+  const handleFaviconUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Error",
+        description: "Please upload an image file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (file.size > 1 * 1024 * 1024) {
+      toast({
+        title: "Error",
+        description: "Favicon must be less than 1MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingFavicon(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload favicon");
+
+      const { url } = await response.json();
+      const updatedMetadata = { ...metadata, favicon: url };
+      setMetadata(updatedMetadata);
+
+      const saveResponse = await fetch(`/api/projects/${projectSlug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: projectName, slug: projectSlug, metadata: updatedMetadata }),
+      });
+
+      if (!saveResponse.ok) {
+        const errorData = await saveResponse.json();
+        throw new Error(errorData.error || "Failed to save favicon");
+      }
+
+      toast({ title: "Success", description: "Favicon uploaded and saved successfully" });
+      router.refresh();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to upload favicon", variant: "destructive" });
+    } finally {
+      setIsUploadingFavicon(false);
+    }
+  };
+
+  const handleRemoveFavicon = async () => {
+    try {
+      const updatedMetadata = { ...metadata, favicon: "" };
+      setMetadata(updatedMetadata);
+
+      const response = await fetch(`/api/projects/${projectSlug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: projectName, slug: projectSlug, metadata: updatedMetadata }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to remove favicon");
+      }
+
+      toast({ title: "Success", description: "Favicon removed successfully" });
+      router.refresh();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to remove favicon", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Project Details */}
@@ -405,6 +488,80 @@ export function ProjectGeneralSettings({
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 PNG, JPG, or SVG. Max 2MB. Recommended size: 150x40px
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Project Favicon */}
+      <div className="bg-white border rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">Project Favicon</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Upload a favicon to display in the browser tab (recommended: 32x32px ICO, PNG, or SVG)
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {metadata.favicon && (
+            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-md">
+              <div className="relative h-8 w-8 flex items-center justify-center bg-white border rounded">
+                <Image
+                  src={metadata.favicon}
+                  alt="Project favicon"
+                  width={32}
+                  height={32}
+                  className="object-contain max-h-8"
+                />
+              </div>
+              {isSuperAdmin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveFavicon}
+                  disabled={isUploadingFavicon}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Remove
+                </Button>
+              )}
+            </div>
+          )}
+
+          {isSuperAdmin && (
+            <div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isUploadingFavicon}
+                  onClick={() => document.getElementById("favicon-upload")?.click()}
+                >
+                  {isUploadingFavicon ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      {metadata.favicon ? "Change Favicon" : "Upload Favicon"}
+                    </>
+                  )}
+                </Button>
+                <input
+                  id="favicon-upload"
+                  type="file"
+                  accept="image/x-icon,image/png,image/svg+xml,image/jpeg"
+                  onChange={handleFaviconUpload}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                ICO, PNG, or SVG. Max 1MB. Recommended size: 32x32px
               </p>
             </div>
           )}
