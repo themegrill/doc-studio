@@ -36,6 +36,7 @@ interface ChatPanelProps {
     title: string;
     description: string;
     blocksPreview: string;
+    projectSlug?: string | null;
   };
   onClose: () => void;
   onRequestEdit?: () => void; // Callback to enable edit mode

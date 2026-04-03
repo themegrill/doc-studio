@@ -82,6 +82,17 @@ export function KnowledgeBaseSettings({
           stopPolling();
           setIsFetching(false);
           if (data.status === "done") {
+            // Save the crawled knowledge base to the database
+            try {
+              const saveRes = await fetch(`/api/projects/${projectSlug}/knowledge-base/save`, {
+                method: "POST",
+              });
+              if (!saveRes.ok) {
+                console.error("[KB] Failed to save knowledge base to database");
+              }
+            } catch (saveErr) {
+              console.error("[KB] Error saving knowledge base to database:", saveErr);
+            }
             toast({ title: "Done", description: "Knowledge base is ready." });
             router.refresh();
           } else {

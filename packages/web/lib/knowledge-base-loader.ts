@@ -1,5 +1,6 @@
 import { DocumentationKnowledgeBase } from "@/types/knowledge-base";
 import { getKnowledgeBaseFromGitHub } from "./github-kb-fetcher";
+import { getDb } from "@/lib/db/postgres";
 import fs from "fs";
 import path from "path";
 
@@ -18,17 +19,27 @@ export function loadKnowledgeBase(
 ): DocumentationKnowledgeBase | null {
   // Try local file first (for custom overrides)
   try {
-    const knowledgeBasePath = path.join(
-      process.cwd(),
-      "knowledge-base",
-      `${projectSlug}.json`
-    );
+    // Check both the flat path and the crawl-output subdirectory path
+    const candidates = [
+      path.join(process.cwd(), "knowledge-base", `${projectSlug}.json`),
+      path.join(
+        process.cwd(),
+        "knowledge-base",
+        projectSlug,
+        "website-knowledge-base.json"
+      ),
+    ];
 
-    if (fs.existsSync(knowledgeBasePath)) {
-      console.log(`[KB] Loading local knowledge base for: ${projectSlug}`);
-      const fileContent = fs.readFileSync(knowledgeBasePath, "utf-8");
-      const knowledgeBase: DocumentationKnowledgeBase = JSON.parse(fileContent);
-      return knowledgeBase;
+    for (const knowledgeBasePath of candidates) {
+      if (fs.existsSync(knowledgeBasePath)) {
+        console.log(
+          `[KB] Loading local knowledge base for: ${projectSlug} (${knowledgeBasePath})`
+        );
+        const fileContent = fs.readFileSync(knowledgeBasePath, "utf-8");
+        const knowledgeBase: DocumentationKnowledgeBase =
+          JSON.parse(fileContent);
+        return knowledgeBase;
+      }
     }
   } catch (error) {
     console.error(
@@ -42,7 +53,7 @@ export function loadKnowledgeBase(
 }
 
 /**
- * Load knowledge base asynchronously (tries GitHub)
+ * Load knowledge base asynchronously (tries DB, local file, then GitHub)
  *
  * @param projectSlug - The project slug
  * @returns Knowledge base object or null if not found
@@ -50,7 +61,29 @@ export function loadKnowledgeBase(
 export async function loadKnowledgeBaseAsync(
   projectSlug: string
 ): Promise<DocumentationKnowledgeBase | null> {
-  // Try local file first
+  // Try database first (works in all environments including Vercel)
+  try {
+    const sql = getDb();
+    const [project] = await sql`
+      SELECT settings FROM projects WHERE slug = ${projectSlug}
+    `;
+
+    const settings =
+      typeof project?.settings === "string"
+        ? JSON.parse(project.settings)
+        : project?.settings;
+    if (settings?.knowledgeBase) {
+      console.log(`[KB] Loaded from database for: ${projectSlug}`);
+      return settings.knowledgeBase as DocumentationKnowledgeBase;
+    }
+  } catch (error) {
+    console.error(
+      `[KB] Error loading from database for ${projectSlug}:`,
+      error
+    );
+  }
+
+  // Try local file (for local development overrides)
   const localKB = loadKnowledgeBase(projectSlug);
   if (localKB) {
     return localKB;

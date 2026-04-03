@@ -1,8 +1,6 @@
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
 
 // GET /api/projects - List all projects
 export async function GET() {
@@ -175,10 +173,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Merge siteLink into settings if provided
+    // Merge siteLink and knowledgeBase into settings if provided
     const projectSettings = {
       ...(settings || {}),
       ...(siteLink ? { siteLink } : {}),
+      ...(knowledgeBase ? { knowledgeBase } : {}),
     };
 
     // Create the project using the resolved DB user id
@@ -208,32 +207,6 @@ export async function POST(req: NextRequest) {
       INSERT INTO project_members (project_id, user_id, role)
       VALUES (${project.id}, ${dbUser.id}, 'owner')
     `;
-
-    // If knowledge base data is provided, save it to file
-    if (knowledgeBase) {
-      try {
-        const knowledgeBasePath = path.join(
-          process.cwd(),
-          "knowledge-base",
-          `${slug}.json`
-        );
-
-        // Ensure knowledge-base directory exists
-        await fs.mkdir(path.dirname(knowledgeBasePath), { recursive: true });
-
-        // Write knowledge base file
-        await fs.writeFile(
-          knowledgeBasePath,
-          JSON.stringify(knowledgeBase, null, 2),
-          "utf-8"
-        );
-
-        console.log(`[KB] Created knowledge base file for project: ${slug}`);
-      } catch (kbError) {
-        console.error("Error saving knowledge base:", kbError);
-        // Don't fail the whole request if KB save fails
-      }
-    }
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
