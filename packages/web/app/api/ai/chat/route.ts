@@ -1,4 +1,4 @@
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { streamText, convertToModelMessages } from "ai";
 import {
   injectDocumentStateMessages,
@@ -59,6 +59,9 @@ export async function POST(req: Request) {
     const tools = toolDefinitions
       ? toolDefinitionsToToolSet(toolDefinitions)
       : undefined;
+
+    // Create Anthropic provider instance with API key from settings/env
+    const anthropic = createAnthropic({ apiKey });
 
     // Create streaming response using Anthropic's Claude with config settings
     const result = streamText({

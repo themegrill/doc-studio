@@ -198,6 +198,17 @@ export default function ChatPanel({
             ),
           );
         }
+
+        // If stream ended with no content, the API likely hit a limit or returned an error
+        if (!assistantContent.trim() && toolCalls.length === 0) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessage.id
+                ? { ...m, content: "The AI didn't return a response. This may be due to an API rate limit, quota exceeded, or configuration issue. Please check your API key settings." }
+                : m,
+            ),
+          );
+        }
       }
 
       // Execute all tool calls sequentially (with deduplication)

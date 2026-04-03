@@ -1,4 +1,4 @@
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { streamText } from "ai";
 import { getKnowledgeBasePromptAsync } from "@/lib/knowledge-base-loader";
 import { auth } from "@/lib/auth";
@@ -344,6 +344,8 @@ Do not guess missing product details.
             ? m.content.map((c: any) => c.text || c).join("")
             : String(m.content),
     }));
+
+    const anthropic = createAnthropic({ apiKey: config.apiKey });
 
     const result = streamText({
       model: anthropic(config.defaultModel),
