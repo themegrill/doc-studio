@@ -138,11 +138,23 @@ export async function getAIConfig(): Promise<
   AIConfig & { enabledFeatures: AIFeatures }
 > {
   const config = await getSetting<AIConfig>("ai.config", {
-    apiKey: process.env.ANTHROPIC_API_KEY || "",
+    apiKey: "",
     defaultModel: "claude-sonnet-4-5",
     temperature: 0.7,
     maxTokens: 4096,
   });
+
+  if (!config.apiKey && process.env.ANTHROPIC_API_KEY) {
+    config.apiKey = process.env.ANTHROPIC_API_KEY;
+  }
+
+  if (!config.maxTokens || isNaN(config.maxTokens)) {
+    config.maxTokens = 4096;
+  }
+
+  if (!config.temperature || isNaN(config.temperature)) {
+    config.temperature = 0.7;
+  }
 
   const features = await getSetting<AIFeatures>("ai.features", {
     chat: true,

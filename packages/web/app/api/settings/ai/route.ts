@@ -35,7 +35,7 @@ export async function GET() {
       apiKey: config.apiKey || process.env.ANTHROPIC_API_KEY || "",
       defaultModel: config.defaultModel || "claude-sonnet-4-5",
       temperature: config.temperature || 0.7,
-      maxOutputTokens: config.maxTokens || 4096,
+      maxTokens: config.maxTokens || 4096,
       enabledFeatures: features || {
         chat: true,
         textGeneration: true,
