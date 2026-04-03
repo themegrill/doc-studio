@@ -63,7 +63,7 @@ export default async function ProjectDocsLayout({
     `;
 
     if (draftDocs.length > 0) {
-      const draftSlugs = new Set(draftDocs.map((d: { slug: string }) => d.slug));
+      const draftSlugs = new Set((draftDocs as unknown as { slug: string }[]).map((d) => d.slug));
 
       const filterRoutes = (routes: NavRoute[]): NavRoute[] =>
         routes
