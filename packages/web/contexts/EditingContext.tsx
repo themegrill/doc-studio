@@ -29,8 +29,18 @@ interface EditingContextType {
   // Handler functions (registered by DocRenderer or SectionPage)
   onSave: () => Promise<void>;
   setOnSave: (fn: (() => Promise<void>) | null) => void;
+  onSaveDraft: () => Promise<void>;
+  setOnSaveDraft: (fn: (() => Promise<void>) | null) => void;
   onCancel: () => void;
   setOnCancel: (fn: (() => void) | null) => void;
+
+  // Whether the current page supports draft saving (docs do, sections don't)
+  draftEnabled: boolean;
+  setDraftEnabled: (value: boolean) => void;
+
+  // Whether the current document is already published
+  isPublished: boolean;
+  setIsPublished: (value: boolean) => void;
 
   // Save operation status
   isSaving: boolean;
@@ -46,6 +56,8 @@ const EditingContext = createContext<EditingContextType | undefined>(undefined);
 export function EditingProvider({ children }: { children: ReactNode }) {
   // Edit mode and save operation state
   const [isEditing, setIsEditing] = useState(false);
+  const [draftEnabled, setDraftEnabled] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -72,11 +84,16 @@ export function EditingProvider({ children }: { children: ReactNode }) {
 
   // Store handler references (updated by pages via setOnSave/setOnCancel)
   const onSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const onSaveDraftRef = useRef<(() => Promise<void>) | null>(null);
   const onCancelRef = useRef<(() => void) | null>(null);
 
   // Stable setters - pages use these to register their handlers
   const setOnSave = useCallback((fn: (() => Promise<void>) | null) => {
     onSaveRef.current = fn;
+  }, []);
+
+  const setOnSaveDraft = useCallback((fn: (() => Promise<void>) | null) => {
+    onSaveDraftRef.current = fn;
   }, []);
 
   const setOnCancel = useCallback((fn: (() => void) | null) => {
@@ -88,6 +105,12 @@ export function EditingProvider({ children }: { children: ReactNode }) {
   const onSave = useCallback(async () => {
     if (onSaveRef.current) {
       await onSaveRef.current();
+    }
+  }, []);
+
+  const onSaveDraft = useCallback(async () => {
+    if (onSaveDraftRef.current) {
+      await onSaveDraftRef.current();
     }
   }, []);
 
@@ -111,9 +134,15 @@ export function EditingProvider({ children }: { children: ReactNode }) {
     () => ({
       isEditing,
       setIsEditing,
+      draftEnabled,
+      setDraftEnabled,
+      isPublished,
+      setIsPublished,
       onSave,
+      onSaveDraft,
       onCancel,
       setOnSave,
+      setOnSaveDraft,
       setOnCancel,
       isSaving,
       setIsSaving,
@@ -122,7 +151,7 @@ export function EditingProvider({ children }: { children: ReactNode }) {
       saveError,
       setSaveError,
     }),
-    [isEditing, isSaving, saveSuccess, saveError],
+    [isEditing, draftEnabled, isPublished, isSaving, saveSuccess, saveError],
   );
 
   return (

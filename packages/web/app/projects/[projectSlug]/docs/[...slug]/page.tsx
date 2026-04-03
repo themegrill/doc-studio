@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import DocRendererClient from "@/components/docs/DocRendererClient";
 import SectionPage from "@/components/docs/SectionPage";
 import { getDb } from "@/lib/db/postgres";
+import { auth } from "@/lib/auth";
 
 export default async function ProjectDocPage({
   params,
@@ -24,8 +25,12 @@ export default async function ProjectDocPage({
   }
 
   // Get document for this project
+  // Authenticated users (admins/editors) can view draft docs
+  const session = await auth();
   const cm = ContentManager.create();
-  const doc = await cm.getDoc(project.id, slug);
+  const doc = session?.user
+    ? await cm.getDocAdmin(project.id, slug)
+    : await cm.getDoc(project.id, slug);
 
   // If no document found, check if it's a section without overview
   if (!doc) {

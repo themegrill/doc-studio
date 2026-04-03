@@ -42,39 +42,43 @@ export default async function ProjectsPage() {
   let projects: ProjectWithRole[];
   let isSuperAdmin = false;
 
-  if (session?.user?.id) {
-    // Check if user is super_admin or admin
-    const [userData] = await sql`
-      SELECT role FROM users WHERE id = ${session.user.id}
+  if (session?.user?.email) {
+    // Resolve the user from DB by email (consistent with how the API stores project_members)
+    const [dbUser] = await sql`
+      SELECT id, role FROM users WHERE email = ${session.user.email}
     `;
 
-    isSuperAdmin =
-      userData?.role === "super_admin" || userData?.role === "admin";
+    if (dbUser) {
+      isSuperAdmin =
+        dbUser.role === "super_admin" || dbUser.role === "admin";
 
-    if (isSuperAdmin) {
-      // Super admins see ALL projects with owner role
-      projects = (await sql`
-        SELECT p.id, p.name, p.slug, p.description,
-               'owner' as role,
-               COUNT(d.id) as doc_count
-        FROM projects p
-        LEFT JOIN documents d ON p.id = d.project_id
-        GROUP BY p.id, p.name, p.slug, p.description
-        ORDER BY p.name
-      `) as unknown as ProjectWithRole[];
+      if (isSuperAdmin) {
+        // Super admins see ALL projects with owner role
+        projects = (await sql`
+          SELECT p.id, p.name, p.slug, p.description,
+                 'owner' as role,
+                 COUNT(d.id) as doc_count
+          FROM projects p
+          LEFT JOIN documents d ON p.id = d.project_id
+          GROUP BY p.id, p.name, p.slug, p.description
+          ORDER BY p.name
+        `) as unknown as ProjectWithRole[];
+      } else {
+        // Regular users see only their projects
+        projects = (await sql`
+          SELECT p.id, p.name, p.slug, p.description,
+                 pm.role,
+                 COUNT(d.id) as doc_count
+          FROM projects p
+          INNER JOIN project_members pm ON p.id = pm.project_id
+          LEFT JOIN documents d ON p.id = d.project_id
+          WHERE pm.user_id = ${dbUser.id}
+          GROUP BY p.id, p.name, p.slug, p.description, pm.role
+          ORDER BY p.name
+        `) as unknown as ProjectWithRole[];
+      }
     } else {
-      // Regular users see only their projects
-      projects = (await sql`
-        SELECT p.id, p.name, p.slug, p.description,
-               pm.role,
-               COUNT(d.id) as doc_count
-        FROM projects p
-        INNER JOIN project_members pm ON p.id = pm.project_id
-        LEFT JOIN documents d ON p.id = d.project_id
-        WHERE pm.user_id = ${session.user.id}
-        GROUP BY p.id, p.name, p.slug, p.description, pm.role
-        ORDER BY p.name
-      `) as unknown as ProjectWithRole[];
+      projects = [];
     }
   } else {
     // Show all projects for non-authenticated users (no role)

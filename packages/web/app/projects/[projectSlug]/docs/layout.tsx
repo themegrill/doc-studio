@@ -3,6 +3,7 @@ import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 import { notFound } from "next/navigation";
+import type { NavRoute } from "@/lib/db/ContentManager";
 
 export default async function ProjectDocsLayout({
   children,
@@ -52,9 +53,36 @@ export default async function ProjectDocsLayout({
   const cm = ContentManager.create();
   const navigation = await cm.getNavigation(project.id);
 
+  // For unauthenticated users, filter draft documents out of the navigation
+  // so they don't appear in the sidebar
+  let filteredNavigation = navigation;
+  if (!session?.user) {
+    const draftDocs = await sql`
+      SELECT slug FROM documents
+      WHERE project_id = ${project.id} AND published = false
+    `;
+
+    if (draftDocs.length > 0) {
+      const draftSlugs = new Set(draftDocs.map((d: { slug: string }) => d.slug));
+
+      const filterRoutes = (routes: NavRoute[]): NavRoute[] =>
+        routes
+          .filter((route) => {
+            const slug = route.slug || route.path?.replace(/^\/docs\//, "");
+            return !slug || !draftSlugs.has(slug);
+          })
+          .map((route) => ({
+            ...route,
+            children: route.children ? filterRoutes(route.children) : undefined,
+          }));
+
+      filteredNavigation = { ...navigation, routes: filterRoutes(navigation.routes) };
+    }
+  }
+
   return (
     <DocsLayoutClient
-      navigation={navigation}
+      navigation={filteredNavigation}
       userProjectRole={userRole}
       projectMetadata={project.metadata || {}}
     >

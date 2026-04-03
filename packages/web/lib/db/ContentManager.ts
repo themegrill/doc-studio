@@ -85,6 +85,37 @@ export class ContentManager {
     }
   }
 
+  async getDocAdmin(
+    projectId: string,
+    slug: string
+  ): Promise<DocContent | null> {
+    try {
+      const [doc] = await this.sql`
+        SELECT * FROM documents
+        WHERE project_id = ${projectId} AND slug = ${slug}
+        LIMIT 1
+      `;
+
+      if (!doc) {
+        return null;
+      }
+
+      return {
+        id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        description: doc.description,
+        blocks: doc.blocks || [],
+        published: doc.published,
+        createdAt: doc.created_at,
+        updatedAt: doc.updated_at,
+      };
+    } catch (error) {
+      console.error("Error fetching document:", error);
+      return null;
+    }
+  }
+
   async saveDoc(
     projectId: string,
     slug: string,
@@ -108,18 +139,32 @@ export class ContentManager {
       const description = content.description || null;
       const blocks = content.blocks || [];
       const userId = session.user.id;
+      const published = content.published;
 
       if (existing) {
         // Update existing document
-        await this.sql`
-          UPDATE documents
-          SET
-            title = ${title},
-            description = ${description},
-            blocks = ${this.sql.json(blocks as any)},
-            updated_by = ${userId}
-          WHERE project_id = ${projectId} AND slug = ${slug}
-        `;
+        if (published !== undefined) {
+          await this.sql`
+            UPDATE documents
+            SET
+              title = ${title},
+              description = ${description},
+              blocks = ${this.sql.json(blocks as any)},
+              published = ${published},
+              updated_by = ${userId}
+            WHERE project_id = ${projectId} AND slug = ${slug}
+          `;
+        } else {
+          await this.sql`
+            UPDATE documents
+            SET
+              title = ${title},
+              description = ${description},
+              blocks = ${this.sql.json(blocks as any)},
+              updated_by = ${userId}
+            WHERE project_id = ${projectId} AND slug = ${slug}
+          `;
+        }
 
         // Update title in navigation structure if it exists there
         const [nav] = await this.sql`
@@ -217,7 +262,7 @@ export class ContentManager {
           }
         }
       } else {
-        // Insert new document
+        // Insert new document as draft by default
         await this.sql`
           INSERT INTO documents (project_id, slug, title, description, blocks, created_by, updated_by, published)
           VALUES (
@@ -228,7 +273,7 @@ export class ContentManager {
             ${this.sql.json(blocks as any)},
             ${userId},
             ${userId},
-            true
+            false
           )
         `;
       }

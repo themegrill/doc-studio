@@ -39,14 +39,17 @@ export default async function DocPage({
         ...rawChildren.map(async (child) => {
           const childSlug = child.path?.replace(/^\/docs\//, "") ?? child.slug ?? "";
           const doc = childSlug ? await getDoc(childSlug) : null;
+          if (!doc) return null;
           return {
             id: child.id ?? child.slug ?? child.path ?? "",
             title: child.title,
             slug: childSlug,
-            description: doc?.description,
+            description: doc.description,
           };
         }),
       ]);
+
+      const publishedChildren = childDocResults.filter((d) => d !== null);
 
       return (
         <>
@@ -58,7 +61,7 @@ export default async function DocPage({
             sectionSlug={slug}
             sectionTitle={section.title}
             hideTitle={!!sectionDoc}
-            childDocs={childDocResults}
+            childDocs={publishedChildren}
           />
         </>
       );

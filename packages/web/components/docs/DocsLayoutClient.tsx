@@ -7,7 +7,7 @@ import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings } from "lucide-react";
+import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings, FileEdit } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
@@ -32,7 +32,10 @@ function EditControls() {
   const {
     isEditing,
     setIsEditing,
+    draftEnabled,
+    isPublished,
     onSave,
+    onSaveDraft,
     onCancel,
     isSaving,
     saveSuccess,
@@ -81,24 +84,63 @@ function EditControls() {
         <Eye size={16} />
         <span className="hidden sm:inline">Cancel</span>
       </Button>
-      <Button
-        onClick={onSave}
-        disabled={isSaving}
-        size="sm"
-        className="flex items-center gap-2"
-      >
-        {isSaving ? (
-          <>
-            <Loader2 size={16} className="animate-spin" />
-            <span className="hidden sm:inline">Saving...</span>
-          </>
-        ) : (
-          <>
-            <Save size={16} />
-            <span className="hidden sm:inline">Save & Publish</span>
-          </>
-        )}
-      </Button>
+      {isPublished ? (
+        <Button
+          onClick={onSave}
+          disabled={isSaving}
+          size="sm"
+          className="flex items-center gap-2"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 size={16} className="animate-spin" />
+              <span className="hidden sm:inline">Updating...</span>
+            </>
+          ) : (
+            <>
+              <Save size={16} />
+              <span className="hidden sm:inline">Update</span>
+            </>
+          )}
+        </Button>
+      ) : (
+        <>
+          {draftEnabled && (
+            <Button
+              onClick={onSaveDraft}
+              disabled={isSaving}
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+            >
+              {isSaving ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <FileEdit size={16} />
+              )}
+              <span className="hidden sm:inline">Save Draft</span>
+            </Button>
+          )}
+          <Button
+            onClick={onSave}
+            disabled={isSaving}
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span className="hidden sm:inline">Publishing...</span>
+              </>
+            ) : (
+              <>
+                <Save size={16} />
+                <span className="hidden sm:inline">Publish</span>
+              </>
+            )}
+          </Button>
+        </>
+      )}
     </div>
   );
 }

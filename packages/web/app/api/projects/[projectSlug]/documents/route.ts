@@ -97,7 +97,7 @@ export async function POST(
       ${title},
       ${description || null},
       ${sql.json(initialBlocks)},
-      true,
+      false,
       ${session.user.id}
     )
     RETURNING id, slug, title, description

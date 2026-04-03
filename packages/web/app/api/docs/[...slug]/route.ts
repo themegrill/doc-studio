@@ -6,7 +6,7 @@ import { getProjectFromRequest } from "@/lib/project-helpers";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ slug: string[] }> },
+  { params }: { params: Promise<{ slug: string[] }> }
 ) {
   try {
     const resolvedParams = await params;
@@ -44,7 +44,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ slug: string[] }> },
+  { params }: { params: Promise<{ slug: string[] }> }
 ) {
   const resolvedParams = await params;
   const slug = resolvedParams.slug.join("/");
@@ -54,10 +54,7 @@ export async function PUT(
     const session = await auth();
 
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Parse request body
@@ -82,20 +79,19 @@ export async function PUT(
     const project = await getProjectFromRequest(hostname, pathname);
 
     if (!project) {
-      return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
     const cm = ContentManager.create();
-    const success = await cm.saveDoc(project.id, slug, body);
+    const docContent = {
+      ...body,
+      published:
+        typeof body.published === "boolean" ? body.published : undefined,
+    };
+    const success = await cm.saveDoc(project.id, slug, docContent);
 
     if (!success) {
-      return NextResponse.json(
-        { error: "Save failed" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Save failed" }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, slug });
@@ -104,7 +100,7 @@ export async function PUT(
     console.error("[PUT /api/docs] Error:", err.message);
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

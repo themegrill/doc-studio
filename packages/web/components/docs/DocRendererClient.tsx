@@ -25,8 +25,9 @@ interface Props {
   doc: DocContent;
   slug: string;
   projectSlug?: string;
+  isSectionOverview?: boolean;
 }
 
-export default function DocRendererClient({ doc, slug, projectSlug }: Props) {
-  return <DocRenderer doc={doc} slug={slug} projectSlug={projectSlug} />;
+export default function DocRendererClient({ doc, slug, projectSlug, isSectionOverview }: Props) {
+  return <DocRenderer doc={doc} slug={slug} projectSlug={projectSlug} isSectionOverview={isSectionOverview} />;
 }

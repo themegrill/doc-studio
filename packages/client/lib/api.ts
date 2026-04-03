@@ -69,6 +69,7 @@ export async function getNavigation(): Promise<Navigation | null> {
       `${API_BASE_URL}/api/navigation?projectSlug=${PROJECT_SLUG}`,
       { cache: "no-store" }
     );
+
     if (!res.ok) return null;
     return res.json();
   } catch {

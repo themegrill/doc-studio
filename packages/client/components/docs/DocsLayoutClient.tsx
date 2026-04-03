@@ -42,7 +42,7 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
             >
               <Menu size={20} />
             </button>
-            <Link href="/docs">
+            <Link href="/">
               <Image
                 src={logo ?? FALLBACK_LOGO}
                 alt="Logo"

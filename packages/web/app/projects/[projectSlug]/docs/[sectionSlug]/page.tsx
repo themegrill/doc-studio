@@ -94,16 +94,24 @@ export default async function SectionPage({
   );
 
   const [sectionDoc, documents] = await Promise.all([
-    cm.getDoc(project.id, sectionSlug),
+    isAuthenticated ? cm.getDocAdmin(project.id, sectionSlug) : cm.getDoc(project.id, sectionSlug),
     validChildSlugs.length > 0
-      ? sql`
-          SELECT id, slug, title, description, created_at, updated_at
-          FROM documents
-          WHERE project_id = ${project.id}
-            AND slug = ANY(${sql.array(validChildSlugs)})
-            AND published = true
-          ORDER BY order_index ASC, created_at ASC
-        `
+      ? isAuthenticated
+        ? sql`
+            SELECT id, slug, title, description, published, created_at, updated_at
+            FROM documents
+            WHERE project_id = ${project.id}
+              AND slug = ANY(${sql.array(validChildSlugs)})
+            ORDER BY order_index ASC, created_at ASC
+          `
+        : sql`
+            SELECT id, slug, title, description, published, created_at, updated_at
+            FROM documents
+            WHERE project_id = ${project.id}
+              AND slug = ANY(${sql.array(validChildSlugs)})
+              AND published = true
+            ORDER BY order_index ASC, created_at ASC
+          `
       : Promise.resolve([]),
   ]);
 
@@ -112,7 +120,7 @@ export default async function SectionPage({
       {/* Section content/description (if exists) */}
       {sectionDoc ? (
         <div className="mb-12">
-          <DocRendererClient doc={sectionDoc} slug={sectionSlug} projectSlug={projectSlug} />
+          <DocRendererClient doc={sectionDoc} slug={sectionSlug} projectSlug={projectSlug} isSectionOverview={true} />
 
           {isAuthenticated && (
             <RemoveSectionOverviewButton
@@ -167,9 +175,22 @@ export default async function SectionPage({
               >
                 <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer flex flex-col">
                   <CardHeader className="flex-1">
-                    <CardTitle className="line-clamp-2 leading-snug">
-                      {doc.title}
-                    </CardTitle>
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="line-clamp-2 leading-snug flex-1">
+                        {doc.title}
+                      </CardTitle>
+                      {isAuthenticated && (
+                        <span
+                          className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            doc.published
+                              ? "bg-green-100 text-green-700 border border-green-200"
+                              : "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                          }`}
+                        >
+                          {doc.published ? "Published" : "Draft"}
+                        </span>
+                      )}
+                    </div>
                     {doc.description && (
                       <CardDescription className="mt-2 line-clamp-2">
                         {doc.description}

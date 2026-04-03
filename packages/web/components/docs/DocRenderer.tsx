@@ -45,6 +45,7 @@ interface Props {
   doc: DocContent;
   slug: string;
   projectSlug?: string;
+  isSectionOverview?: boolean;
 }
 
 interface EditorState {
@@ -84,7 +85,7 @@ interface ImproveTextState {
   error: string;
 }
 
-export default function DocRenderer({ doc, slug, projectSlug }: Props) {
+export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview = false }: Props) {
   const router = useRouter();
   const editingContext = useEditing();
   const { isEnabled: isFeatureEnabled } = useAIFeatures();
@@ -94,11 +95,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     description: doc.description || "",
   });
 
-  // Check if this is a section overview
-  // A section overview is a document that represents a section itself, not just any top-level doc
-  // We need to check if this document is actually used as a section in the navigation
-  const isSectionOverview = false; // Disable section overview functionality for now
-  // TODO: Properly implement section overview detection by checking navigation structure
+  // isSectionOverview is passed as a prop - section overview docs don't support draft mode
 
   const [saveState, setSaveState] = useState<SaveState>({
     isSaving: false,
@@ -401,6 +398,50 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     return () => clearTimeout(timer);
   }, [editorState.isEditing, doc.blocks]);
 
+  function parseInlineMarkdown(text: string): any[] {
+    const result: any[] = [];
+    const regex = /\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        result.push({ type: "text", text: text.slice(lastIndex, match.index), styles: {} });
+      }
+      if (match[1] !== undefined) {
+        result.push({ type: "text", text: match[1], styles: { bold: true } });
+      } else if (match[2] !== undefined) {
+        result.push({ type: "text", text: match[2], styles: { italic: true } });
+      } else if (match[3] !== undefined) {
+        result.push({ type: "text", text: match[3], styles: { code: true } });
+      }
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      result.push({ type: "text", text: text.slice(lastIndex), styles: {} });
+    }
+
+    return result.length > 0 ? result : [{ type: "text", text, styles: {} }];
+  }
+
+  function applyInlineMarkdownToBlocks(blocks: any[]): any[] {
+    return blocks.map((block) => {
+      if (!Array.isArray(block.content)) return block;
+
+      const newContent: any[] = [];
+      for (const item of block.content) {
+        if (item?.type === "text" && typeof item.text === "string" && /\*\*|`|\*/.test(item.text)) {
+          newContent.push(...parseInlineMarkdown(item.text));
+        } else {
+          newContent.push(item);
+        }
+      }
+
+      return { ...block, content: newContent };
+    });
+  }
+
   function normalizeLegacyMarkdownBlocks(blocks: any[]) {
   const output: any[] = [];
 
@@ -475,7 +516,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
 
       output.push({
         type: "paragraph",
-        content: [{ type: "text", text: line }],
+        content: parseInlineMarkdown(line),
       });
     }
   }
@@ -560,7 +601,7 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
 
 
   const editor = useCreateBlockNote({
-    initialContent: doc.blocks.length > 0 ? transformMarkdownImages(normalizeLegacyMarkdownBlocks(doc.blocks)) : undefined,
+    initialContent: doc.blocks.length > 0 ? applyInlineMarkdownToBlocks(transformMarkdownImages(normalizeLegacyMarkdownBlocks(doc.blocks))) : undefined,
     dictionary: {
       ...blockNoteLocale,
       ai: aiLocale, // AI dictionary should be nested under 'ai' key
@@ -890,13 +931,14 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
         }
       }
 
-      // Save document content
+      // Save document content and publish
       const updatedDoc = {
         slug: doc.slug,
         title: currentEditorState.title,
         description: currentEditorState.description,
-		blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
-	  };
+        blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
+        published: true,
+      };
 
       const response = await fetch(`/api/docs/${slug}`, {
         method: "PUT",
@@ -953,17 +995,77 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
     }
   }, [slug, projectSlug, isSectionOverview, doc.slug, router, editingContext]);
 
+  const handleSaveDraft = useCallback(async () => {
+    const currentEditorState = editorStateRef.current;
+    const currentEditor = editorRef.current;
+
+    if (!currentEditor) return;
+
+    editingContext.setIsSaving(true);
+    editingContext.setSaveSuccess(false);
+    editingContext.setSaveError("");
+    setSaveState({ isSaving: true, success: false, error: "" });
+
+    try {
+      const updatedDoc = {
+        slug: doc.slug,
+        title: currentEditorState.title,
+        description: currentEditorState.description,
+        blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
+        published: false,
+      };
+
+      const response = await fetch(`/api/docs/${slug}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedDoc),
+      });
+
+      const responseData = await response.json();
+
+      if (response.ok) {
+        setEditorState((prev) => ({ ...prev, isEditing: false, isEditingSectionTitle: false, sectionTitle: undefined }));
+        editingContext.setIsEditing(false);
+        editingContext.setIsSaving(false);
+        editingContext.setSaveSuccess(true);
+        editingContext.setSaveError("");
+        setSaveState({ isSaving: false, success: true, error: "" });
+        router.refresh();
+        setTimeout(() => {
+          setSaveState((prev) => ({ ...prev, success: false }));
+          editingContext.setSaveSuccess(false);
+        }, 3000);
+      } else {
+        const errorMsg = responseData.error || `Save failed (${response.status})`;
+        editingContext.setIsSaving(false);
+        editingContext.setSaveError(errorMsg);
+        setSaveState({ isSaving: false, success: false, error: errorMsg });
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Save failed. Please try again.";
+      editingContext.setIsSaving(false);
+      editingContext.setSaveError(errorMsg);
+      setSaveState({ isSaving: false, success: false, error: errorMsg });
+    }
+  }, [slug, doc.slug, router, editingContext]);
+
   // Register save and cancel handlers - update when they change
   useEffect(() => {
+    editingContext.setDraftEnabled(!isSectionOverview);
+    editingContext.setIsPublished(doc.published === true);
     editingContext.setOnSave(handleSave);
+    if (!isSectionOverview) editingContext.setOnSaveDraft(handleSaveDraft);
     editingContext.setOnCancel(handleCancel);
 
     return () => {
+      editingContext.setDraftEnabled(false);
+      editingContext.setIsPublished(false);
       editingContext.setOnSave(null);
+      editingContext.setOnSaveDraft(null);
       editingContext.setOnCancel(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleSave, handleCancel]);
+  }, [handleSave, handleSaveDraft, handleCancel]);
 
   return (
     <div className="max-w-[1000px] mx-auto">
@@ -1130,6 +1232,11 @@ export default function DocRenderer({ doc, slug, projectSlug }: Props) {
               </h1>
               {editorState.description && (
                 <p className="text-gray-600">{editorState.description}</p>
+              )}
+              {isAuthenticated && doc.published === false && (
+                <span className="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                  Draft
+                </span>
               )}
             </>
           )}
