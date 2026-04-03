@@ -9,7 +9,7 @@ import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
 import { logAIUsage } from "@/lib/ai-usage-tracker";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const session = await auth();

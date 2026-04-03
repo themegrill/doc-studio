@@ -7,7 +7,7 @@ import { logAIUsage } from "@/lib/ai-usage-tracker";
 import fs from "fs";
 import path from "path";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -374,7 +374,9 @@ Do not guess missing product details.
       },
     });
 
-    return result.toTextStreamResponse();
+    const response = result.toTextStreamResponse();
+    response.headers.set("x-vercel-ai-data-stream", "v1");
+    return response;
   } catch (error) {
     console.error("[doc-chat] Error:", error);
     console.error(
