@@ -40,7 +40,7 @@ export default async function DocPage({
     notFound();
   }
 
-  return <DocRendererClient doc={doc} slug={slug} />;
+  return <DocRendererClient doc={doc} slug={slug} projectSlug={project.slug} />;
 }
 
 export const dynamic = "force-dynamic";
