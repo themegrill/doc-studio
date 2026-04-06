@@ -74,14 +74,15 @@ export default async function ProjectDocsIndexPage({
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-4xl font-bold mb-2">
           {project.name} Documentation
         </h1>
         {project.description && (
-          <p className="text-gray-600">{project.description}</p>
+          <p className="text-gray-600 mt-2">{project.description}</p>
         )}
       </div>
+      <hr className="mb-8" />
 
       {sections.length === 0 ? (
         <div className="text-center py-12 border-2 border-dashed rounded-lg">

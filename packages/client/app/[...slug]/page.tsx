@@ -2,6 +2,49 @@ import { notFound } from "next/navigation";
 import DocRendererClient from "@/components/docs/DocRendererClient";
 import SectionPage from "@/components/docs/SectionPage";
 import { getDoc, getNavigation, PROJECT_SLUG } from "@/lib/api";
+import type { Navigation } from "@/lib/api";
+import { stripTitleHTML } from "@/lib/parse-title-badges";
+import type { BreadcrumbItem } from "@/components/docs/Breadcrumb";
+
+function buildBreadcrumbs(
+  slug: string,
+  navigation: Navigation | null,
+  docTitle: string
+): BreadcrumbItem[] {
+  const crumbs: BreadcrumbItem[] = [{ title: "Home", href: "/" }];
+
+  if (navigation && slug.includes("/")) {
+    const sectionSlug = slug.split("/")[0];
+    const sectionPath = `/docs/${sectionSlug}`;
+
+    const section = navigation.routes.find((route) => {
+      if (route.path === sectionPath || route.slug === sectionSlug) return true;
+      if (
+        route.children?.some((c) => {
+          const childSlug = c.path?.replace(/^\/docs\//, "") ?? c.slug ?? "";
+          return childSlug.startsWith(sectionSlug + "/") || childSlug === sectionSlug;
+        })
+      )
+        return true;
+      const titleSlug = route.title
+        .toLowerCase()
+        .replace(/<[^>]*>/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      return titleSlug === sectionSlug;
+    });
+
+    if (section) {
+      crumbs.push({
+        title: stripTitleHTML(section.title),
+        href: `/${sectionSlug}`,
+      });
+    }
+  }
+
+  crumbs.push({ title: stripTitleHTML(docTitle) }); // active — no href
+  return crumbs;
+}
 
 export default async function DocPage({
   params,
@@ -11,10 +54,12 @@ export default async function DocPage({
   const resolvedParams = await params;
   const slug = resolvedParams.slug.join("/");
 
+  // Always fetch navigation — needed for section check and breadcrumbs
+  const navigation = await getNavigation();
+
   // For single-segment slugs, check if it matches a navigation section first.
   // Section pages take priority over documents with the same slug.
   if (!slug.includes("/")) {
-    const navigation = await getNavigation();
     const sectionPath = `/docs/${slug}`;
 
     const section = navigation?.routes?.find((route) => {
@@ -54,7 +99,12 @@ export default async function DocPage({
       return (
         <>
           {sectionDoc && (
-              <DocRendererClient doc={sectionDoc} slug={slug} projectSlug={PROJECT_SLUG} />
+            <DocRendererClient
+              doc={sectionDoc}
+              slug={slug}
+              projectSlug={PROJECT_SLUG}
+              breadcrumbs={buildBreadcrumbs(slug, navigation, sectionDoc.title)}
+            />
           )}
           <SectionPage
             projectSlug={PROJECT_SLUG}
@@ -72,7 +122,14 @@ export default async function DocPage({
   const doc = await getDoc(slug);
 
   if (doc) {
-    return <DocRendererClient doc={doc} slug={slug} projectSlug={PROJECT_SLUG} />;
+    return (
+      <DocRendererClient
+        doc={doc}
+        slug={slug}
+        projectSlug={PROJECT_SLUG}
+        breadcrumbs={buildBreadcrumbs(slug, navigation, doc.title)}
+      />
+    );
   }
 
   notFound();

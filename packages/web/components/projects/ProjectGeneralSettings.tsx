@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Trash2, Save, Loader2, Upload, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 
@@ -24,14 +25,16 @@ interface ProjectGeneralSettingsProps {
   projectSlug: string;
   projectId: string;
   projectName: string;
+  projectDescription: string;
   projectMetadata: Record<string, any>;
   isSuperAdmin: boolean;
 }
 
 export function ProjectGeneralSettings({
   projectSlug,
-  projectId,
+  projectId: _projectId,
   projectName,
+  projectDescription,
   projectMetadata,
   isSuperAdmin,
 }: ProjectGeneralSettingsProps) {
@@ -46,6 +49,7 @@ export function ProjectGeneralSettings({
   const [formData, setFormData] = useState({
     name: projectName,
     slug: projectSlug,
+    description: projectDescription,
   });
 
   const [metadata, setMetadata] = useState(projectMetadata);
@@ -66,7 +70,7 @@ export function ProjectGeneralSettings({
       const response = await fetch(`/api/projects/${projectSlug}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, metadata }),
+        body: JSON.stringify({ ...formData, metadata, description: formData.description }),
       });
 
       if (!response.ok) {
@@ -351,6 +355,7 @@ export function ProjectGeneralSettings({
                 value={formData.name}
                 onChange={(e) => {
                   setFormData({
+                    ...formData,
                     name: e.target.value,
                     slug: slugify(e.target.value),
                   });
@@ -383,6 +388,26 @@ export function ProjectGeneralSettings({
             </p>
           </div>
 
+          <div>
+            <Label htmlFor="description">Project Description</Label>
+            {isEditing ? (
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder="A short description of this project"
+                className="mt-1"
+                rows={3}
+              />
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {projectDescription || <span className="text-gray-400">No description</span>}
+              </p>
+            )}
+          </div>
+
           {isEditing && (
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSave} disabled={isSaving}>
@@ -405,6 +430,7 @@ export function ProjectGeneralSettings({
                   setFormData({
                     name: projectName,
                     slug: projectSlug,
+                    description: projectDescription,
                   });
                   setMetadata(projectMetadata);
                 }}

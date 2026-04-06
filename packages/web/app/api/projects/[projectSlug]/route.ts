@@ -36,7 +36,7 @@ export async function PATCH(
   }
 
   const { projectSlug } = await params;
-  const { name, slug, metadata } = await request.json();
+  const { name, slug, description, metadata } = await request.json();
 
   if (!name?.trim() || !slug?.trim()) {
     return Response.json(
@@ -87,6 +87,7 @@ export async function PATCH(
     UPDATE projects
     SET name = ${name},
         slug = ${slug},
+        description = ${description ?? null},
         metadata = ${metadata ? sql.json(metadata) : sql.json({})},
         updated_at = NOW()
     WHERE id = ${project.id}

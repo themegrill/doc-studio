@@ -9,14 +9,16 @@ import "@blocknote/mantine/style.css";
 import { DocContent } from "@/lib/db/ContentManager";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
 import { Badge } from "@/components/ui/badge-pro";
+import Breadcrumb, { type BreadcrumbItem } from "@/components/docs/Breadcrumb";
 
 interface Props {
   doc: DocContent;
   slug: string;
   projectSlug?: string;
+  breadcrumbs?: BreadcrumbItem[];
 }
 
-export default function DocRenderer({ doc }: Props) {
+export default function DocRenderer({ doc, breadcrumbs }: Props) {
   const { cleanTitle, badges } = useMemo(
     () => parseTitleWithBadges(doc.title),
     [doc.title]
@@ -65,6 +67,9 @@ export default function DocRenderer({ doc }: Props) {
 
   return (
     <div className="max-w-[1000px] mx-auto">
+      {breadcrumbs && breadcrumbs.length > 0 && (
+        <Breadcrumb items={breadcrumbs} />
+      )}
       {/* Title */}
       <div className="flex justify-between items-start mb-6 pb-4 border-b">
         <div className="flex-1 mr-4">

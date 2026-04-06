@@ -21,6 +21,7 @@ interface ProjectSettingsTabsProps {
   projectSlug: string;
   projectId: string;
   projectName: string;
+  projectDescription: string;
   projectMetadata: Record<string, any>;
   projectDomain: string | null;
   projectDeploy: DeployState | null;
@@ -34,6 +35,7 @@ export function ProjectSettingsTabs({
   projectSlug,
   projectId,
   projectName,
+  projectDescription,
   projectMetadata,
   projectDomain,
   projectDeploy,
@@ -114,6 +116,7 @@ export function ProjectSettingsTabs({
               projectSlug={projectSlug}
               projectId={projectId}
               projectName={projectName}
+              projectDescription={projectDescription}
               projectMetadata={projectMetadata}
               isSuperAdmin={isSuperAdmin}
             />

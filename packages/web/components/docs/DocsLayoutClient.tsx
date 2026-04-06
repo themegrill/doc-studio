@@ -43,8 +43,8 @@ function EditControls() {
   } = useEditing();
   const pathname = usePathname();
 
-  // Only show controls on document/section pages (not on home/list pages)
-  const isDocumentPage = pathname.includes('/docs/') || pathname.includes('/projects/');
+  // Only show controls on individual document/section pages, not on the sections index
+  const isDocumentPage = pathname.includes('/docs/');
   if (!isDocumentPage) return null;
 
   if (!isEditing) {

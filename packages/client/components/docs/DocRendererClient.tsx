@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { DocContent } from "@/lib/db/ContentManager";
+import type { BreadcrumbItem } from "@/components/docs/Breadcrumb";
 
 // Dynamic import with no SSR
 const DocRenderer = dynamic(() => import("./DocRenderer"), {
@@ -25,8 +26,9 @@ interface Props {
   doc: DocContent;
   slug: string;
   projectSlug?: string;
+  breadcrumbs?: BreadcrumbItem[];
 }
 
-export default function DocRendererClient({ doc, slug, projectSlug }: Props) {
-  return <DocRenderer doc={doc} slug={slug} projectSlug={projectSlug} />;
+export default function DocRendererClient({ doc, slug, projectSlug, breadcrumbs }: Props) {
+  return <DocRenderer doc={doc} slug={slug} projectSlug={projectSlug} breadcrumbs={breadcrumbs} />;
 }

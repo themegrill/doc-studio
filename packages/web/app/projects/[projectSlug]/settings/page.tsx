@@ -26,7 +26,7 @@ export default async function ProjectSettingsPage({
 
   // Get project
   const [project] = await sql`
-    SELECT id, name, slug, metadata, domain, settings
+    SELECT id, name, slug, description, metadata, domain, settings
     FROM projects
     WHERE slug = ${projectSlug}
   `;
@@ -81,6 +81,7 @@ export default async function ProjectSettingsPage({
           projectSlug={project.slug}
           projectId={project.id}
           projectName={project.name}
+          projectDescription={project.description ?? ""}
           projectMetadata={project.metadata || {}}
           projectDomain={project.domain ?? null}
           projectDeploy={project.settings?.deploy ?? null}
