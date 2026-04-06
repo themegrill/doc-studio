@@ -8,15 +8,36 @@ import { Label } from "@/components/ui/label";
 import {
   Loader2, Save, Globe, RefreshCw, CheckCircle2, XCircle,
   GitBranch, AlertCircle, ExternalLink, Upload, X, Pencil,
+  ImageIcon, Download, Sparkles, Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface KbEntry {
-  type: "upload" | "website" | "codebase";
+  type: "upload" | "website" | "codebase" | "ui_flow";
   metadata: Record<string, unknown>;
   updatedAt: string;
+}
+
+interface UiFlowImage {
+  name: string;
+  size: number;
+  url: string;
 }
 
 interface KnowledgeBaseSettingsProps {
@@ -309,6 +330,98 @@ export function KnowledgeBaseSettings({
     }
   };
 
+  // ── UI Flow state ──────────────────────────────────────────────────────────
+  const [editingUiFlow, setEditingUiFlow] = useState(!savedMap.ui_flow);
+  const [uiFlowImages, setUiFlowImages] = useState<UiFlowImage[]>([]);
+  const [isLoadingImages, setIsLoadingImages] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [isGeneratingUiFlow, setIsGeneratingUiFlow] = useState(false);
+  const [selectedUiFlowImage, setSelectedUiFlowImage] = useState<UiFlowImage | null>(null);
+  const [imageToDelete, setImageToDelete] = useState<UiFlowImage | null>(null);
+
+  const loadUiFlowImages = async () => {
+    setIsLoadingImages(true);
+    try {
+      const res = await fetch(`/api/projects/${projectSlug}/knowledge-base/ui-flow/images`);
+      if (res.ok) {
+        const data = await res.json();
+        setUiFlowImages(data.images || []);
+      }
+    } catch { /* ignore */ }
+    finally { setIsLoadingImages(false); }
+  };
+
+  useEffect(() => {
+    if (editingUiFlow) loadUiFlowImages();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingUiFlow]);
+
+  const handleUiFlowImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+
+    setIsUploadingImages(true);
+    try {
+      const formData = new FormData();
+      files.forEach((f) => formData.append("images", f));
+      const res = await fetch(`/api/projects/${projectSlug}/knowledge-base/ui-flow/upload`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      if (data.errors?.length) {
+        toast({ title: "Some files skipped", description: data.errors.join("; "), variant: "destructive" });
+      }
+      if (data.saved?.length) {
+        toast({ title: "Uploaded", description: `${data.saved.length} image(s) uploaded` });
+        await loadUiFlowImages();
+      }
+    } catch (error) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Upload failed", variant: "destructive" });
+    } finally {
+      setIsUploadingImages(false);
+    }
+  };
+
+  const handleDeleteUiFlowImage = async (filename: string) => {
+    try {
+      await fetch(`/api/projects/${projectSlug}/knowledge-base/ui-flow/images`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename }),
+      });
+      setUiFlowImages((prev) => prev.filter((img) => img.name !== filename));
+    } catch {
+      toast({ title: "Error", description: "Failed to delete image", variant: "destructive" });
+    }
+  };
+
+  const handleDownloadUiFlowImages = () => {
+    window.location.href = `/api/projects/${projectSlug}/knowledge-base/ui-flow/download`;
+  };
+
+  const handleGenerateUiFlowKB = async () => {
+    setIsGeneratingUiFlow(true);
+    try {
+      const res = await fetch(`/api/projects/${projectSlug}/knowledge-base/ui-flow/generate`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Generation failed");
+      toast({
+        title: "Done",
+        description: `UI flow knowledge base generated from ${data.summary.succeeded}/${data.summary.processed} images`,
+      });
+      router.refresh();
+    } catch (error) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Generation failed", variant: "destructive" });
+    } finally {
+      setIsGeneratingUiFlow(false);
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -581,6 +694,195 @@ export function KnowledgeBaseSettings({
         )}
       </div>
 
+      {/* ── UI Flow Knowledge Base ────────────────────────────────────────── */}
+      <div className="bg-white border rounded-lg p-6">
+        <h3 className="text-base font-semibold text-gray-900 mb-1">UI Flow Knowledge Base</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Upload UI design screenshots to generate a knowledge base from screen flows, fields, and actions.
+        </p>
+
+        {!editingUiFlow && savedMap.ui_flow ? (
+          <SavedCard
+            label="UI flow knowledge base saved"
+            detail={`${(savedMap.ui_flow.metadata.imageCount as number) ?? 0} image(s) processed`}
+            updatedAt={savedMap.ui_flow.updatedAt}
+            onEdit={() => { setEditingUiFlow(true); loadUiFlowImages(); }}
+            disabled={!isSuperAdmin}
+          />
+        ) : (
+          isSuperAdmin && (
+            <div className="space-y-4">
+              {/* Upload button */}
+              <div>
+                <input
+                  id="ui-flow-upload"
+                  type="file"
+                  accept=".png,.jpg,.jpeg,image/png,image/jpeg"
+                  multiple
+                  className="hidden"
+                  onChange={handleUiFlowImageUpload}
+                  disabled={isUploadingImages || isGeneratingUiFlow}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => document.getElementById("ui-flow-upload")?.click()}
+                  disabled={isUploadingImages || isGeneratingUiFlow}
+                >
+                  {isUploadingImages
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                    : <><Upload className="h-4 w-4 mr-2" />Upload Images</>}
+                </Button>
+                <p className="text-xs text-gray-500 mt-2">
+                  Accepts PNG and JPG files (max 10 MB each). Multiple files can be selected at once.
+                </p>
+              </div>
+
+              {/* Image list / empty state */}
+              {isLoadingImages ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />Loading images...
+                </div>
+              ) : uiFlowImages.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Header with view + download */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700">
+                      UI Flow Images ({uiFlowImages.length})
+                    </p>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={handleDownloadUiFlowImages}>
+                        <Download className="h-4 w-4 mr-1" />Download
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Thumbnail grid */}
+                  <div className="grid grid-cols-3 sm:grid-cols-8 gap-2">
+                    {uiFlowImages.map((img) => (
+                      <div
+						key={img.name}
+						className="relative group border rounded-lg overflow-hidden bg-gray-50 w-28 sm:w-32 aspect-square shadow-sm hover:shadow-md transition-all"
+						>
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img
+							src={img.url}
+							alt={img.name}
+							className="w-full h-full object-cover"
+						/>
+
+						{/* Hover actions */}
+							<div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors">
+								<div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+									<button
+										type="button"
+										onClick={() => setSelectedUiFlowImage(img)}
+										className="bg-white/95 rounded-full p-1.5 text-gray-700 hover:text-blue-600 shadow"
+										title="View image"
+									>
+										<Eye className="h-3.5 w-3.5" />
+									</button>
+
+									<button
+										type="button"
+										onClick={() => setImageToDelete(img)}
+										className="bg-white/95 rounded-full p-1.5 text-gray-700 hover:text-red-600 shadow"
+										title="Remove image"
+										>
+											<X className="h-3.5 w-3.5" />
+									</button>
+								</div>
+							</div>
+
+							{/* Filename */}
+							<div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/55">
+								<p className="text-white text-[10px] truncate">{img.name}</p>
+							</div>
+						</div>
+                    ))}
+                  </div>
+
+                  {/* Generate button */}
+                  <div className="flex gap-2 pt-1">
+                    <Button onClick={handleGenerateUiFlowKB} disabled={isGeneratingUiFlow}>
+                      {isGeneratingUiFlow
+                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating...</>
+                        : <><Sparkles className="h-4 w-4 mr-2" />Generate Knowledge Base</>}
+                    </Button>
+                    {savedMap.ui_flow && (
+                      <Button variant="ghost" onClick={() => setEditingUiFlow(false)} disabled={isGeneratingUiFlow}>
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 p-4 bg-gray-50 border border-dashed rounded-md text-sm text-gray-500">
+                  <ImageIcon className="h-5 w-5 shrink-0" />
+                  <span>No images uploaded yet. Upload PNG or JPG screenshots to get started.</span>
+                </div>
+              )}
+            </div>
+          )
+        )}
+      </div>
+	  <Dialog
+		open={!!selectedUiFlowImage}
+		onOpenChange={(open) => {
+			if (!open) setSelectedUiFlowImage(null);
+		}}
+		>
+			<DialogContent className="max-w-3xl w-full">
+				<DialogHeader>
+				<DialogTitle>{selectedUiFlowImage?.name || "Image preview"}</DialogTitle>
+				</DialogHeader>
+
+				{selectedUiFlowImage && (
+				<div className="space-y-3">
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img
+					src={selectedUiFlowImage.url}
+					alt={selectedUiFlowImage.name}
+					className="w-full max-h-[70vh] object-contain rounded-md border bg-gray-50"
+					/>
+					<p className="text-xs text-gray-500 text-center">
+					{(selectedUiFlowImage.size / 1024).toFixed(1)} KB
+					</p>
+				</div>
+				)}
+			</DialogContent>
+		</Dialog>
+		<AlertDialog
+			open={!!imageToDelete}
+			onOpenChange={(open) => {
+				if (!open) setImageToDelete(null);
+			}}
+			>
+			<AlertDialogContent>
+				<AlertDialogHeader>
+					<AlertDialogTitle>Delete this image?</AlertDialogTitle>
+					<AlertDialogDescription>
+						This will permanently remove{" "}
+						<strong>{imageToDelete?.name}</strong> from the UI Flow images list.
+						This action cannot be undone.
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+
+				<AlertDialogFooter>
+					<AlertDialogCancel>Cancel</AlertDialogCancel>
+					<AlertDialogAction
+						onClick={async () => {
+						if (!imageToDelete) return;
+						await handleDeleteUiFlowImage(imageToDelete.name);
+						setImageToDelete(null);
+						}}
+						className="bg-red-600 hover:bg-red-700"
+					>
+						Delete Image
+					</AlertDialogAction>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
     </div>
   );
 }

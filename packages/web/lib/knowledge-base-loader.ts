@@ -5,7 +5,7 @@ import path from "path";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type KnowledgeBaseType = "upload" | "website" | "codebase";
+export type KnowledgeBaseType = "upload" | "website" | "codebase" | "ui_flow";
 
 export interface ProjectKnowledgeBase {
   type: KnowledgeBaseType;
@@ -301,6 +301,8 @@ function kbTypeLabel(pkb: ProjectKnowledgeBase): string {
         ? `Codebase Knowledge Base (GitHub: ${repo}${branch ? `, branch: ${branch}` : ""})`
         : "Codebase Knowledge Base";
     }
+    case "ui_flow":
+      return "UI Flow Knowledge Base (extracted from UI design images)";
   }
 }
 
@@ -359,13 +361,106 @@ function formatWebsiteKnowledgeBasePrompt(content: unknown): string {
   return sections.join("\n");
 }
 
+// ─── UI Flow KB formatter ─────────────────────────────────────────────────────
+
+/**
+ * Format a UI flow knowledge base (produced by the vision extractor) into a
+ * prompt section the AI can use when writing documentation.
+ */
+function formatUiFlowKnowledgeBasePrompt(content: unknown): string {
+  if (!content || typeof content !== "object" || Array.isArray(content)) return "";
+  const kb = content as Record<string, unknown>;
+  const sections: string[] = [];
+
+  const project = kb.project as Record<string, unknown> | undefined;
+  if (project?.name) sections.push(`# Product UI Flows: ${project.name}`);
+
+  // Screens
+  const screens = Array.isArray(kb.screens) ? kb.screens : [];
+  if (screens.length > 0) {
+    sections.push("\n## UI Screens\n");
+    for (const s of screens) {
+      if (!s || typeof s !== "object") continue;
+      const screen = s as Record<string, unknown>;
+      if (!screen.screen_title) continue;
+
+      sections.push(`### ${screen.screen_title}`);
+      if (screen.screen_purpose) sections.push(`**Purpose:** ${screen.screen_purpose}`);
+      if (screen.user_goal) sections.push(`**User Goal:** ${screen.user_goal}`);
+
+      const primary = Array.isArray(screen.primary_actions) ? screen.primary_actions.filter(Boolean) : [];
+      if (primary.length > 0) sections.push(`**Primary Actions:** ${primary.join(", ")}`);
+
+      const secondary = Array.isArray(screen.secondary_actions) ? screen.secondary_actions.filter(Boolean) : [];
+      if (secondary.length > 0) sections.push(`**Secondary Actions:** ${secondary.join(", ")}`);
+
+      const fields = Array.isArray(screen.fields) ? screen.fields : [];
+      if (fields.length > 0) {
+        sections.push("**Fields:**");
+        for (const f of fields) {
+          const field = f as Record<string, unknown>;
+          if (!field.label) continue;
+          const req = field.required ? " (required)" : "";
+          const help = field.help_text ? ` — ${field.help_text}` : "";
+          sections.push(`- **${field.label}** [${field.type}]${req}${help}`);
+        }
+      }
+
+      const content = screen.content as Record<string, unknown> | undefined;
+      const headings = Array.isArray(content?.headings) ? content.headings.filter(Boolean) : [];
+      if (headings.length > 0) sections.push(`**Headings:** ${headings.join(", ")}`);
+
+      const messages = Array.isArray(content?.messages) ? content.messages.filter(Boolean) : [];
+      if (messages.length > 0) sections.push(`**Messages:** ${messages.join("; ")}`);
+
+      const states = screen.states as Record<string, unknown> | undefined;
+      const errorStates = Array.isArray(states?.error) ? states.error.filter(Boolean) : [];
+      if (errorStates.length > 0) sections.push(`**Error States:** ${errorStates.join("; ")}`);
+      const successStates = Array.isArray(states?.success) ? states.success.filter(Boolean) : [];
+      if (successStates.length > 0) sections.push(`**Success States:** ${successStates.join("; ")}`);
+
+      const notes = Array.isArray(screen.documentation_notes) ? screen.documentation_notes.filter(Boolean) : [];
+      if (notes.length > 0) {
+        sections.push("**Documentation Notes:**");
+        notes.forEach((n) => sections.push(`- ${n}`));
+      }
+
+      sections.push("");
+    }
+  }
+
+  // Flows
+  const flows = Array.isArray(kb.flows) ? kb.flows : [];
+  if (flows.length > 0) {
+    sections.push("## Navigation Flows\n");
+    for (const f of flows) {
+      const flow = f as Record<string, unknown>;
+      if (flow.from && flow.to) {
+        sections.push(`- **${flow.from}** → **${flow.to}** (trigger: ${flow.trigger || "unknown"}, confidence: ${flow.confidence || "low"})`);
+      }
+    }
+    sections.push("");
+  }
+
+  // Global components
+  const components = Array.isArray(kb.components) ? kb.components.filter(Boolean) : [];
+  if (components.length > 0) {
+    sections.push(`## UI Components\n${components.map((c) => `- ${c}`).join("\n")}`);
+  }
+
+  return sections.join("\n");
+}
+
 // ─── Format dispatcher ────────────────────────────────────────────────────────
 
 /**
- * Pick the right formatter based on the KB content structure.
- * DocumentationKnowledgeBase has a `plugin` property; website KB is an array.
+ * Pick the right formatter based on KB type and content structure.
  */
 function formatKbContent(pkb: ProjectKnowledgeBase): string {
+  // UI flow KB always has `project.screens`
+  if (pkb.type === "ui_flow") {
+    return formatUiFlowKnowledgeBasePrompt(pkb.content as unknown);
+  }
   const c = pkb.content as unknown;
   if (
     c &&

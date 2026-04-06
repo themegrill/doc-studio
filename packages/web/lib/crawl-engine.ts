@@ -5,9 +5,12 @@ import { URL } from "url";
 import Anthropic from "@anthropic-ai/sdk";
 import type { Cheerio, CheerioAPI } from "cheerio";
 import type { Element } from "domhandler";
+import { getAIConfig } from "@/lib/ai-config";
+
+const config = await getAIConfig();
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  apiKey: (config.apiKey || process.env.ANTHROPIC_API_KEY) ?? "",
 });
 
 export const MAX_PAGES = 200;

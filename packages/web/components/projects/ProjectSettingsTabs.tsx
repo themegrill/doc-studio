@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Upload, Settings, BookOpen, Globe } from "lucide-react";
+import { Users, Settings, BookOpen, Globe } from "lucide-react";
 import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
 import { DeploySettings } from "./DeploySettings";
 
@@ -18,7 +18,7 @@ interface DeployState {
 }
 
 interface KbEntry {
-  type: "upload" | "website" | "codebase";
+  type: "upload" | "website" | "codebase" | "ui_flow";
   metadata: Record<string, unknown>;
   updatedAt: string;
 }

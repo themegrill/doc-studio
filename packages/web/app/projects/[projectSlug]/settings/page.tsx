@@ -104,7 +104,7 @@ export default async function ProjectSettingsPage({
           isSuperAdmin={isSuperAdmin}
           githubConfigured={githubConfigured}
           existingKbs={existingKbs.map((row) => ({
-            type: row.type as "upload" | "website" | "codebase",
+            type: row.type as "upload" | "website" | "codebase" | "ui_flow",
             metadata: (row.metadata || {}) as Record<string, unknown>,
             updatedAt: row.updated_at instanceof Date
               ? row.updated_at.toISOString()

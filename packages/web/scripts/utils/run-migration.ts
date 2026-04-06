@@ -2,7 +2,7 @@
 
 /**
  * Database Migration Runner
- * Runs the user roles migration
+ * Runs the user roles migration + knowledge base update
  */
 
 import { getDb } from "../../lib/db/postgres";
@@ -13,29 +13,49 @@ async function runMigration() {
   const sql = getDb();
 
   try {
+    // =========================
+    // Users table migration
+    // =========================
     console.log("⚡ Adding role column to users table...");
 
-    // Add role column
     await sql`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'user'
     `;
     console.log("✅ Role column added");
 
-    // Update existing users
     await sql`
       UPDATE users SET role = 'user' WHERE role IS NULL OR role = ''
     `;
     console.log("✅ Updated existing users");
 
-    // Add index
     await sql`
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)
     `;
     console.log("✅ Index created");
 
+    // =========================
+    // project_knowledge_bases update
+    // =========================
+    console.log("\n⚡ Updating project_knowledge_bases constraint...");
+
+    await sql`
+      ALTER TABLE project_knowledge_bases
+      DROP CONSTRAINT IF EXISTS project_knowledge_bases_type_check
+    `;
+    console.log("✅ Old constraint dropped");
+
+    await sql`
+      ALTER TABLE project_knowledge_bases
+      ADD CONSTRAINT project_knowledge_bases_type_check
+      CHECK (type IN ('upload', 'website', 'codebase', 'ui_flow'))
+    `;
+    console.log("✅ New constraint added (includes 'ui_flow')");
+
     console.log("\n✅ Migration completed successfully!\n");
 
-    // Verify
+    // =========================
+    // Verification
+    // =========================
     const columns = await sql`
       SELECT column_name, data_type, column_default
       FROM information_schema.columns
@@ -49,7 +69,6 @@ async function runMigration() {
       console.log("   - Default:", columns[0].column_default);
     }
 
-    // Show users
     const users = await sql`
       SELECT id, email, name, role FROM users LIMIT 5
     `;

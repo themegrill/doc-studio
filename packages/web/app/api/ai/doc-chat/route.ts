@@ -301,9 +301,12 @@ Multiple knowledge base types may be present:
 - Uploaded Knowledge Base: manually curated product information
 - Website Knowledge Base: content crawled from the product website
 - Codebase Knowledge Base: content fetched from the product GitHub repository
+- UI Flow Knowledge Base: screens, fields, navigation flows, and UI components extracted from design screenshots using AI vision
 
 When multiple knowledge bases are present, treat all of them as valid sources.
 If the same fact appears in multiple sources with minor differences, prefer the most specific or detailed version.
+When writing about UI screens, forms, or navigation, prefer information from the UI Flow Knowledge Base as it reflects the exact visible UI.
+When writing about features or workflows at a higher level, use the Uploaded or Website Knowledge Base.
 
 Allowed product-fact sources:
 1. Any of the PRODUCT KNOWLEDGE BASES below
