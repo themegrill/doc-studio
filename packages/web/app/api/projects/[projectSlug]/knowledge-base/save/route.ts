@@ -49,21 +49,47 @@ export async function POST(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const existingSettings =
-    typeof project.settings === "string"
-      ? JSON.parse(project.settings)
-      : (project.settings || {});
-  const updatedSettings = {
-    ...existingSettings,
-    knowledgeBase,
-  };
+  // Resolve site URL from project settings for metadata
+  const settings = safeSettingsObject(project.settings);
+  const siteLink: string = typeof settings.siteLink === "string" ? settings.siteLink : "";
 
+  // Save into the dedicated project_knowledge_bases table (type='website')
   await sql`
-    UPDATE projects
-    SET settings = ${sql.json(updatedSettings)},
-        updated_at = NOW()
-    WHERE id = ${project.id}
+    INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
+    VALUES (
+      ${project.id},
+      'website',
+      ${sql.json(knowledgeBase as Record<string, unknown>)},
+      ${sql.json(siteLink ? { siteLink } : {})}
+    )
+    ON CONFLICT (project_id, type)
+    DO UPDATE SET
+      content    = EXCLUDED.content,
+      metadata   = EXCLUDED.metadata,
+      updated_at = NOW()
   `;
 
   return NextResponse.json({ success: true });
+}
+
+function safeSettingsObject(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) return {};
+  const obj = raw as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  if (keys.length > 0 && keys.every((k) => /^\d+$/.test(k))) {
+    try {
+      const recovered = JSON.parse(
+        keys.sort((a, b) => Number(a) - Number(b)).map((k) => obj[k]).join("")
+      );
+      if (recovered && typeof recovered === "object" && !Array.isArray(recovered)) {
+        return recovered as Record<string, unknown>;
+      }
+    } catch { /* fall through */ }
+    return {};
+  }
+  return obj;
 }

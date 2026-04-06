@@ -1,0 +1,12 @@
+{
+  "status": "done",
+  "visitedPages": 1,
+  "maxPages": 200,
+  "currentBatch": 1,
+  "totalBatches": 1,
+  "progress": 100,
+  "message": "Knowledge base ready.",
+  "error": null,
+  "startedAt": "2026-04-06T06:20:43.262Z",
+  "completedAt": "2026-04-06T06:21:14.585Z"
+}

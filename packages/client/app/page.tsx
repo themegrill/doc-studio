@@ -70,39 +70,52 @@ export default async function RootPage() {
                   </div>
                 </div>
 
-                {/* Card Body — doc list */}
-                <div className="flex-1 px-5 py-3 flex flex-col gap-1.5">
-                  {previewDocs.length === 0 ? (
-                    <p className="text-sm text-gray-400 py-2">No documents published yet.</p>
-                  ) : (
-                    previewDocs.map((doc) => {
-                      const docSlug = doc.path
-                        ? doc.path.replace("/docs/", "")
-                        : doc.slug ?? getSectionSlug(doc);
-                      return (
-                        <Link
-                          key={doc.id ?? doc.path}
-                          href={`/${docSlug}`}
-                          className="flex items-start gap-2 text-sm text-blue-700 hover:text-blue-900 hover:underline group"
-                        >
-                          <FileText className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400 group-hover:text-blue-700" />
-                          <span className="line-clamp-2 leading-snug">{doc.title}</span>
-                        </Link>
-                      );
-                    })
-                  )}
-                </div>
+                {previewDocs.length === 0 ? (
+                  /* Empty state — body + footer merged */
+                  <div className="flex-1 flex flex-col items-center justify-center gap-3 px-5 py-6 text-center">
+                    <FileText className="h-8 w-8 text-gray-200" />
+                    <p className="text-sm text-gray-400">No documents published yet.</p>
+                    <Link
+                      href={`/${sectionSlug}`}
+                      className="inline-flex items-center gap-1 text-sm border border-gray-200 rounded px-3 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors"
+                    >
+                      View Section
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    {/* Card Body — doc list */}
+                    <div className="flex-1 px-5 py-3 flex flex-col gap-1.5">
+                      {previewDocs.map((doc) => {
+                        const docSlug = doc.path
+                          ? doc.path.replace("/docs/", "")
+                          : doc.slug ?? getSectionSlug(doc);
+                        return (
+                          <Link
+                            key={doc.id ?? doc.path}
+                            href={`/${docSlug}`}
+                            className="flex items-start gap-2 text-sm text-blue-700 hover:text-blue-900 hover:underline group"
+                          >
+                            <FileText className="h-3.5 w-3.5 mt-0.5 shrink-0 text-blue-400 group-hover:text-blue-700" />
+                            <span className="line-clamp-2 leading-snug">{doc.title}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
 
-                {/* Card Footer */}
-                <div className="px-5 pb-5 pt-3">
-                  <Link
-                    href={`/${sectionSlug}`}
-                    className="inline-flex items-center gap-1 text-sm border border-gray-300 rounded px-3 py-1.5 text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    {hasMore ? "Explore More" : "View Section"}
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
+                    {/* Card Footer */}
+                    <div className="px-5 pb-5 pt-3">
+                      <Link
+                        href={`/${sectionSlug}`}
+                        className="inline-flex items-center gap-1 text-sm border border-gray-300 rounded px-3 py-1.5 text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        {hasMore ? "Explore More" : "View Section"}
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })}

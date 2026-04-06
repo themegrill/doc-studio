@@ -173,11 +173,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Merge siteLink and knowledgeBase into settings if provided
+    // Merge siteLink into settings (knowledgeBase stored in dedicated table now)
     const projectSettings = {
       ...(settings || {}),
       ...(siteLink ? { siteLink } : {}),
-      ...(knowledgeBase ? { knowledgeBase } : {}),
     };
 
     // Create the project using the resolved DB user id
@@ -188,7 +187,7 @@ export async function POST(req: NextRequest) {
         ${slug},
         ${description || null},
         ${domain || null},
-        ${JSON.stringify(projectSettings)},
+        ${sql.json(projectSettings)},
         ${dbUser.id}
       )
       RETURNING
@@ -207,6 +206,24 @@ export async function POST(req: NextRequest) {
       INSERT INTO project_members (project_id, user_id, role)
       VALUES (${project.id}, ${dbUser.id}, 'owner')
     `;
+
+    // If a knowledge base was uploaded during project creation, save it to the
+    // dedicated table with type='upload'
+    if (knowledgeBase && typeof knowledgeBase === "object") {
+      await sql`
+        INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
+        VALUES (
+          ${project.id},
+          'upload',
+          ${sql.json(knowledgeBase)},
+          ${sql.json({})}
+        )
+        ON CONFLICT (project_id, type)
+        DO UPDATE SET
+          content    = EXCLUDED.content,
+          updated_at = NOW()
+      `;
+    }
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {

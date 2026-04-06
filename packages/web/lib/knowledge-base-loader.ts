@@ -1,25 +1,117 @@
 import { DocumentationKnowledgeBase } from "@/types/knowledge-base";
-import { getKnowledgeBaseFromGitHub } from "./github-kb-fetcher";
 import { getDb } from "@/lib/db/postgres";
 import fs from "fs";
 import path from "path";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type KnowledgeBaseType = "upload" | "website" | "codebase";
+
+export interface ProjectKnowledgeBase {
+  type: KnowledgeBaseType;
+  content: DocumentationKnowledgeBase;
+  metadata: Record<string, unknown>;
+}
+
+// ─── DB loader ────────────────────────────────────────────────────────────────
+
 /**
- * Load knowledge base for a specific project
- *
- * This function tries to load from:
- * 1. Local knowledge-base directory (for custom/override files)
- * 2. GitHub repository cache (fetched from themegrill/knowledge-base)
- *
- * @param projectSlug - The project slug (e.g., 'user-registration-pro')
- * @returns Knowledge base object or null if not found
+ * Load all knowledge bases for a project from the database.
+ * Returns one entry per type (upload, website, codebase) that has been saved.
  */
+export async function loadAllKnowledgeBases(
+  projectSlug: string
+): Promise<ProjectKnowledgeBase[]> {
+  try {
+    const sql = getDb();
+
+    const rows = await sql`
+      SELECT pkb.type, pkb.content, pkb.metadata
+      FROM project_knowledge_bases pkb
+      INNER JOIN projects p ON p.id = pkb.project_id
+      WHERE p.slug = ${projectSlug}
+      ORDER BY pkb.type
+    `;
+
+    if (rows.length > 0) {
+      return rows.map((row) => ({
+        type: row.type as KnowledgeBaseType,
+        content: (typeof row.content === "string"
+          ? JSON.parse(row.content)
+          : row.content) as DocumentationKnowledgeBase,
+        metadata: (typeof row.metadata === "string"
+          ? JSON.parse(row.metadata)
+          : row.metadata) as Record<string, unknown>,
+      }));
+    }
+  } catch (error) {
+    console.error(`[KB] Error loading from project_knowledge_bases for ${projectSlug}:`, error);
+  }
+
+  // Fallback: check legacy settings.knowledgeBase on the project row
+  try {
+    const sql = getDb();
+    const [project] = await sql`
+      SELECT settings FROM projects WHERE slug = ${projectSlug}
+    `;
+
+    if (project) {
+      const rawSettings = project.settings;
+      let settings =
+        typeof rawSettings === "string" ? JSON.parse(rawSettings) : rawSettings;
+
+      // Recover corrupted settings (character-by-character spread artifact)
+      if (
+        settings &&
+        typeof settings === "object" &&
+        !settings.knowledgeBase &&
+        "0" in settings
+      ) {
+        try {
+          const keys = Object.keys(settings).filter((k) => /^\d+$/.test(k));
+          const recoveredJson = keys
+            .sort((a, b) => Number(a) - Number(b))
+            .map((k) => settings[k])
+            .join("");
+          const recovered = JSON.parse(recoveredJson);
+          if (recovered && typeof recovered === "object") {
+            settings = recovered;
+          }
+        } catch { /* ignore recovery failure */ }
+      }
+
+      if (settings?.knowledgeBase) {
+        console.log(`[KB] Loaded legacy KB from settings for: ${projectSlug}`);
+        return [
+          {
+            type: "upload",
+            content: settings.knowledgeBase as DocumentationKnowledgeBase,
+            metadata: {},
+          },
+        ];
+      }
+    }
+  } catch (error) {
+    console.error(`[KB] Error loading legacy settings KB for ${projectSlug}:`, error);
+  }
+
+  // Try local file (development override)
+  const localKB = loadKnowledgeBase(projectSlug);
+  if (localKB) {
+    console.log(`[KB] Loaded local file KB for: ${projectSlug}`);
+    return [{ type: "upload", content: localKB, metadata: {} }];
+  }
+
+  console.log(`[KB] No knowledge base found for project: ${projectSlug}`);
+  return [];
+}
+
+// ─── Local file loader (dev override) ────────────────────────────────────────
+
 export function loadKnowledgeBase(
   projectSlug: string
 ): DocumentationKnowledgeBase | null {
-  // Try local file first (for custom overrides)
   try {
-    // Check both the flat path and the crawl-output subdirectory path
     const candidates = [
       path.join(process.cwd(), "knowledge-base", `${projectSlug}.json`),
       path.join(
@@ -32,92 +124,25 @@ export function loadKnowledgeBase(
 
     for (const knowledgeBasePath of candidates) {
       if (fs.existsSync(knowledgeBasePath)) {
-        console.log(
-          `[KB] Loading local knowledge base for: ${projectSlug} (${knowledgeBasePath})`
-        );
-        const fileContent = fs.readFileSync(knowledgeBasePath, "utf-8");
-        const knowledgeBase: DocumentationKnowledgeBase =
-          JSON.parse(fileContent);
-        return knowledgeBase;
+        console.log(`[KB] Loading local file for: ${projectSlug} (${knowledgeBasePath})`);
+        return JSON.parse(fs.readFileSync(knowledgeBasePath, "utf-8")) as DocumentationKnowledgeBase;
       }
     }
   } catch (error) {
-    console.error(
-      `[KB] Error loading local knowledge base for ${projectSlug}:`,
-      error
-    );
+    console.error(`[KB] Error loading local file for ${projectSlug}:`, error);
   }
-
-  // Local file not found, will try GitHub in async function
   return null;
 }
 
-/**
- * Load knowledge base asynchronously (tries DB, local file, then GitHub)
- *
- * @param projectSlug - The project slug
- * @returns Knowledge base object or null if not found
- */
-export async function loadKnowledgeBaseAsync(
-  projectSlug: string
-): Promise<DocumentationKnowledgeBase | null> {
-  // Try database first (works in all environments including Vercel)
-  try {
-    const sql = getDb();
-    const [project] = await sql`
-      SELECT settings FROM projects WHERE slug = ${projectSlug}
-    `;
-
-    const settings =
-      typeof project?.settings === "string"
-        ? JSON.parse(project.settings)
-        : project?.settings;
-    if (settings?.knowledgeBase) {
-      console.log(`[KB] Loaded from database for: ${projectSlug}`);
-      return settings.knowledgeBase as DocumentationKnowledgeBase;
-    }
-  } catch (error) {
-    console.error(
-      `[KB] Error loading from database for ${projectSlug}:`,
-      error
-    );
-  }
-
-  // Try local file (for local development overrides)
-  const localKB = loadKnowledgeBase(projectSlug);
-  if (localKB) {
-    return localKB;
-  }
-
-  // Try GitHub
-  try {
-    console.log(`[KB] Fetching from GitHub for: ${projectSlug}`);
-    const githubKB = await getKnowledgeBaseFromGitHub(projectSlug);
-    if (githubKB) {
-      console.log(`[KB] Successfully loaded from GitHub: ${projectSlug}`);
-      return githubKB;
-    }
-  } catch (error) {
-    console.error(`[KB] Error fetching from GitHub for ${projectSlug}:`, error);
-  }
-
-  console.log(`[KB] No knowledge base found for project: ${projectSlug}`);
-  return null;
-}
+// ─── Prompt formatters ────────────────────────────────────────────────────────
 
 /**
- * Format knowledge base into a prompt string for the AI assistant
- *
- * Produces a system prompt that gives the AI product context and instructs
- * it to write documentation following the plugin documentation guidelines
- * (sections A–P: overview, availability, prerequisites, steps, settings, etc.)
+ * Format a single knowledge base into a detailed prompt section.
  */
 export function formatKnowledgeBasePrompt(
   kb: DocumentationKnowledgeBase
 ): string {
   const sections: string[] = [];
-
-  // ─── Product Context ────────────────────────────────────────────────────────
 
   sections.push(`# Product: ${kb.plugin.name}`);
 
@@ -135,13 +160,9 @@ export function formatKnowledgeBasePrompt(
     sections.push("");
     if (ps.whatItDoes) sections.push(ps.whatItDoes);
     if (ps.targetUsers && ps.targetUsers.length > 0) {
-      sections.push(
-        `Target users: ${ps.targetUsers.join(", ")}.`
-      );
+      sections.push(`Target users: ${ps.targetUsers.join(", ")}.`);
     }
   }
-
-  // ─── Documentation Writing Guidelines ───────────────────────────────────────
 
   sections.push(`
 ## Documentation Guidelines
@@ -198,11 +219,8 @@ Follow a logical order: overview → availability → prerequisites → enable �
 ### P. Optional Sections
 Add FAQs, Troubleshooting, or Related Documentation only when needed.`);
 
-  // ─── Product Knowledge ───────────────────────────────────────────────────────
-
   sections.push(`\n## Product Knowledge\n\nUse the information below when writing documentation. Only reference what is relevant to the topic.`);
 
-  // Features
   if (kb.knowledge.features && kb.knowledge.features.length > 0) {
     sections.push("\n### Features");
     const featuresWithDesc = kb.knowledge.features.filter((f) => f.description);
@@ -215,7 +233,6 @@ Add FAQs, Troubleshooting, or Related Documentation only when needed.`);
     }
   }
 
-  // Use Cases
   if (kb.knowledge.use_cases && kb.knowledge.use_cases.length > 0) {
     sections.push("\n### Use Cases");
     for (const useCase of kb.knowledge.use_cases) {
@@ -224,7 +241,6 @@ Add FAQs, Troubleshooting, or Related Documentation only when needed.`);
     }
   }
 
-  // How-To Guides (steps reference for sections E, F, J)
   if (kb.knowledge.how_tos && kb.knowledge.how_tos.length > 0) {
     sections.push("\n### How-To Guides");
     for (const howTo of kb.knowledge.how_tos) {
@@ -237,7 +253,6 @@ Add FAQs, Troubleshooting, or Related Documentation only when needed.`);
     }
   }
 
-  // UI Screens (reference for sections E, F, G, K, L)
   if (kb.knowledge.screens && kb.knowledge.screens.length > 0) {
     sections.push("\n### UI Screens");
     for (const screen of kb.knowledge.screens) {
@@ -261,7 +276,6 @@ Add FAQs, Troubleshooting, or Related Documentation only when needed.`);
     }
   }
 
-  // UI Components (reference for sections G, L)
   if (kb.knowledge.components && kb.knowledge.components.length > 0) {
     sections.push("\n### UI Components");
     sections.push(kb.knowledge.components.map((c) => `- ${c}`).join("\n"));
@@ -270,43 +284,149 @@ Add FAQs, Troubleshooting, or Related Documentation only when needed.`);
   return sections.join("\n");
 }
 
+// ─── Label helpers ────────────────────────────────────────────────────────────
+
+function kbTypeLabel(pkb: ProjectKnowledgeBase): string {
+  switch (pkb.type) {
+    case "upload":
+      return "Uploaded Knowledge Base";
+    case "website": {
+      const url = pkb.metadata.siteLink as string | undefined;
+      return url ? `Website Knowledge Base (source: ${url})` : "Website Knowledge Base";
+    }
+    case "codebase": {
+      const repo = pkb.metadata.githubRepo as string | undefined;
+      const branch = pkb.metadata.branch as string | undefined;
+      return repo
+        ? `Codebase Knowledge Base (GitHub: ${repo}${branch ? `, branch: ${branch}` : ""})`
+        : "Codebase Knowledge Base";
+    }
+  }
+}
+
+// ─── Website KB formatter ─────────────────────────────────────────────────────
+
 /**
- * Get knowledge base prompt for a project (async version - recommended)
- *
- * Convenience function that loads and formats the knowledge base
+ * Format a website knowledge base (array format) into a prompt section.
+ */
+function formatWebsiteKnowledgeBasePrompt(content: unknown): string {
+  const entries = Array.isArray(content) ? content : [content];
+  const sections: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+
+    const ps = e.productSummary as Record<string, unknown> | undefined;
+    if (ps) {
+      if (ps.productName) sections.push(`# Product: ${ps.productName}`);
+      if (ps.oneSentenceSummary) sections.push(ps.oneSentenceSummary as string);
+      if (ps.whatItDoes) sections.push(ps.whatItDoes as string);
+      if (Array.isArray(ps.targetUsers) && ps.targetUsers.length > 0) {
+        sections.push(`Target users: ${(ps.targetUsers as string[]).join(", ")}.`);
+      }
+    }
+
+    if (Array.isArray(e.features) && e.features.length > 0) {
+      sections.push("\n### Features");
+      for (const f of e.features) {
+        const feat = f as Record<string, unknown>;
+        if (feat.name) {
+          sections.push(`\n**${feat.name}**`);
+          if (feat.description) sections.push(feat.description as string);
+        }
+      }
+    }
+
+    if (Array.isArray(e.howTos) && e.howTos.length > 0) {
+      sections.push("\n### How-To Guides");
+      for (const h of e.howTos) {
+        const howTo = h as Record<string, unknown>;
+        if (howTo.title) {
+          sections.push(`\n**${howTo.title}**`);
+          if (howTo.description) sections.push(howTo.description as string);
+          if (Array.isArray(howTo.steps) && howTo.steps.length > 0) {
+            sections.push("\n**Steps**");
+            (howTo.steps as string[]).forEach((step, i) =>
+              sections.push(`${i + 1}. ${step}`)
+            );
+          }
+        }
+      }
+    }
+  }
+
+  return sections.join("\n");
+}
+
+// ─── Format dispatcher ────────────────────────────────────────────────────────
+
+/**
+ * Pick the right formatter based on the KB content structure.
+ * DocumentationKnowledgeBase has a `plugin` property; website KB is an array.
+ */
+function formatKbContent(pkb: ProjectKnowledgeBase): string {
+  const c = pkb.content as unknown;
+  if (
+    c &&
+    typeof c === "object" &&
+    !Array.isArray(c) &&
+    (c as Record<string, unknown>).plugin
+  ) {
+    return formatKnowledgeBasePrompt(pkb.content);
+  }
+  return formatWebsiteKnowledgeBasePrompt(c);
+}
+
+// ─── Combined prompt builder ──────────────────────────────────────────────────
+
+/**
+ * Build a combined knowledge-base prompt from all KB entries for a project.
+ * Each KB type gets its own labelled section so the AI can distinguish sources.
+ */
+export function formatAllKnowledgeBasesPrompt(
+  kbs: ProjectKnowledgeBase[]
+): string {
+  if (kbs.length === 0) return "";
+
+  if (kbs.length === 1) {
+    return formatKbContent(kbs[0]);
+  }
+
+  const parts: string[] = [];
+  for (const pkb of kbs) {
+    parts.push(`## ${kbTypeLabel(pkb)}\n`);
+    parts.push(formatKbContent(pkb));
+    parts.push("\n---\n");
+  }
+  return parts.join("\n");
+}
+
+// ─── Public convenience functions ─────────────────────────────────────────────
+
+/**
+ * Load and format all knowledge bases for a project into a prompt string.
+ * This is the primary function used by the AI chat route.
  */
 export async function getKnowledgeBasePromptAsync(
   projectSlug: string | null | undefined
 ): Promise<string> {
-  if (!projectSlug) {
-    return "";
-  }
+  if (!projectSlug) return "";
 
-  const kb = await loadKnowledgeBaseAsync(projectSlug);
-  if (!kb) {
-    return "";
-  }
-
-  return formatKnowledgeBasePrompt(kb);
+  const kbs = await loadAllKnowledgeBases(projectSlug);
+  return formatAllKnowledgeBasesPrompt(kbs);
 }
 
 /**
- * Get knowledge base prompt for a project (sync version - local only)
- *
- * This only checks local files and doesn't fetch from GitHub.
- * Use getKnowledgeBasePromptAsync for full functionality.
+ * Synchronous local-only version (dev / fallback).
  */
 export function getKnowledgeBasePrompt(
   projectSlug: string | null | undefined
 ): string {
-  if (!projectSlug) {
-    return "";
-  }
+  if (!projectSlug) return "";
 
   const kb = loadKnowledgeBase(projectSlug);
-  if (!kb) {
-    return "";
-  }
+  if (!kb) return "";
 
   return formatKnowledgeBasePrompt(kb);
 }

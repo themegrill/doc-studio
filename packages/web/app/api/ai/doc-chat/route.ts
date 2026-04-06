@@ -41,7 +41,9 @@ export async function POST(req: Request) {
 
     // Load knowledge base for this project (if available)
     const projectSlug = documentContext?.projectSlug;
+    console.log(`[doc-chat] projectSlug=${projectSlug ?? "null"}`);
     const knowledgeBasePrompt = await getKnowledgeBasePromptAsync(projectSlug);
+    console.log(`[doc-chat] knowledgeBase loaded=${knowledgeBasePrompt.length > 0}, length=${knowledgeBasePrompt.length}`);
 
     // Build system prompt with document context
     const basePrompt = `You are an AI assistant helping users improve documentation inside a documentation editor.
@@ -294,11 +296,18 @@ Note: For direct editing, users can use the BlockNote AI toolbar (sparkles butto
       ? `
 # PRODUCT FACTUALITY POLICY
 
-The PRODUCT KNOWLEDGE BASE is the authoritative source of truth for the product.
+The PRODUCT KNOWLEDGE BASES below are the authoritative sources of truth for the product.
+Multiple knowledge base types may be present:
+- Uploaded Knowledge Base: manually curated product information
+- Website Knowledge Base: content crawled from the product website
+- Codebase Knowledge Base: content fetched from the product GitHub repository
+
+When multiple knowledge bases are present, treat all of them as valid sources.
+If the same fact appears in multiple sources with minor differences, prefer the most specific or detailed version.
 
 Allowed product-fact sources:
-1. PRODUCT KNOWLEDGE BASE
-2. explicit product-specific user statements in this chat
+1. Any of the PRODUCT KNOWLEDGE BASES below
+2. Explicit product-specific user statements in this chat
 
 Forbidden:
 - assumptions
@@ -314,7 +323,7 @@ When writing or editing documentation:
 - improve wording and structure without expanding unsupported facts
 - never add “helpful” product details unless explicitly supported
 
-PRODUCT KNOWLEDGE BASE:
+PRODUCT KNOWLEDGE BASES:
 ${knowledgeBasePrompt}
 `
       : `

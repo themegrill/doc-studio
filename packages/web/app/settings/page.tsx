@@ -1,5 +1,6 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AISettings } from "@/components/settings/AISettings";
+import { GitHubSettings } from "@/components/settings/GitHubSettings";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db/postgres";
@@ -36,6 +37,11 @@ export default async function SettingsPage() {
           <div>
             <h2 className="text-2xl font-semibold mb-4">AI Configuration</h2>
             <AISettings />
+          </div>
+
+          <div id="github">
+            <h2 className="text-2xl font-semibold mb-4">GitHub Integration</h2>
+            <GitHubSettings />
           </div>
         </div>
       </div>

@@ -154,8 +154,9 @@ export async function POST(
     verifiedAt: vercelData.verified ? new Date().toISOString() : null,
   };
 
+  const existingSettings = safeSettingsObject(project.settings);
   const updatedSettings = {
-    ...(project.settings ?? {}),
+    ...existingSettings,
     deploy: deploySettings,
   };
 
@@ -218,7 +219,7 @@ export async function DELETE(
     }
   }
 
-  const updatedSettings = { ...(project.settings ?? {}) };
+  const updatedSettings = { ...safeSettingsObject(project.settings) };
   delete updatedSettings.deploy;
 
   await sql`
@@ -235,6 +236,34 @@ export async function DELETE(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Safely convert a project.settings value to a plain object.
+ * Guards against corrupted settings (e.g. a string that was spread
+ * character-by-character into an object with numeric keys).
+ */
+function safeSettingsObject(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) return {};
+  const obj = raw as Record<string, unknown>;
+  // Corrupted: all keys are numeric strings (character spread artifact)
+  const keys = Object.keys(obj);
+  if (keys.length > 0 && keys.every((k) => /^\d+$/.test(k))) {
+    try {
+      const recovered = JSON.parse(
+        keys.sort((a, b) => Number(a) - Number(b)).map((k) => obj[k]).join("")
+      );
+      if (recovered && typeof recovered === "object" && !Array.isArray(recovered)) {
+        return recovered as Record<string, unknown>;
+      }
+    } catch { /* fall through */ }
+    return {};
+  }
+  return obj;
+}
 
 function buildDnsRecords(
   domain: string,

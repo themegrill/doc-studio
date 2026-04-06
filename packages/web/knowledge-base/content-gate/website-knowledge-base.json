@@ -1,0 +1,127 @@
+[
+  {
+    "productSummary": {
+      "productName": "ContentGate",
+      "oneSentenceSummary": "ContentGate is a WordPress plugin that restricts access to pages, posts, or entire sites based on user login status, role, and other conditions.",
+      "whatItDoes": "ContentGate allows WordPress site owners to control who can view their content by creating visual access rules without coding. It supports restricting individual pages, posts, or entire websites based on user roles, login status, registration date, and other criteria.",
+      "targetUsers": [
+        "WordPress site owners",
+        "Course creators",
+        "Membership site operators",
+        "Content publishers",
+        "Online community managers",
+        "Client portal administrators"
+      ]
+    },
+    "features": [
+      {
+        "name": "Visual Rule Builder",
+        "description": "Create access restriction rules using a visual interface without writing code. Build conditional logic like 'IF visitor is logged out → hide this page.'",
+        "evidence": [
+          "Make rules like \"IF visitor is logged out → hide this page.\" Build complex logic visually with zero code.",
+          "Easy Rule Builder",
+          "No shortcodes, no PHP, no headaches"
+        ]
+      },
+      {
+        "name": "Role-Based Access Control",
+        "description": "Restrict content based on WordPress user roles including Contributors, Editors, Admins, or any custom roles.",
+        "evidence": [
+          "Target specific WordPress user roles — Contributors, Editors, Admins, or any custom role you've created.",
+          "Choose who sees content based on user role, logged-in status, registration date and more."
+        ]
+      },
+      {
+        "name": "Login Status Restrictions",
+        "description": "Control content visibility based on whether a visitor is logged in or logged out.",
+        "evidence": [
+          "Choose who sees content based on user role, logged-in status, registration date and more.",
+          "Make rules like \"IF visitor is logged out → hide this page.\""
+        ]
+      },
+      {
+        "name": "Instant Rule Activation",
+        "description": "Toggle access rules on or off in real-time without modifying theme files or functions.php.",
+        "evidence": [
+          "Toggle any rule on or off instantly. Test restrictions in real-time without touching theme files or functions.php.",
+          "Toggle the rule on. Your content is now protected — instantly, reliably, beautifully."
+        ]
+      },
+      {
+        "name": "Custom Restriction Messages",
+        "description": "Display fully editable messages to visitors when they don't have access to restricted content.",
+        "evidence": [
+          "Add fully editable message that visitors see when they don't have access to a post or page.",
+          "Write the message visitors see when they're restricted. Brand it, link it, make it yours."
+        ]
+      },
+      {
+        "name": "Whole Site Lock",
+        "description": "Apply a single access rule to protect the entire WordPress site at once.",
+        "evidence": [
+          "Put your entire WordPress site behind a single access rule. Only approved users can view anything at all.",
+          "Select specific pages, posts, or toggle on \"Whole Site\" to protect everything at once."
+        ]
+      },
+      {
+        "name": "Granular Content Protection",
+        "description": "Restrict individual pages, posts, or the entire website with flexible control over each piece of content.",
+        "evidence": [
+          "From a single blog post to your entire website — ContentGate gives you granular control over every piece of content.",
+          "Hide any page you want. Perfect for private lessons, dashboards, or client pages.",
+          "Keep certain blog posts private so only the right people can read them."
+        ]
+      },
+      {
+        "name": "Registration Date Filtering",
+        "description": "Restrict content based on user registration date.",
+        "evidence": [
+          "Choose who sees content based on user role, logged-in status, registration date and more."
+        ]
+      }
+    ],
+    "useCases": [
+      {
+        "title": "Private Pages",
+        "description": "Create private pages for lessons, dashboards, or client-specific content that only authorized users can access."
+      },
+      {
+        "title": "Member Content",
+        "description": "Restrict blog posts and content to members only, keeping premium content private for the right audience."
+      },
+      {
+        "title": "Exclusive Sites",
+        "description": "Lock down an entire website so only approved users can view any content."
+      },
+      {
+        "title": "Online Course",
+        "description": "Protect course materials and lessons behind access rules for enrolled students."
+      },
+      {
+        "title": "Private Forum",
+        "description": "Restrict forum access to specific user roles or logged-in members."
+      }
+    ],
+    "howTos": [
+      {
+        "title": "Set Up Content Restriction",
+        "steps": [
+          "Install the Plugin: Download and activate ContentGate from the WordPress plugin directory",
+          "Create what to Protect: Use the visual rule builder to define your condition (e.g., user login status and user role)",
+          "Choose what to Protect: Select specific pages, posts, or toggle on 'Whole Site' to protect everything at once",
+          "Customize the Message: Write the message visitors see when they're restricted",
+          "Activate & Done: Toggle the rule on to protect your content instantly"
+        ]
+      }
+    ],
+    "openQuestions": [
+      "What is the relationship between ContentGate and User Registration & Membership? The FAQ section mentions User Registration & Membership extensively but it's unclear if this is the same product, a companion plugin, or a different product entirely.",
+      "What specific criteria can be used for registration date filtering?",
+      "Are there limitations on the number of rules in the free version versus paid versions?",
+      "What happens to SEO and search engine indexing when content is restricted?",
+      "Can restrictions be scheduled or time-based?",
+      "Does ContentGate support custom post types beyond pages and posts?",
+      "What are the differences between the free version and paid plans for ContentGate specifically?"
+    ]
+  }
+]

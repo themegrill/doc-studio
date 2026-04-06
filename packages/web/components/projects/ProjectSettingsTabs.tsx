@@ -27,6 +27,7 @@ interface ProjectSettingsTabsProps {
   projectDeploy: DeployState | null;
   currentUserRole: string;
   isSuperAdmin: boolean;
+  githubConfigured: boolean;
 }
 
 type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy";
@@ -41,6 +42,7 @@ export function ProjectSettingsTabs({
   projectDeploy,
   currentUserRole,
   isSuperAdmin,
+  githubConfigured,
 }: ProjectSettingsTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("general");
 
@@ -156,10 +158,11 @@ export function ProjectSettingsTabs({
             </div>
 
             <KnowledgeBaseSettings
-			  projectName={projectName}
+              projectName={projectName}
               projectSlug={projectSlug}
-			  projectMetadata={projectMetadata}
+              projectMetadata={projectMetadata}
               isSuperAdmin={isSuperAdmin}
+              githubConfigured={githubConfigured}
             />
           </div>
         )}

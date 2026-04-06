@@ -112,8 +112,9 @@ export async function POST(
         : (currentDeploy.verifiedAt ?? null),
   };
 
+  const existingSettings = safeSettingsObject(project.settings);
   const updatedSettings = {
-    ...(project.settings ?? {}),
+    ...existingSettings,
     deploy: updatedDeploy,
   };
 
@@ -125,4 +126,26 @@ export async function POST(
   `;
 
   return Response.json({ success: true, status: newStatus, deploy: updatedDeploy });
+}
+
+function safeSettingsObject(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
+  if (typeof raw !== "object" || Array.isArray(raw)) return {};
+  const obj = raw as Record<string, unknown>;
+  const keys = Object.keys(obj);
+  if (keys.length > 0 && keys.every((k) => /^\d+$/.test(k))) {
+    try {
+      const recovered = JSON.parse(
+        keys.sort((a, b) => Number(a) - Number(b)).map((k) => obj[k]).join("")
+      );
+      if (recovered && typeof recovered === "object" && !Array.isArray(recovered)) {
+        return recovered as Record<string, unknown>;
+      }
+    } catch { /* fall through */ }
+    return {};
+  }
+  return obj;
 }

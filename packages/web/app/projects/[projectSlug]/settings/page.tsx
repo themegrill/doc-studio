@@ -40,6 +40,13 @@ export default async function ProjectSettingsPage({
     SELECT role FROM users WHERE id = ${session.user.id}
   `;
 
+  // Fetch global GitHub config to pass to KB settings
+  const [githubSettingsRow] = await sql`
+    SELECT value FROM global_settings WHERE key = 'github.config'
+  `;
+  const githubConfig = githubSettingsRow?.value || {};
+  const githubConfigured = !!(githubConfig.repo as string | undefined)?.trim();
+
   const isSuperAdmin =
     userData?.role === "super_admin" || userData?.role === "admin";
 
@@ -87,6 +94,7 @@ export default async function ProjectSettingsPage({
           projectDeploy={project.settings?.deploy ?? null}
           currentUserRole={effectiveRole}
           isSuperAdmin={isSuperAdmin}
+          githubConfigured={githubConfigured}
         />
       </div>
     </div>
