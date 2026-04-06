@@ -5,6 +5,7 @@ import * as cheerio from "cheerio";
 import pLimit from "p-limit";
 import { URL } from "url";
 import Anthropic from "@anthropic-ai/sdk";
+import postgres from "postgres";
 import type { Cheerio, CheerioAPI } from "cheerio";
 import type { Element } from "domhandler";
 
@@ -13,9 +14,8 @@ const anthropic = new Anthropic({
 });
 
 const START_URL = process.argv[2] ?? "";
-const OUTPUT_PATH = process.argv[3] ?? "knowledge-base.refined.json";
-
-const KB_DIR = path.dirname(OUTPUT_PATH);
+const KB_DIR = process.argv[3] ?? "knowledge-base";
+const PROJECT_SLUG = process.argv[4] ?? "";
 const PROGRESS_PATH = path.join(KB_DIR, "crawl-progress.json");
 const PID_PATH = path.join(KB_DIR, "crawl-pid.txt");
 const LOG_PATH = path.join(KB_DIR, "crawl-log.txt");
@@ -1057,14 +1057,33 @@ async function saveRefinedKnowledgeBase(
     rawKnowledgeBase
   );
 
-  ensureDirExists(OUTPUT_PATH);
-  fs.writeFileSync(
-    OUTPUT_PATH,
-    JSON.stringify(finalKnowledgeBase, null, 2),
-    "utf-8"
-  );
+  const connectionString =
+    process.env.DATABASE_URL ||
+    "postgres://tg_docs_user:tg_docs_password@localhost:5432/tg_docs_db";
+  const sql = postgres(connectionString, { max: 1 });
 
-  console.log(`✅ Refined knowledge base saved to ${OUTPUT_PATH}`);
+  try {
+    const [project] = await sql`SELECT id FROM projects WHERE slug = ${PROJECT_SLUG}`;
+    if (!project) throw new Error(`Project not found: ${PROJECT_SLUG}`);
+
+    await sql`
+      INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
+      VALUES (
+        ${project.id},
+        'website',
+        ${sql.json(JSON.parse(JSON.stringify(finalKnowledgeBase)))},
+        ${sql.json(START_URL ? { siteLink: START_URL } : {})}
+      )
+      ON CONFLICT (project_id, type)
+      DO UPDATE SET
+        content    = EXCLUDED.content,
+        metadata   = EXCLUDED.metadata,
+        updated_at = NOW()
+    `;
+    console.log(`✅ Refined knowledge base saved to database for project: ${PROJECT_SLUG}`);
+  } finally {
+    await sql.end();
+  }
 }
 
 async function runCrawler(): Promise<void> {

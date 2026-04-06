@@ -17,7 +17,6 @@ export async function POST(
   }
 
   const kbDir = path.join(process.cwd(), "knowledge-base", projectSlug);
-  const outputPath = path.join(kbDir, "website-knowledge-base.json");
   const progressPath = path.join(kbDir, "crawl-progress.json");
   const pidPath = path.join(kbDir, "crawl-pid.txt");
 
@@ -48,7 +47,7 @@ export async function POST(
 
   // Use tsx binary directly — shell: true is required on Windows to execute .CMD files
   const tsxBin = path.join(process.cwd(), "node_modules", ".bin", "tsx");
-  const child = spawn(tsxBin, [scriptPath, websiteUrl, outputPath], {
+  const child = spawn(tsxBin, [scriptPath, websiteUrl, kbDir, projectSlug], {
     detached: true,
     stdio: ["ignore", logFd, logFd],
     shell: true,

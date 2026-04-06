@@ -5,6 +5,9 @@ import { DocumentationKnowledgeBase } from "@/types/knowledge-base";
 
 const GITHUB_API_BASE = "https://api.github.com";
 
+type JSONPrimitive = string | number | boolean | null;
+type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
+
 /**
  * POST /api/projects/[projectSlug]/knowledge-base/fetch-codebase
  *
@@ -67,7 +70,9 @@ export async function POST(
   let body: { filePath?: string } = {};
   try {
     body = await request.json();
-  } catch { /* empty body is fine */ }
+  } catch {
+    /* empty body is fine */
+  }
 
   const { filePath } = body;
 
@@ -131,19 +136,19 @@ export async function POST(
   };
 
   await sql`
-    INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
-    VALUES (
-      ${project.id},
-      'codebase',
-      ${sql.json(knowledgeBase as unknown as Record<string, unknown>)},
-      ${sql.json(kbMetadata)}
-    )
-    ON CONFLICT (project_id, type)
-    DO UPDATE SET
-      content    = EXCLUDED.content,
-      metadata   = EXCLUDED.metadata,
-      updated_at = NOW()
-  `;
+	INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
+	VALUES (
+		${project.id},
+		'codebase',
+		${sql.json(toJSONValue(knowledgeBase))},
+		${sql.json(toJSONValue(kbMetadata))}
+	)
+	ON CONFLICT (project_id, type)
+	DO UPDATE SET
+		content    = EXCLUDED.content,
+		metadata   = EXCLUDED.metadata,
+		updated_at = NOW()
+	`;
 
   return NextResponse.json({
     success: true,
@@ -151,4 +156,8 @@ export async function POST(
     branch,
     filePath: resolvedFilePath,
   });
+}
+
+function toJSONValue(value: unknown): JSONValue {
+  return JSON.parse(JSON.stringify(value)) as JSONValue;
 }

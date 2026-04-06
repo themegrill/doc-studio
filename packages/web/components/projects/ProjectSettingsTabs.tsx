@@ -17,6 +17,12 @@ interface DeployState {
   verifiedAt: string | null;
 }
 
+interface KbEntry {
+  type: "upload" | "website" | "codebase";
+  metadata: Record<string, unknown>;
+  updatedAt: string;
+}
+
 interface ProjectSettingsTabsProps {
   projectSlug: string;
   projectId: string;
@@ -28,6 +34,7 @@ interface ProjectSettingsTabsProps {
   currentUserRole: string;
   isSuperAdmin: boolean;
   githubConfigured: boolean;
+  existingKbs: KbEntry[];
 }
 
 type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy";
@@ -43,6 +50,7 @@ export function ProjectSettingsTabs({
   currentUserRole,
   isSuperAdmin,
   githubConfigured,
+  existingKbs,
 }: ProjectSettingsTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("general");
 
@@ -67,11 +75,11 @@ export function ProjectSettingsTabs({
       label: "Deploy",
       icon: Globe,
     },
-    {
-      id: "import" as const,
-      label: "Import",
-      icon: Upload,
-    },
+    // {
+    //   id: "import" as const,
+    //   label: "Import",
+    //   icon: Upload,
+    // },
   ];
 
   return (
@@ -163,6 +171,7 @@ export function ProjectSettingsTabs({
               projectMetadata={projectMetadata}
               isSuperAdmin={isSuperAdmin}
               githubConfigured={githubConfigured}
+              existingKbs={existingKbs}
             />
           </div>
         )}
@@ -185,7 +194,7 @@ export function ProjectSettingsTabs({
           </div>
         )}
 
-        {activeTab === "import" && (
+        {/* {activeTab === "import" && (
           <div>
             <div className="mb-6">
               <h2 className="text-xl font-semibold">Import Documentation</h2>
@@ -196,7 +205,7 @@ export function ProjectSettingsTabs({
 
             <MigrationImport projectSlug={projectSlug} projectId={projectId} />
           </div>
-        )}
+        )} */}
       </div>
     </div>
   );

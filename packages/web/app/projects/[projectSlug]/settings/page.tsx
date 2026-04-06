@@ -47,6 +47,14 @@ export default async function ProjectSettingsPage({
   const githubConfig = githubSettingsRow?.value || {};
   const githubConfigured = !!(githubConfig.repo as string | undefined)?.trim();
 
+  // Fetch existing knowledge base entries (type + metadata only, no content)
+  const existingKbs = await sql`
+    SELECT type, metadata, updated_at
+    FROM project_knowledge_bases
+    WHERE project_id = ${project.id}
+    ORDER BY type
+  `;
+
   const isSuperAdmin =
     userData?.role === "super_admin" || userData?.role === "admin";
 
@@ -95,6 +103,13 @@ export default async function ProjectSettingsPage({
           currentUserRole={effectiveRole}
           isSuperAdmin={isSuperAdmin}
           githubConfigured={githubConfigured}
+          existingKbs={existingKbs.map((row) => ({
+            type: row.type as "upload" | "website" | "codebase",
+            metadata: (row.metadata || {}) as Record<string, unknown>,
+            updatedAt: row.updated_at instanceof Date
+              ? row.updated_at.toISOString()
+              : String(row.updated_at),
+          }))}
         />
       </div>
     </div>

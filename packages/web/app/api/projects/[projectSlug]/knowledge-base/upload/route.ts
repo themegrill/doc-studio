@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 
+type JSONPrimitive = string | number | boolean | null;
+type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
+type JSONObject = { [key: string]: JSONValue };
+
+function toJSONValue(value: unknown): JSONValue {
+  return JSON.parse(JSON.stringify(value)) as JSONValue;
+}
+
 /**
  * POST /api/projects/[projectSlug]/knowledge-base/upload
  *
@@ -43,12 +51,27 @@ export async function POST(
     const body = await request.json();
     content = body?.content;
   } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request body" },
+      { status: 400 }
+    );
   }
 
-  if (!content || typeof content !== "object") {
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
     return NextResponse.json(
       { error: "content must be a non-null JSON object" },
+      { status: 400 }
+    );
+  }
+
+  const jsonContent = toJSONValue(content);
+  if (
+    !jsonContent ||
+    typeof jsonContent !== "object" ||
+    Array.isArray(jsonContent)
+  ) {
+    return NextResponse.json(
+      { error: "content must be a valid JSON object" },
       { status: 400 }
     );
   }
@@ -58,8 +81,8 @@ export async function POST(
     VALUES (
       ${project.id},
       'upload',
-      ${sql.json(content as Record<string, unknown>)},
-      ${sql.json({})}
+      ${sql.json(jsonContent)},
+      ${sql.json({} as JSONObject)}
     )
     ON CONFLICT (project_id, type)
     DO UPDATE SET

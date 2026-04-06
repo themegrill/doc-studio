@@ -9,6 +9,10 @@ import {
 } from "@/lib/vercel-client";
 import { NextRequest } from "next/server";
 
+type JSONPrimitive = string | number | boolean | null;
+type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
+type JSONObject = { [key: string]: JSONValue };
+
 /**
  * GET /api/projects/[projectSlug]/domain
  * Returns the current domain config for the project.
@@ -79,8 +83,7 @@ export async function POST(
     return Response.json({ error: "Domain is required" }, { status: 400 });
   }
 
-  const domainRegex =
-    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+  const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
   if (!domainRegex.test(domain)) {
     return Response.json({ error: "Invalid domain format" }, { status: 400 });
   }
@@ -102,7 +105,12 @@ export async function POST(
     });
   } catch (err) {
     return Response.json(
-      { error: err instanceof Error ? err.message : "Failed to resolve Vercel project" },
+      {
+        error:
+          err instanceof Error
+            ? err.message
+            : "Failed to resolve Vercel project",
+      },
       { status: 502 }
     );
   }
@@ -143,7 +151,7 @@ export async function POST(
 
   const dnsRecords = buildDnsRecords(domain, configData, vercelData);
 
-  const deploySettings = {
+  const deploySettings: JSONObject = {
     domain,
     status: vercelData.verified ? "verified" : "pending_dns",
     vercelProjectId,
@@ -155,18 +163,18 @@ export async function POST(
   };
 
   const existingSettings = safeSettingsObject(project.settings);
-  const updatedSettings = {
+  const updatedSettings: JSONObject = {
     ...existingSettings,
     deploy: deploySettings,
   };
 
   await sql`
-    UPDATE projects
-    SET domain = ${domain},
-        settings = ${sql.json(updatedSettings)},
-        updated_at = NOW()
-    WHERE id = ${project.id}
-  `;
+  UPDATE projects
+  SET domain = ${domain},
+      settings = ${sql.json(updatedSettings)},
+      updated_at = NOW()
+  WHERE id = ${project.id}
+`;
 
   return Response.json({ success: true, deploy: deploySettings });
 }
@@ -209,7 +217,9 @@ export async function DELETE(
 
   if (isVercelConfigured()) {
     try {
-      const vercelProjectId = await getOrCreateVercelClientProjectId(projectSlug);
+      const vercelProjectId = await getOrCreateVercelClientProjectId(
+        projectSlug
+      );
       await fetch(
         `https://api.vercel.com/v9/projects/${vercelProjectId}/domains/${project.domain}`,
         { method: "DELETE", headers: vercelHeaders() }
@@ -242,27 +252,47 @@ export async function DELETE(
  * Guards against corrupted settings (e.g. a string that was spread
  * character-by-character into an object with numeric keys).
  */
-function safeSettingsObject(raw: unknown): Record<string, unknown> {
+function safeSettingsObject(raw: unknown): JSONObject {
   if (!raw) return {};
+
   if (typeof raw === "string") {
-    try { return JSON.parse(raw); } catch { return {}; }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as JSONObject;
+      }
+      return {};
+    } catch {
+      return {};
+    }
   }
+
   if (typeof raw !== "object" || Array.isArray(raw)) return {};
+
   const obj = raw as Record<string, unknown>;
-  // Corrupted: all keys are numeric strings (character spread artifact)
   const keys = Object.keys(obj);
+
   if (keys.length > 0 && keys.every((k) => /^\d+$/.test(k))) {
     try {
       const recovered = JSON.parse(
-        keys.sort((a, b) => Number(a) - Number(b)).map((k) => obj[k]).join("")
-      );
-      if (recovered && typeof recovered === "object" && !Array.isArray(recovered)) {
-        return recovered as Record<string, unknown>;
+        keys
+          .sort((a, b) => Number(a) - Number(b))
+          .map((k) => String(obj[k] ?? ""))
+          .join("")
+      ) as unknown;
+
+      if (
+        recovered &&
+        typeof recovered === "object" &&
+        !Array.isArray(recovered)
+      ) {
+        return recovered as JSONObject;
       }
-    } catch { /* fall through */ }
+    } catch {}
     return {};
   }
-  return obj;
+
+  return obj as JSONObject;
 }
 
 function buildDnsRecords(
