@@ -5,7 +5,13 @@ import { getAIConfig } from "@/lib/ai-config";
 import { list } from "@vercel/blob";
 import { runUiFlowExtraction, type ImageBuffer } from "@/lib/ui-flow-extractor";
 
-type JSONValue = string | number | boolean | null | JSONValue[] | { [k: string]: JSONValue };
+type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [k: string]: JSONValue };
 
 function toJSON(v: unknown): JSONValue {
   return JSON.parse(JSON.stringify(v)) as JSONValue;
@@ -21,14 +27,18 @@ export async function POST(
   }
 
   const sql = getDb();
-  const [userData] = await sql`SELECT role FROM users WHERE id = ${session.user.id}`;
+  const [userData] =
+    await sql`SELECT role FROM users WHERE id = ${session.user.id}`;
   if (!userData || !["admin", "super_admin"].includes(userData.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { projectSlug } = await params;
-  const [project] = await sql`SELECT id, name FROM projects WHERE slug = ${projectSlug}`;
-  if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  const [project] =
+    await sql`SELECT id, name FROM projects WHERE slug = ${projectSlug}`;
+  if (!project) {
+    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
 
   const { blobs } = await list({ prefix: `ui-flow-images/${projectSlug}/` });
   if (blobs.length === 0) {
@@ -41,7 +51,10 @@ export async function POST(
   const config = await getAIConfig();
   const apiKey = config.apiKey || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "AI API key is not configured" }, { status: 503 });
+    return NextResponse.json(
+      { error: "AI API key is not configured" },
+      { status: 503 }
+    );
   }
 
   // Fetch image data from Vercel Blob
@@ -50,9 +63,11 @@ export async function POST(
     try {
       const res = await fetch(blob.url);
       if (!res.ok) continue;
+
       const buffer = Buffer.from(await res.arrayBuffer());
-      const filename = blob.pathname.split("/").pop()!;
-      const mimeType = blob.contentType || "image/png";
+      const filename = blob.pathname.split("/").pop() ?? "image.png";
+      const mimeType = res.headers.get("content-type") || "image/png";
+
       images.push({ filename, data: buffer, mimeType });
     } catch {
       // Skip blobs that can't be fetched
@@ -93,15 +108,18 @@ export async function POST(
   }
 
   const content = toJSON(result.knowledgebase);
-  const metadata = toJSON({ summary: result.summary, imageCount: result.summary.processed });
+  const metadata = toJSON({
+    summary: result.summary,
+    imageCount: result.summary.processed,
+  });
 
   await sql`
     INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
     VALUES (
       ${project.id},
       'ui_flow',
-      ${sql.json(content as Record<string, unknown>)},
-      ${sql.json(metadata as Record<string, unknown>)}
+      ${sql.json(content as Parameters<typeof sql.json>[0])},
+      ${sql.json(metadata as Parameters<typeof sql.json>[0])}
     )
     ON CONFLICT (project_id, type)
     DO UPDATE SET
@@ -110,5 +128,9 @@ export async function POST(
       updated_at = NOW()
   `;
 
-  return NextResponse.json({ success: true, summary: result.summary, failures: result.failures });
+  return NextResponse.json({
+    success: true,
+    summary: result.summary,
+    failures: result.failures,
+  });
 }

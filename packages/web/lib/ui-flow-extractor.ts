@@ -199,40 +199,59 @@ async function analyzeImageBuffer(
 ): Promise<{ ok: true; screen: UiFlowScreen } | { ok: false; error: string }> {
   try {
     const base64 = image.data.toString("base64");
-    const mediaType = image.mimeType as "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+    const mediaType = image.mimeType as
+      | "image/png"
+      | "image/jpeg"
+      | "image/gif"
+      | "image/webp";
 
     const response = await client.messages.create({
       model,
       max_tokens: 3000,
       system: kbPrompt(),
-      messages: [{
-        role: "user",
-        content: [
-          { type: "text", text: "Analyze this UI design artifact and extract documentation-oriented knowledge. Focus on visible screen title, purpose, actions, fields, labels, messages, states, and likely navigation. Return only valid JSON matching the schema." },
-          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-        ],
-      }],
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analyze this UI design artifact and extract documentation-oriented knowledge. Focus on visible screen title, purpose, actions, fields, labels, messages, states, and likely navigation. Return only valid JSON matching the schema.",
+            },
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: base64 },
+            },
+          ],
+        },
+      ],
     });
 
     const text = response.content
-      .filter((b): b is { type: "text"; text: string } => b.type === "text")
-      .map((b) => b.text)
+      .filter((b) => b.type === "text")
+      .map((b) => ("text" in b ? b.text : ""))
       .join("\n")
       .trim();
 
     const parsed = extractJson(text);
-    if (!parsed) return { ok: false, error: "Failed to parse AI response as JSON" };
+    if (!parsed)
+      return { ok: false, error: "Failed to parse AI response as JSON" };
 
     const screen = normalizeScreen(parsed, image.filename);
     return { ok: true, screen };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }
 
 // ─── Merge screens into KB ────────────────────────────────────────────────────
 
-function mergeScreens(projectName: string, screens: UiFlowScreen[]): UiFlowKnowledgeBase {
+function mergeScreens(
+  projectName: string,
+  screens: UiFlowScreen[]
+): UiFlowKnowledgeBase {
   const componentSet = new Set<string>();
   const questionSet = new Set<string>();
   const flowMap = new Map<string, UiFlowKnowledgeBase["flows"][0]>();
@@ -302,7 +321,11 @@ export async function runUiFlowExtraction(
 
   return {
     knowledgebase,
-    summary: { processed: images.length, succeeded: screens.length, failed: failures.length },
+    summary: {
+      processed: images.length,
+      succeeded: screens.length,
+      failed: failures.length,
+    },
     failures,
   };
 }

@@ -50,6 +50,12 @@ function toProgressResponse(session: CrawlSessionMeta) {
   };
 }
 
+type SqlJsonInput = Parameters<ReturnType<typeof getDb>["json"]>[0];
+
+function asJson<T>(value: T): SqlJsonInput {
+  return value as unknown as SqlJsonInput;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ projectSlug: string }> }
@@ -68,7 +74,11 @@ export async function GET(
   `;
 
   if (!session) {
-    return NextResponse.json({ status: "idle", progress: 0, message: "Not started" });
+    return NextResponse.json({
+      status: "idle",
+      progress: 0,
+      message: "Not started",
+    });
   }
 
   // Terminal states — just return current state
@@ -84,7 +94,9 @@ export async function GET(
 
   // ── Crawling phase ──────────────────────────────────────────────────────────
   if (session.status === "crawling") {
-    const [data] = await sql<{ queue_urls: string[]; visited_urls: string[] }[]>`
+    const [data] = await sql<
+      { queue_urls: string[]; visited_urls: string[] }[]
+    >`
       SELECT queue_urls, visited_urls FROM crawl_sessions WHERE project_slug = ${projectSlug}
     `;
 
@@ -164,18 +176,23 @@ export async function GET(
     `;
     const existingRawPages: KnowledgeBaseItem[] = rawData.raw_pages ?? [];
     const newRawPages = [...existingRawPages, ...result.crawled];
-    const newProgress = Math.min(Math.round((newVisitedCount / MAX_PAGES) * 50), 49);
+    const newProgress = Math.min(
+      Math.round((newVisitedCount / MAX_PAGES) * 50),
+      49
+    );
 
     await sql`
       UPDATE crawl_sessions SET
-        queue_urls    = ${sql.json(newQueue)},
-        visited_urls  = ${sql.json(newVisited)},
-        raw_pages     = ${sql.json(newRawPages)},
-        visited_count = ${newVisitedCount},
+        queue_urls      = ${sql.json(asJson(newQueue))},
+        visited_urls    = ${sql.json(asJson(newVisited))},
+        raw_pages       = ${sql.json(asJson(newRawPages))},
+        visited_count   = ${newVisitedCount},
         raw_pages_count = ${newRawPages.length},
-        progress      = ${newProgress},
-        message       = ${"Crawling pages... (" + newVisitedCount + "/" + MAX_PAGES + ")"},
-        updated_at    = NOW()
+        progress        = ${newProgress},
+        message         = ${
+          "Crawling pages... (" + newVisitedCount + "/" + MAX_PAGES + ")"
+        },
+        updated_at      = NOW()
       WHERE project_slug = ${projectSlug}
     `;
 
@@ -195,14 +212,18 @@ export async function GET(
 
     if (batchIndex >= totalBatches) {
       // All batches done — save final KB to project_knowledge_bases
-      const [refinedData] = await sql<{ refined_batches: RefinedKnowledgeBatch[] }[]>`
+      const [refinedData] = await sql<
+        { refined_batches: RefinedKnowledgeBatch[] }[]
+      >`
         SELECT refined_batches FROM crawl_sessions WHERE project_slug = ${projectSlug}
       `;
-      const refinedBatches: RefinedKnowledgeBatch[] = refinedData.refined_batches ?? [];
+      const refinedBatches: RefinedKnowledgeBatch[] =
+        refinedData.refined_batches ?? [];
 
       const [project] = await sql<{ id: string }[]>`
         SELECT id FROM projects WHERE slug = ${projectSlug}
       `;
+
       if (!project) {
         await sql`
           UPDATE crawl_sessions SET
@@ -210,15 +231,18 @@ export async function GET(
             error = 'Project not found.', completed_at = NOW(), updated_at = NOW()
           WHERE project_slug = ${projectSlug}
         `;
-        return NextResponse.json({ status: "error", message: "Project not found." }, { status: 404 });
+        return NextResponse.json(
+          { status: "error", message: "Project not found." },
+          { status: 404 }
+        );
       }
 
       await sql`
         INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
         VALUES (
           ${project.id}, 'website',
-          ${sql.json(refinedBatches)},
-          ${sql.json({ siteLink: session.start_url })}
+          ${sql.json(asJson(refinedBatches))},
+          ${sql.json(asJson({ siteLink: session.start_url }))}
         )
         ON CONFLICT (project_id, type) DO UPDATE SET
           content    = EXCLUDED.content,
@@ -248,11 +272,18 @@ export async function GET(
     await sql`UPDATE crawl_sessions SET updated_at = NOW() WHERE project_slug = ${projectSlug}`;
 
     // Fetch raw pages for this batch
-    const [rawData] = await sql<{ raw_pages: KnowledgeBaseItem[]; refined_batches: RefinedKnowledgeBatch[] }[]>`
+    const [rawData] = await sql<
+      {
+        raw_pages: KnowledgeBaseItem[];
+        refined_batches: RefinedKnowledgeBatch[];
+      }[]
+    >`
       SELECT raw_pages, refined_batches FROM crawl_sessions WHERE project_slug = ${projectSlug}
     `;
+
     const rawPages: KnowledgeBaseItem[] = rawData.raw_pages ?? [];
-    const existingRefined: RefinedKnowledgeBatch[] = rawData.refined_batches ?? [];
+    const existingRefined: RefinedKnowledgeBatch[] =
+      rawData.refined_batches ?? [];
     const batches = chunkArray(rawPages.map(stripLargeFields), PAGE_BATCH_SIZE);
     const pageBatch = batches[batchIndex];
 
@@ -267,7 +298,10 @@ export async function GET(
           error = ${message}, completed_at = NOW(), updated_at = NOW()
         WHERE project_slug = ${projectSlug}
       `;
-      return NextResponse.json({ status: "error", message: `AI refinement failed: ${message}` }, { status: 500 });
+      return NextResponse.json(
+        { status: "error", message: `AI refinement failed: ${message}` },
+        { status: 500 }
+      );
     }
 
     const newRefined = [...existingRefined, refined];
@@ -276,10 +310,12 @@ export async function GET(
 
     await sql`
       UPDATE crawl_sessions SET
-        refined_batches      = ${sql.json(newRefined)},
+        refined_batches      = ${sql.json(asJson(newRefined))},
         current_refine_batch = ${nextBatch},
         progress             = ${refineProgress},
-        message              = ${"Refining with AI... (batch " + nextBatch + "/" + totalBatches + ")"},
+        message              = ${
+          "Refining with AI... (batch " + nextBatch + "/" + totalBatches + ")"
+        },
         updated_at           = NOW()
       WHERE project_slug = ${projectSlug}
     `;
