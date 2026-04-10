@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+
+export const maxDuration = 60;
 import { getDb } from "@/lib/db/postgres";
 import { getAIConfig } from "@/lib/ai-config";
 import { list } from "@vercel/blob";
@@ -66,7 +68,13 @@ export async function POST(
 
       const buffer = Buffer.from(await res.arrayBuffer());
       const filename = blob.pathname.split("/").pop() ?? "image.png";
-      const mimeType = res.headers.get("content-type") || "image/png";
+      const rawMime = (res.headers.get("content-type") || "image/png").split(";")[0].trim();
+      // Normalize to types accepted by the Anthropic API
+      const mimeType =
+        rawMime === "image/jpg" ? "image/jpeg" :
+        ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(rawMime)
+          ? rawMime
+          : "image/png";
 
       images.push({ filename, data: buffer, mimeType });
     } catch {
@@ -87,7 +95,7 @@ export async function POST(
       images,
       projectName: project.name as string,
       apiKey,
-      model: config.defaultModel || "claude-sonnet-4-5",
+      model: config.defaultModel || "claude-sonnet-4-6",
     });
   } catch (err) {
     return NextResponse.json(

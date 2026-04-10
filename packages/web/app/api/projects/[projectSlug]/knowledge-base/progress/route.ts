@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db/postgres";
 import {
   crawlPageBatch,
   refineBatch,
+  mergeRefinedBatches,
   getDomain,
   chunkArray,
   stripLargeFields,
@@ -237,11 +238,13 @@ export async function GET(
         );
       }
 
+      const mergedBatches = mergeRefinedBatches(refinedBatches);
+
       await sql`
         INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
         VALUES (
           ${project.id}, 'website',
-          ${sql.json(asJson(refinedBatches))},
+          ${sql.json(asJson(mergedBatches))},
           ${sql.json(asJson({ siteLink: session.start_url }))}
         )
         ON CONFLICT (project_id, type) DO UPDATE SET
@@ -289,7 +292,7 @@ export async function GET(
 
     let refined: RefinedKnowledgeBatch;
     try {
-      refined = await refineBatch(pageBatch, batchIndex + 1, totalBatches);
+      refined = await refineBatch(pageBatch, batchIndex + 1, totalBatches, getDomain(session.start_url));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await sql`

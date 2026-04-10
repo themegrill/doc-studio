@@ -207,7 +207,7 @@ function cleanText(text: string): string {
 function isJunkLine(line: string): boolean {
   if (line.length < 2) return true;
   if (/^(skip to content|scroll to top)$/i.test(line)) return true;
-  if (/^(get started|get contentgate|join waitlist|email|message|learn more)$/i.test(line)) return true;
+  if (/^(get started|join waitlist|email|message|learn more)$/i.test(line)) return true;
   if (/^\d+$/.test(line)) return true;
   if (/^(∞|100%|2 min|0)$/i.test(line)) return true;
   if (/^[#>*\-\s]+$/.test(line)) return true;
@@ -386,6 +386,53 @@ function getToolInput(response: unknown, toolName: string): unknown {
   return block.input;
 }
 
+function toStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter(isString);
+}
+
+function sanitizeRefinedBatch(v: unknown): unknown {
+  if (!isRecord(v)) return v;
+
+  const ps = isRecord(v.productSummary) ? v.productSummary : {};
+  const productSummary: ProductSummary = {
+    productName: isString(ps.productName) ? ps.productName : "",
+    oneSentenceSummary: isString(ps.oneSentenceSummary) ? ps.oneSentenceSummary : "",
+    whatItDoes: isString(ps.whatItDoes) ? ps.whatItDoes : "",
+    targetUsers: toStringArray(ps.targetUsers),
+  };
+
+  const features: Feature[] = Array.isArray(v.features)
+    ? v.features.filter(isRecord).map((f) => ({
+        name: isString(f.name) ? f.name : "",
+        description: isString(f.description) ? f.description : "",
+        evidence: toStringArray(f.evidence),
+      })).filter((f) => f.name)
+    : [];
+
+  const useCases: UseCase[] = Array.isArray(v.useCases)
+    ? v.useCases.filter(isRecord).map((u) => ({
+        title: isString(u.title) ? u.title : "",
+        description: isString(u.description) ? u.description : "",
+      })).filter((u) => u.title)
+    : [];
+
+  const howTos: HowTo[] = Array.isArray(v.howTos)
+    ? v.howTos.filter(isRecord).map((h) => ({
+        title: isString(h.title) ? h.title : "",
+        steps: toStringArray(h.steps),
+      })).filter((h) => h.title)
+    : [];
+
+  return {
+    productSummary,
+    features,
+    useCases,
+    howTos,
+    openQuestions: toStringArray(v.openQuestions),
+  };
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /** Crawl a batch of URLs in parallel. Returns extracted pages and discovered links. */
@@ -450,11 +497,12 @@ export async function refineBatch(
   pages: KnowledgeBaseItem[],
   batchNumber: number,
   totalBatches: number,
+  startDomain: string,
 ): Promise<RefinedKnowledgeBatch> {
   console.log(`Refining batch ${batchNumber}/${totalBatches}...`);
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-5",
-    max_tokens: 4000,
+    model: "claude-sonnet-4-6",
+    max_tokens: 8000,
     temperature: 0,
     tools: [{
       ...refineBatchTool,
@@ -463,10 +511,87 @@ export async function refineBatch(
     tool_choice: { type: "tool", name: "extract_kb_signals" },
     messages: [{
       role: "user",
-      content: `Refine these crawled website pages into a documentation-ready knowledge base batch.\n\nRules:\n- Use only the provided input.\n- Remove boilerplate and repeated marketing CTA language.\n- Do not invent unsupported product behavior.\n- Capture product, features, use cases, terminology, and how-to guidance.\n- Put uncertainty into openQuestions.\n\nInput pages:\n${JSON.stringify(pages)}`.trim(),
+      content: `Refine these crawled website pages into a documentation-ready knowledge base batch.
+
+The website being documented is: ${startDomain}
+
+Rules:
+- Use only the provided input.
+- Remove boilerplate and repeated marketing CTA language.
+- Do not invent unsupported product behavior.
+- Capture product, features, use cases, terminology, and how-to guidance.
+- Put uncertainty into openQuestions.
+- IMPORTANT: Only extract information about the product on ${startDomain}. If the pages contain content about unrelated products, plugins, or services from other vendors, discard that content entirely. Do not reference other product names in openQuestions or any other field.
+- If the pages contain no useful product information (e.g. only blog posts, default WordPress content, or unrelated content), return empty arrays for features, useCases, and howTos.
+
+Input pages:
+${JSON.stringify(pages)}`.trim(),
     }],
   });
   const toolInput = getToolInput(response, "extract_kb_signals");
-  if (!isRefinedKnowledgeBatch(toolInput)) throw new Error("Claude returned invalid structured tool output.");
+  if (!isRefinedKnowledgeBatch(toolInput)) {
+    // Attempt to sanitize: coerce known fields to expected types
+    const sanitized = sanitizeRefinedBatch(toolInput);
+    if (!isRefinedKnowledgeBatch(sanitized)) {
+      console.error("Invalid tool output:", JSON.stringify(toolInput, null, 2));
+      throw new Error("Claude returned invalid structured tool output.");
+    }
+    return sanitized;
+  }
   return toolInput;
+}
+
+/**
+ * Merge all refined batches into a single deduplicated batch.
+ * - Drops empty batches (no features, useCases, or howTos).
+ * - Deduplicates features, useCases, howTos, and openQuestions by their key field.
+ * - Picks the most complete productSummary.
+ */
+export function mergeRefinedBatches(batches: RefinedKnowledgeBatch[]): RefinedKnowledgeBatch[] {
+  const nonEmpty = batches.filter(
+    (b) => b.features.length > 0 || b.useCases.length > 0 || b.howTos.length > 0
+  );
+
+  if (nonEmpty.length === 0) return batches; // Nothing to merge — return original as fallback
+
+  // Pick the productSummary with the most content
+  const bestSummary = nonEmpty.reduce((best, batch) => {
+    const score = (s: ProductSummary) =>
+      s.productName.length + s.oneSentenceSummary.length + s.whatItDoes.length + s.targetUsers.length;
+    return score(batch.productSummary) > score(best.productSummary) ? batch : best;
+  }).productSummary;
+
+  const seenFeatures = new Set<string>();
+  const features = nonEmpty.flatMap((b) => b.features).filter((f) => {
+    const key = f.name.toLowerCase().trim();
+    if (seenFeatures.has(key)) return false;
+    seenFeatures.add(key);
+    return true;
+  });
+
+  const seenUseCases = new Set<string>();
+  const useCases = nonEmpty.flatMap((b) => b.useCases).filter((u) => {
+    const key = u.title.toLowerCase().trim();
+    if (seenUseCases.has(key)) return false;
+    seenUseCases.add(key);
+    return true;
+  });
+
+  const seenHowTos = new Set<string>();
+  const howTos = nonEmpty.flatMap((b) => b.howTos).filter((h) => {
+    const key = h.title.toLowerCase().trim();
+    if (seenHowTos.has(key)) return false;
+    seenHowTos.add(key);
+    return true;
+  });
+
+  const seenQuestions = new Set<string>();
+  const openQuestions = nonEmpty.flatMap((b) => b.openQuestions).filter((q) => {
+    const key = q.toLowerCase().trim();
+    if (seenQuestions.has(key)) return false;
+    seenQuestions.add(key);
+    return true;
+  });
+
+  return [{ productSummary: bestSummary, features, useCases, howTos, openQuestions }];
 }

@@ -297,7 +297,7 @@ export interface RunExtractionOptions {
 export async function runUiFlowExtraction(
   options: RunExtractionOptions
 ): Promise<UiFlowExtractionResult> {
-  const { images, projectName, apiKey, model = "claude-sonnet-4-5" } = options;
+  const { images, projectName, apiKey, model = "claude-sonnet-4-6" } = options;
 
   if (images.length === 0) {
     throw new Error("No images provided for extraction");
