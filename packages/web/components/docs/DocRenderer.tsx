@@ -932,9 +932,15 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       }
 
       // Save document content and publish
+      // When editing a section overview title, use sectionTitle as the doc title too
+      // so ContentManager doesn't revert the navigation title back to the old value
+      const effectiveTitle =
+        currentEditorState.isEditingSectionTitle && currentEditorState.sectionTitle
+          ? currentEditorState.sectionTitle
+          : currentEditorState.title;
       const updatedDoc = {
         slug: doc.slug,
-        title: currentEditorState.title,
+        title: effectiveTitle,
         description: currentEditorState.description,
         blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
         published: true,
@@ -954,6 +960,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           isEditing: false,
           isEditingSectionTitle: false,
           sectionTitle: undefined,
+          title: effectiveTitle,
         }));
         editingContext.setIsEditing(false);
         editingContext.setIsSaving(false);

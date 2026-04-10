@@ -174,7 +174,7 @@ export default function SectionPage({
               {error && <p className="text-sm text-red-500">{error}</p>}
             </div>
           ) : (
-            <h1 className="text-3xl font-bold mb-2">{sectionTitle}</h1>
+            <h1 className="text-3xl font-bold mb-2">{title}</h1>
           )}
         </div>
 
