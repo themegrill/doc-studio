@@ -13,17 +13,14 @@ import {
 export const maxDuration = 60;
 
 const DEBOUNCE_MS = 5_000;
-const VALID_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"] as const;
+const VALID_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
-type JSONValue = string | number | boolean | null | JSONValue[] | { [k: string]: JSONValue };
-function toJSON(v: unknown): JSONValue {
-  return JSON.parse(JSON.stringify(v)) as JSONValue;
-}
-function asJson<T>(v: T) {
-  return v as unknown as Parameters<ReturnType<typeof import("@/lib/db/postgres").getDb>["json"]>[0];
+type SqlJsonInput = Parameters<ReturnType<typeof getDb>["json"]>[0];
+function asJson<T>(value: T): SqlJsonInput {
+  return value as unknown as SqlJsonInput;
 }
 
-interface PendingBlob { url: string; filename: string; mimeType: string }
+interface PendingBlob { url: string; filename: string }
 
 interface JobMetadata {
   _jobStatus: "processing" | "done" | "error";
@@ -31,26 +28,6 @@ interface JobMetadata {
   _processed: number;
   _total: number;
   _failures: Array<{ filename: string; error: string }>;
-  imageCount?: number;
-}
-
-// ── Auth + project helper ─────────────────────────────────────────────────────
-
-async function resolveProject(projectSlug: string) {
-  const sql = getDb();
-  const [project] = await sql<{ id: string; name: string }[]>`
-    SELECT id, name FROM projects WHERE slug = ${projectSlug}
-  `;
-  return { sql, project: project ?? null };
-}
-
-async function checkAuth() {
-  const session = await auth();
-  if (!session?.user?.id) return null;
-  const sql = getDb();
-  const [userData] = await sql<{ role: string }[]>`SELECT role FROM users WHERE id = ${session.user.id}`;
-  if (!userData || !["admin", "super_admin"].includes(userData.role)) return null;
-  return session;
 }
 
 // ── POST — start job ──────────────────────────────────────────────────────────
@@ -59,12 +36,21 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ projectSlug: string }> }
 ) {
-  if (!(await checkAuth())) {
+  const session = await auth();
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const sql = getDb();
+  const [userData] = await sql<{ role: string }[]>`SELECT role FROM users WHERE id = ${session.user.id}`;
+  if (!userData || !["admin", "super_admin"].includes(userData.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { projectSlug } = await params;
-  const { sql, project } = await resolveProject(projectSlug);
+  const [project] = await sql<{ id: string; name: string }[]>`
+    SELECT id, name FROM projects WHERE slug = ${projectSlug}
+  `;
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
   const config = await getAIConfig();
@@ -80,13 +66,10 @@ export async function POST(
     );
   }
 
-  // Resolve mime types from blob metadata (no image download yet)
-  const pendingBlobs: PendingBlob[] = blobs.map((blob) => {
-    const filename = blob.pathname.split("/").pop() ?? "image.png";
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "png";
-    const mimeType = ext === "jpg" ? "image/jpeg" : ext === "png" ? "image/png" : "image/jpeg";
-    return { url: blob.url, filename, mimeType };
-  });
+  const pendingBlobs: PendingBlob[] = blobs.map((blob) => ({
+    url: blob.url,
+    filename: blob.pathname.split("/").pop() ?? "image.png",
+  }));
 
   const metadata: JobMetadata = {
     _jobStatus: "processing",
@@ -97,7 +80,7 @@ export async function POST(
   };
 
   const emptyKb: UiFlowKnowledgeBase = {
-    project: { name: project.name },
+    project: { name: project.name as string },
     screens: [],
     flows: [],
     components: [],
@@ -108,8 +91,8 @@ export async function POST(
     INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
     VALUES (
       ${project.id}, 'ui_flow',
-      ${sql.json(asJson(toJSON(emptyKb)))},
-      ${sql.json(asJson(toJSON(metadata)))}
+      ${sql.json(asJson(emptyKb))},
+      ${sql.json(asJson(metadata))}
     )
     ON CONFLICT (project_id, type) DO UPDATE SET
       content    = EXCLUDED.content,
@@ -120,21 +103,34 @@ export async function POST(
   return NextResponse.json({ status: "processing", total: pendingBlobs.length, processed: 0 });
 }
 
-// ── GET — poll: process one image ─────────────────────────────────────────────
+// ── GET — poll: process one image per call ────────────────────────────────────
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ projectSlug: string }> }
 ) {
-  if (!(await checkAuth())) {
+  const session = await auth();
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const sql = getDb();
+  const [userData] = await sql<{ role: string }[]>`SELECT role FROM users WHERE id = ${session.user.id}`;
+  if (!userData || !["admin", "super_admin"].includes(userData.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const { projectSlug } = await params;
-  const { sql, project } = await resolveProject(projectSlug);
+  const [project] = await sql<{ id: string; name: string }[]>`
+    SELECT id, name FROM projects WHERE slug = ${projectSlug}
+  `;
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
 
-  const [row] = await sql<{ content: UiFlowKnowledgeBase; metadata: JobMetadata; updated_at: string }[]>`
+  const [row] = await sql<{
+    content: UiFlowKnowledgeBase;
+    metadata: JobMetadata;
+    updated_at: string;
+  }[]>`
     SELECT content, metadata, updated_at
     FROM project_knowledge_bases
     WHERE project_id = ${project.id} AND type = 'ui_flow'
@@ -145,48 +141,58 @@ export async function GET(
   const meta = row.metadata;
 
   if (meta._jobStatus === "done") {
-    return NextResponse.json({ status: "done", processed: meta._processed, total: meta._total, failures: meta._failures });
-  }
-  if (meta._jobStatus === "error") {
-    return NextResponse.json({ status: "error", processed: meta._processed, total: meta._total });
+    return NextResponse.json({
+      status: "done",
+      processed: meta._processed,
+      total: meta._total,
+      failures: meta._failures,
+    });
   }
 
-  // Debounce: another request is already working
+  // Debounce: skip if another poll is already working
   const msSinceUpdate = Date.now() - new Date(row.updated_at).getTime();
   if (msSinceUpdate < DEBOUNCE_MS) {
     return NextResponse.json({ status: "processing", processed: meta._processed, total: meta._total });
   }
 
-  // Claim the lock
-  await sql`UPDATE project_knowledge_bases SET updated_at = NOW()
-            WHERE project_id = ${project.id} AND type = 'ui_flow'`;
+  // Claim the lock immediately
+  await sql`
+    UPDATE project_knowledge_bases SET updated_at = NOW()
+    WHERE project_id = ${project.id} AND type = 'ui_flow'
+  `;
 
   if (meta._pendingBlobs.length === 0) {
-    // Nothing left — finalize (shouldn't normally reach here but handle gracefully)
-    await finalize(sql, project.id, row.content, meta);
+    // Already done — finalize
+    const finalKb = mergeScreens(project.name as string, row.content.screens ?? []);
+    await saveResult(sql, project.id, finalKb, meta);
     return NextResponse.json({ status: "done", processed: meta._processed, total: meta._total, failures: meta._failures });
   }
-
-  // Pop the first pending blob
-  const [next, ...remaining] = meta._pendingBlobs;
 
   const config = await getAIConfig();
   const apiKey = (config.apiKey || process.env.ANTHROPIC_API_KEY) ?? "";
   const model = config.defaultModel || "claude-sonnet-4-6";
 
-  // Fetch + process single image
+  const [next, ...remaining] = meta._pendingBlobs;
+
+  // Fetch + normalize mime type
   let screen: UiFlowScreen | null = null;
   let failure: { filename: string; error: string } | null = null;
 
   try {
-    const res = await fetch(next.url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const rawMime = (res.headers.get("content-type") || "image/png").split(";")[0].trim();
-    const mimeType = rawMime === "image/jpg" ? "image/jpeg"
-      : VALID_MIME_TYPES.includes(rawMime as typeof VALID_MIME_TYPES[number]) ? rawMime : "image/png";
+    const fetchRes = await fetch(next.url);
+    if (!fetchRes.ok) throw new Error(`Blob fetch failed: HTTP ${fetchRes.status}`);
+    const buffer = Buffer.from(await fetchRes.arrayBuffer());
+    const rawMime = (fetchRes.headers.get("content-type") || "image/png").split(";")[0].trim();
+    const mimeType =
+      rawMime === "image/jpg" ? "image/jpeg"
+      : VALID_MIME_TYPES.includes(rawMime) ? rawMime
+      : "image/png";
 
-    const result = await extractSingleImage({ filename: next.filename, data: buffer, mimeType }, apiKey, model);
+    const result = await extractSingleImage(
+      { filename: next.filename, data: buffer, mimeType },
+      apiKey,
+      model
+    );
     if (result.ok) screen = result.screen;
     else failure = { filename: next.filename, error: result.error };
   } catch (err) {
@@ -205,11 +211,10 @@ export async function GET(
   };
 
   if (remaining.length === 0) {
-    // All images processed — build final KB
-    const finalKb = mergeScreens(project.name, updatedScreens);
+    // All images done — build and save final KB
+    const finalKb = mergeScreens(project.name as string, updatedScreens);
     updatedMeta._jobStatus = "done";
-    updatedMeta.imageCount = updatedMeta._total;
-    await finalize(sql, project.id, finalKb, updatedMeta);
+    await saveResult(sql, project.id, finalKb, updatedMeta);
     return NextResponse.json({
       status: "done",
       processed: updatedMeta._processed,
@@ -218,33 +223,39 @@ export async function GET(
     });
   }
 
-  // More images remain — save progress
+  // Save incremental progress
   const partialKb: UiFlowKnowledgeBase = { ...row.content, screens: updatedScreens };
   await sql`
     UPDATE project_knowledge_bases SET
-      content    = ${sql.json(asJson(toJSON(partialKb)))},
-      metadata   = ${sql.json(asJson(toJSON(updatedMeta)))},
+      content    = ${sql.json(asJson(partialKb))},
+      metadata   = ${sql.json(asJson(updatedMeta))},
       updated_at = NOW()
     WHERE project_id = ${project.id} AND type = 'ui_flow'
   `;
 
-  return NextResponse.json({
-    status: "processing",
-    processed: updatedMeta._processed,
-    total: updatedMeta._total,
-  });
+  return NextResponse.json({ status: "processing", processed: updatedMeta._processed, total: updatedMeta._total });
 }
 
-async function finalize(
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function saveResult(
   sql: ReturnType<typeof getDb>,
   projectId: string,
   kb: UiFlowKnowledgeBase,
   meta: JobMetadata
 ) {
+  const finalMeta = {
+    imageCount: meta._total,
+    summary: {
+      processed: meta._total,
+      succeeded: meta._processed - meta._failures.length,
+      failed: meta._failures.length,
+    },
+  };
   await sql`
     UPDATE project_knowledge_bases SET
-      content    = ${sql.json(asJson(toJSON(kb)))},
-      metadata   = ${sql.json(asJson(toJSON({ imageCount: meta._total, summary: { processed: meta._total, succeeded: meta._processed - meta._failures.length, failed: meta._failures.length } })))},
+      content    = ${sql.json(asJson(kb))},
+      metadata   = ${sql.json(asJson(finalMeta))},
       updated_at = NOW()
     WHERE project_id = ${projectId} AND type = 'ui_flow'
   `;
