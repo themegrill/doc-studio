@@ -281,7 +281,34 @@ function mergeScreens(
   };
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// ─── Single-image public API (used by polling route) ─────────────────────────
+
+export interface SingleImageResult {
+  ok: true;
+  screen: UiFlowScreen;
+  filename: string;
+}
+
+export interface SingleImageFailure {
+  ok: false;
+  error: string;
+  filename: string;
+}
+
+export async function extractSingleImage(
+  image: ImageBuffer,
+  apiKey: string,
+  model = "claude-sonnet-4-6"
+): Promise<SingleImageResult | SingleImageFailure> {
+  const client = new Anthropic({ apiKey });
+  const result = await analyzeImageBuffer(image, client, model);
+  if (result.ok) return { ok: true, screen: result.screen, filename: image.filename };
+  return { ok: false, error: result.error, filename: image.filename };
+}
+
+export { mergeScreens };
+
+// ─── Batch public API ─────────────────────────────────────────────────────────
 
 export interface RunExtractionOptions {
   images: ImageBuffer[];
@@ -305,15 +332,20 @@ export async function runUiFlowExtraction(
 
   const client = new Anthropic({ apiKey });
 
+  // Process all images in parallel (Anthropic API handles concurrency well)
+  const results = await Promise.all(
+    images.map((image) => analyzeImageBuffer(image, client, model))
+  );
+
   const screens: UiFlowScreen[] = [];
   const failures: UiFlowExtractionResult["failures"] = [];
 
-  for (const image of images) {
-    const result = await analyzeImageBuffer(image, client, model);
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
     if (result.ok) {
       screens.push(result.screen);
     } else {
-      failures.push({ source_file: image.filename, error: result.error });
+      failures.push({ source_file: images[i].filename, error: result.error });
     }
   }
 

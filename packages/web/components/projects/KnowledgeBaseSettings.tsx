@@ -336,6 +336,7 @@ export function KnowledgeBaseSettings({
   const [isLoadingImages, setIsLoadingImages] = useState(false);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [isGeneratingUiFlow, setIsGeneratingUiFlow] = useState(false);
+  const [uiFlowProgress, setUiFlowProgress] = useState<{ processed: number; total: number } | null>(null);
   const [selectedUiFlowImage, setSelectedUiFlowImage] = useState<UiFlowImage | null>(null);
   const [imageToDelete, setImageToDelete] = useState<UiFlowImage | null>(null);
 
@@ -404,21 +405,44 @@ export function KnowledgeBaseSettings({
 
   const handleGenerateUiFlowKB = async () => {
     setIsGeneratingUiFlow(true);
+    setUiFlowProgress(null);
+    const base = `/api/projects/${projectSlug}/knowledge-base/ui-flow/generate`;
     try {
-      const res = await fetch(`/api/projects/${projectSlug}/knowledge-base/ui-flow/generate`, {
-        method: "POST",
-      });
+      const res = await fetch(base, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Generation failed");
-      toast({
-        title: "Done",
-        description: `UI flow knowledge base generated from ${data.summary.succeeded}/${data.summary.processed} images`,
+
+      setUiFlowProgress({ processed: 0, total: data.total });
+
+      // Poll until done
+      await new Promise<void>((resolve, reject) => {
+        const poll = async () => {
+          try {
+            const pollRes = await fetch(base);
+            const pollData = await pollRes.json();
+            if (pollData.status === "done") {
+              const succeeded = pollData.processed - (pollData.failures?.length ?? 0);
+              toast({ title: "Done", description: `UI flow knowledge base generated from ${succeeded}/${pollData.total} images` });
+              resolve();
+            } else if (pollData.status === "error") {
+              reject(new Error("Generation failed"));
+            } else {
+              setUiFlowProgress({ processed: pollData.processed ?? 0, total: pollData.total ?? data.total });
+              setTimeout(poll, 3000);
+            }
+          } catch (err) {
+            reject(err);
+          }
+        };
+        setTimeout(poll, 2000);
       });
+
       router.refresh();
     } catch (error) {
       toast({ title: "Error", description: error instanceof Error ? error.message : "Generation failed", variant: "destructive" });
     } finally {
       setIsGeneratingUiFlow(false);
+      setUiFlowProgress(null);
     }
   };
 
@@ -806,7 +830,7 @@ export function KnowledgeBaseSettings({
                   <div className="flex gap-2 pt-1">
                     <Button onClick={handleGenerateUiFlowKB} disabled={isGeneratingUiFlow}>
                       {isGeneratingUiFlow
-                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating...</>
+                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{uiFlowProgress ? `Processing ${uiFlowProgress.processed}/${uiFlowProgress.total}...` : "Starting..."}</>
                         : <><Sparkles className="h-4 w-4 mr-2" />Generate Knowledge Base</>}
                     </Button>
                     {savedMap.ui_flow && (
