@@ -112,6 +112,7 @@ export default async function DocPage({
             sectionTitle={section.title}
             hideTitle={!!sectionDoc}
             childDocs={publishedChildren}
+			sectionDescription={section.description}
           />
         </>
       );

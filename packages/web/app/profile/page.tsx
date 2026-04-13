@@ -14,7 +14,7 @@ export default async function ProfilePage() {
     <DashboardLayout>
       <div className="p-8">
         <div className="max-w-2xl">
-          <h1 className="text-3xl font-bold mb-2">Profile Settings</h1>
+          <h1 className="text-3xl font-medium mb-2">Profile Settings</h1>
           <p className="text-gray-600 mb-6">
             Update your profile information and preferences.
           </p>

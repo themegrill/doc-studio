@@ -18,6 +18,7 @@ interface SectionPageProps {
   sectionTitle: string;
   hideTitle?: boolean;
   childDocs?: ChildDoc[];
+  sectionDescription?: string;
 }
 
 export default function SectionPage({ sectionTitle, hideTitle, childDocs }: SectionPageProps) {
@@ -27,16 +28,12 @@ export default function SectionPage({ sectionTitle, hideTitle, childDocs }: Sect
     <div className="max-w-[1000px] mx-auto">
       {!hideTitle && (
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">{sectionTitle}</h1>
+          <h1 className="text-3xl font-medium mb-2">{sectionTitle}</h1>
 		</div>
       )}
       {docs.length > 0 && (
-		  <>
-		  {hideTitle && <hr className="mb-8" />}
-          <h2 className="text-2xl font-semibold mb-4">Documents in this section</h2>
-        </>
+		hideTitle && <hr className="mb-8" />
       )}
-
       {docs.length === 0 ? (
         <div className="text-center py-12 border-2 border-dashed rounded-lg">
           <FolderOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />

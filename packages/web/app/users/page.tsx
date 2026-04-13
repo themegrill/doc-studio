@@ -81,7 +81,7 @@ export default async function UsersPage() {
         <div className="max-w-7xl mx-auto">
           <div className="mb-8 flex items-start justify-between">
             <div>
-              <h1 className="text-4xl font-bold mb-2">Users</h1>
+              <h1 className="text-3xl font-medium mb-2">Users</h1>
               <p className="text-gray-600">
                 Manage user accounts and permissions
               </p>

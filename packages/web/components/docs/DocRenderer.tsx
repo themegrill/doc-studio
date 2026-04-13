@@ -1229,7 +1229,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
             </div>
           ) : (
             <>
-              <h1 className="text-3xl font-bold mb-2">
+              <h1 className="text-3xl font-medium mb-2">
                 {parsedTitle.cleanTitle}
                 {parsedTitle.badges.map((badge, idx) => (
                   <Badge key={`badge-${idx}`} variant={badge.variant} className="ml-3">

@@ -99,7 +99,7 @@ export default async function ProjectsPage() {
         <div className="max-w-6xl mx-auto">
           <div className="mb-8 flex items-start justify-between">
             <div>
-              <h1 className="text-4xl font-bold mb-2">Projects</h1>
+              <h1 className="text-3xl font-medium mb-2">Projects</h1>
               <p className="text-gray-600">
                 Select a project to view its documentation
               </p>
