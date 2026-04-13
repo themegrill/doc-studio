@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Settings, BookOpen, Globe } from "lucide-react";
+import { Users, Settings, BookOpen, Globe, Upload } from "lucide-react";
 import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
 import { DeploySettings } from "./DeploySettings";
 
@@ -75,11 +75,11 @@ export function ProjectSettingsTabs({
       label: "Deploy",
       icon: Globe,
     },
-    // {
-    //   id: "import" as const,
-    //   label: "Import",
-    //   icon: Upload,
-    // },
+    {
+      id: "import" as const,
+      label: "Import",
+      icon: Upload,
+    },
   ];
 
   return (
@@ -194,7 +194,7 @@ export function ProjectSettingsTabs({
           </div>
         )}
 
-        {/* {activeTab === "import" && (
+        {activeTab === "import" && (
           <div>
             <div className="mb-6">
               <h2 className="text-xl font-semibold">Import Documentation</h2>
@@ -205,7 +205,7 @@ export function ProjectSettingsTabs({
 
             <MigrationImport projectSlug={projectSlug} projectId={projectId} />
           </div>
-        )} */}
+        )}
       </div>
     </div>
   );

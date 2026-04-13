@@ -19,10 +19,10 @@ export async function POST(req: Request) {
     // Validate feature is enabled
     const validation = await validateAIFeature("chat");
     if (validation) {
-      return new Response(
-        JSON.stringify({ error: validation.error }),
-        { status: validation.status, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: validation.error }), {
+        status: validation.status,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Get AI configuration
@@ -31,19 +31,31 @@ export async function POST(req: Request) {
     // Load documentation writing guideline
     let documentationGuidelinePrompt = "";
     try {
-      const guidelinePath = path.join(process.cwd(), "template", "documentation-guideline.md");
+      const guidelinePath = path.join(
+        process.cwd(),
+        "template",
+        "documentation-guideline.md"
+      );
       if (fs.existsSync(guidelinePath)) {
         documentationGuidelinePrompt = fs.readFileSync(guidelinePath, "utf-8");
       }
     } catch (error) {
-      console.error("[Doc Chat API] Failed to load documentation guideline:", error);
+      console.error(
+        "[Doc Chat API] Failed to load documentation guideline:",
+        error
+      );
     }
 
     // Load knowledge base for this project (served from cache after first load)
     const projectSlug = documentContext?.projectSlug;
     console.log(`[doc-chat] projectSlug=${projectSlug ?? "null"}`);
     const knowledgeBasePrompt = await getKnowledgeBasePromptAsync(projectSlug);
-    console.log(`[doc-chat] knowledgeBase loaded=${knowledgeBasePrompt.length > 0}, length=${knowledgeBasePrompt.length}`);
+
+    console.log(
+      `[doc-chat] knowledgeBase loaded=${
+        knowledgeBasePrompt.length > 0
+      }, length=${knowledgeBasePrompt.length}`
+    );
 
     // ── System prompt (no KB content here — KB is injected into the first
     //    user message as a cached block to minimise per-turn token cost) ──────
@@ -300,11 +312,19 @@ Multiple knowledge base types may be present:
 - Website Knowledge Base: content crawled from the product website
 - Codebase Knowledge Base: content fetched from the product GitHub repository
 - UI Flow Knowledge Base: screens, fields, navigation flows, and UI components extracted from design screenshots using AI vision
+- Imported Docs Knowledge Base: knowledge extracted from a previous documentation site using AI — may be outdated
 
 When multiple knowledge bases are present, treat all of them as valid sources.
 If the same fact appears in multiple sources with minor differences, prefer the most specific or detailed version.
 When writing about UI screens, forms, or navigation, prefer information from the UI Flow Knowledge Base as it reflects the exact visible UI.
 When writing about features or workflows at a higher level, use the Uploaded or Website Knowledge Base.
+
+IMPORTANT — Imported Docs Knowledge Base:
+If an "Imported Docs Knowledge Base" is present, treat it as a potentially stale reference.
+- Use it for conceptual understanding of features and workflows.
+- Do NOT copy UI-specific details (exact menu paths, button labels, screen names) verbatim — these may have changed.
+- Any item flagged as "Potentially outdated" in that source must not be stated as current fact; rephrase as a general concept or omit it.
+- If the Imported Docs KB conflicts with another KB source, prefer the other source.
 
 Allowed product-fact sources:
 1. The PRODUCT KNOWLEDGE BASE in <knowledge_base> tags
@@ -343,15 +363,19 @@ Do not guess missing product details.
       throw new Error("No messages provided");
     }
 
-    const modelMessages: ModelMessage[] = messages.map((m: { role: string; content: unknown }) => ({
-      role: m.role as "user" | "assistant",
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : Array.isArray(m.content)
-            ? (m.content as Array<{ text?: string }>).map((c) => c.text || c).join("")
+    const modelMessages: ModelMessage[] = messages.map(
+      (m: { role: string; content: unknown }) => ({
+        role: m.role as "user" | "assistant",
+        content:
+          typeof m.content === "string"
+            ? m.content
+            : Array.isArray(m.content)
+            ? (m.content as Array<{ text?: string }>)
+                .map((c) => c.text || c)
+                .join("")
             : String(m.content),
-    }));
+      })
+    );
 
     // ── Anthropic prompt caching ───────────────────────────────────────────────
     //
@@ -366,7 +390,11 @@ Do not guess missing product details.
 
     let finalMessages: ModelMessage[] = modelMessages;
 
-    if (knowledgeBasePrompt && modelMessages.length > 0 && modelMessages[0].role === "user") {
+    if (
+      knowledgeBasePrompt &&
+      modelMessages.length > 0 &&
+      modelMessages[0].role === "user"
+    ) {
       const firstMsg = modelMessages[0];
       const firstMsgText =
         typeof firstMsg.content === "string" ? firstMsg.content : "";

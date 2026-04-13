@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db/postgres";
-import { parseBetterDocsCSV, getDocumentStats, ParsedDocument } from "@/lib/migration/csv-parser";
+import { parseBetterDocsCSV, getDocumentStats, ParsedDocument, ParseResult } from "@/lib/migration/csv-parser";
 import { convertHTMLToBlockNote } from "@/lib/migration/html-to-blocknote";
+import { getAIConfig } from "@/lib/ai-config";
+import { invalidateKbCache } from "@/lib/kb-cache";
+import Anthropic from "@anthropic-ai/sdk";
 import type { JSONValue } from "postgres";
+
+export const maxDuration = 300;
 
 interface RouteParams {
   params: Promise<{
@@ -91,6 +96,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         categories,
         project.id,
         session.user.id,
+        sql
+      );
+      return NextResponse.json({ result });
+    }
+
+    // If action is "extract-knowledge", extract KB with Claude and save to DB
+    if (action === "extract-knowledge") {
+      const aiConfig = await getAIConfig();
+      if (!aiConfig.apiKey) {
+        return NextResponse.json(
+          { error: "AI API key is not configured" },
+          { status: 500 }
+        );
+      }
+      const result = await extractKnowledgeBase(
+        parseResult,
+        project.id,
+        projectSlug,
+        file.name,
+        aiConfig.apiKey,
+        aiConfig.defaultModel || "claude-sonnet-4-6",
         sql
       );
       return NextResponse.json({ result });
@@ -362,4 +388,246 @@ async function updateNavigationStructure(
       VALUES (${projectId}, ${sql.json(jsonNavigation)})
     `;
   }
+}
+
+// ─── Knowledge Base Extraction ────────────────────────────────────────────────
+
+const KB_EXTRACTION_SYSTEM_PROMPT = `You are a technical knowledge extraction specialist.
+Your job is to read a documentation article (which may be outdated, written inconsistently,
+or describe UI that has changed) and extract the ESSENTIAL, DURABLE knowledge from it.
+
+Return a JSON object with exactly these keys:
+
+{
+  "title": "Clean, concise title for this knowledge chunk",
+  "summary": "1-2 sentence summary of what this doc covers",
+  "feature_or_topic": "The specific product feature, integration, or concept this covers",
+  "key_concepts": ["list", "of", "core", "concepts", "or", "terms"],
+  "prerequisites": ["things", "the", "user", "needs", "before", "using", "this"],
+  "steps_or_instructions": [
+    "Step 1: ...",
+    "Step 2: ..."
+  ],
+  "important_notes": ["warnings, caveats, or tips that are likely stable over time"],
+  "configuration_options": [
+    {"name": "option name", "description": "what it does"}
+  ],
+  "related_topics": ["other features or docs this connects to"],
+  "staleness_flags": ["list anything that looks UI-specific, version-specific, or likely outdated"],
+  "confidence": "high | medium | low — your confidence that extracted info is still accurate"
+}
+
+Rules:
+- Extract WHAT the feature does and HOW it works conceptually, not WHERE buttons are in the UI.
+- If steps reference specific UI locations, rephrase them as intentions:
+  "Navigate to Settings → Save and Continue" → "Find the Save and Continue settings panel"
+- Flag anything that is a screenshot description, exact menu path, or version number in staleness_flags.
+- If the doc is very short or unclear, still extract what you can — set confidence to "low".
+- Return ONLY valid JSON, no markdown fences, no explanation.`;
+
+interface ExtractedKnowledgeDoc {
+  title?: string;
+  summary?: string;
+  feature_or_topic?: string;
+  key_concepts?: string[];
+  prerequisites?: string[];
+  steps_or_instructions?: string[];
+  important_notes?: string[];
+  configuration_options?: { name: string; description: string }[];
+  related_topics?: string[];
+  staleness_flags?: string[];
+  confidence?: "high" | "medium" | "low";
+  original_title: string;
+  slug?: string;
+}
+
+interface FaqEntry {
+  question: string;
+  answer: string;
+  slug: string;
+}
+
+interface DocsKnowledgeBaseContent {
+  extracted_at: string;
+  source_file: string;
+  model_used: string;
+  total_docs: number;
+  extracted: number;
+  skipped: number;
+  documents: ExtractedKnowledgeDoc[];
+  faqs: FaqEntry[];
+}
+
+function htmlToPlainText(html: string): string {
+  if (!html || typeof html !== "string") return "";
+  let cleaned = html.replace(/<!--\s*\/?wp:[^>]*-->/g, "");
+  cleaned = cleaned.replace(/<\/?(p|div|h[1-6]|li|br|tr|blockquote)[^>]*>/gi, "\n");
+  cleaned = cleaned.replace(/<[^>]+>/g, "");
+  cleaned = cleaned
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(parseInt(c, 10)));
+  return cleaned.split("\n").map((l) => l.trim())
+    .filter((l, i, arr) => l !== "" || arr[i - 1] !== "")
+    .join("\n").trim();
+}
+
+async function extractSingleDoc(
+  doc: ParsedDocument,
+  client: Anthropic,
+  model: string
+): Promise<ExtractedKnowledgeDoc | null> {
+  const bodyText = htmlToPlainText(doc.content);
+  const excerptText = htmlToPlainText(doc.excerpt || "");
+
+  if (!bodyText.trim()) return null;
+
+  const userMessage = `DOCUMENTATION ARTICLE
+Title: ${doc.title}
+Slug: ${doc.slug || ""}
+Excerpt: ${excerptText || "(none)"}
+
+--- CONTENT ---
+${bodyText.slice(0, 8000)}`;
+
+  const MAX_RETRIES = 3;
+  const BASE_BACKOFF = 2000;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const message = await client.messages.create({
+        model,
+        max_tokens: 1500,
+        system: KB_EXTRACTION_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+      });
+
+      const raw = message.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b as { type: "text"; text: string }).text)
+        .join("");
+
+      // Strip markdown fences if present
+      let cleaned = raw.trim();
+      const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (fence) cleaned = fence[1].trim();
+
+      const parsed = JSON.parse(cleaned);
+      return { ...parsed, original_title: doc.title, slug: doc.slug };
+    } catch (err) {
+      const isRateLimit =
+        (err as { status?: number }).status === 429 ||
+        (err instanceof Error && err.message.toLowerCase().includes("rate_limit"));
+      const isSyntaxErr = err instanceof SyntaxError;
+
+      if ((isRateLimit || isSyntaxErr) && attempt < MAX_RETRIES - 1) {
+        await new Promise((res) => setTimeout(res, BASE_BACKOFF * Math.pow(2, attempt)));
+        continue;
+      }
+      console.error(`[KB Extract] Failed for "${doc.title}":`, err);
+      return null;
+    }
+  }
+  return null;
+}
+
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) break;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+async function extractKnowledgeBase(
+  parseResult: ParseResult,
+  projectId: string,
+  projectSlug: string,
+  sourceFile: string,
+  apiKey: string,
+  model: string,
+  sql: ReturnType<typeof getDb>
+): Promise<{ success: boolean; extracted: number; skipped: number }> {
+  const client = new Anthropic({ apiKey });
+
+  // Only process published docs
+  const publishedDocs = parseResult.documents.filter((d) => d.status === "publish");
+
+  console.log(`[KB Extract] Processing ${publishedDocs.length} docs with model=${model}`);
+
+  const extractedDocs: ExtractedKnowledgeDoc[] = [];
+  let skipped = 0;
+
+  const results = await runWithConcurrency(publishedDocs, 5, async (doc) => {
+    return extractSingleDoc(doc, client, model);
+  });
+
+  results.forEach((r, i) => {
+    if (r) {
+      extractedDocs.push(r);
+    } else {
+      skipped++;
+      console.log(`[KB Extract] Skipped: ${publishedDocs[i].title}`);
+    }
+  });
+
+  // Extract FAQs parsed by csv-parser
+  const faqs: FaqEntry[] = (parseResult.faqs || []).map((f) => ({
+    question: f.title,
+    answer: htmlToPlainText(f.answer),
+    slug: f.slug,
+  }));
+
+  const content: DocsKnowledgeBaseContent = {
+    extracted_at: new Date().toISOString(),
+    source_file: sourceFile,
+    model_used: model,
+    total_docs: publishedDocs.length,
+    extracted: extractedDocs.length,
+    skipped,
+    documents: extractedDocs,
+    faqs,
+  };
+
+  const jsonContent = content as unknown as JSONValue;
+
+  // Upsert into project_knowledge_bases with type 'docs-site'
+  const [existing] = await sql`
+    SELECT id FROM project_knowledge_bases
+    WHERE project_id = ${projectId} AND type = 'docs-site'
+  `;
+
+  if (existing) {
+    await sql`
+      UPDATE project_knowledge_bases
+      SET content = ${sql.json(jsonContent)},
+          metadata = ${sql.json({ sourceFile, extractedAt: content.extracted_at } as unknown as JSONValue)},
+          updated_at = NOW()
+      WHERE id = ${existing.id}
+    `;
+  } else {
+    await sql`
+      INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
+      VALUES (
+        ${projectId},
+        'docs-site',
+        ${sql.json(jsonContent)},
+        ${sql.json({ sourceFile, extractedAt: content.extracted_at } as unknown as JSONValue)}
+      )
+    `;
+  }
+
+  console.log(`[KB Extract] Done. Extracted=${extractedDocs.length}, Skipped=${skipped}, FAQs=${faqs.length}`);
+  invalidateKbCache(projectSlug);
+  return { success: extractedDocs.length > 0, extracted: extractedDocs.length, skipped };
 }

@@ -47,9 +47,9 @@ async function runMigration() {
     await sql`
       ALTER TABLE project_knowledge_bases
       ADD CONSTRAINT project_knowledge_bases_type_check
-      CHECK (type IN ('upload', 'website', 'codebase', 'ui_flow'))
+      CHECK (type IN ('upload', 'website', 'codebase', 'ui_flow', 'docs-site'))
     `;
-    console.log("✅ New constraint added (includes 'ui_flow')");
+    console.log("✅ New constraint added (includes 'ui_flow' and 'docs-site')");
 
     console.log("\n✅ Migration completed successfully!\n");
 
