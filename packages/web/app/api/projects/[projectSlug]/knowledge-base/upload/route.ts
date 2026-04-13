@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
+import { invalidateKbCache } from "@/lib/kb-cache";
 
 type JSONPrimitive = string | number | boolean | null;
 type JSONValue = JSONPrimitive | JSONValue[] | { [key: string]: JSONValue };
@@ -89,6 +90,10 @@ export async function POST(
       content    = EXCLUDED.content,
       updated_at = NOW()
   `;
+
+  // Invalidate the server-side KB prompt cache so the next chat request
+  // fetches the updated knowledge base from the database.
+  invalidateKbCache(projectSlug);
 
   return NextResponse.json({ success: true });
 }

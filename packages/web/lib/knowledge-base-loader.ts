@@ -1,5 +1,6 @@
 import { DocumentationKnowledgeBase } from "@/types/knowledge-base";
 import { getDb } from "@/lib/db/postgres";
+import { getCachedKbPrompt, setCachedKbPrompt } from "@/lib/kb-cache";
 import fs from "fs";
 import path from "path";
 
@@ -502,14 +503,27 @@ export function formatAllKnowledgeBasesPrompt(
 /**
  * Load and format all knowledge bases for a project into a prompt string.
  * This is the primary function used by the AI chat route.
+ *
+ * Results are cached in memory per project slug. The cache is invalidated
+ * by `invalidateKbCache()` whenever a KB source is updated by an admin.
  */
 export async function getKnowledgeBasePromptAsync(
   projectSlug: string | null | undefined
 ): Promise<string> {
   if (!projectSlug) return "";
 
+  const cached = getCachedKbPrompt(projectSlug);
+  if (cached !== null) {
+    console.log(`[KB] Cache hit for: ${projectSlug} (${cached.length} chars)`);
+    return cached;
+  }
+
   const kbs = await loadAllKnowledgeBases(projectSlug);
-  return formatAllKnowledgeBasesPrompt(kbs);
+  const prompt = formatAllKnowledgeBasesPrompt(kbs);
+
+  setCachedKbPrompt(projectSlug, prompt);
+  console.log(`[KB] Cache populated for: ${projectSlug} (${prompt.length} chars)`);
+  return prompt;
 }
 
 /**

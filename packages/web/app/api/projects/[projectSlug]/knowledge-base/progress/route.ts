@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/postgres";
+import { invalidateKbCache } from "@/lib/kb-cache";
 import {
   crawlPageBatch,
   refineBatch,
@@ -252,6 +253,10 @@ export async function GET(
           metadata   = EXCLUDED.metadata,
           updated_at = NOW()
       `;
+
+      // Invalidate the server-side KB prompt cache so the next chat request
+      // fetches the newly crawled website knowledge base from the database.
+      invalidateKbCache(projectSlug);
 
       await sql`
         UPDATE crawl_sessions SET

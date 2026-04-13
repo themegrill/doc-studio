@@ -1,5 +1,5 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { streamText } from "ai";
+import { streamText, type ModelMessage, type TextPart } from "ai";
 import { getKnowledgeBasePromptAsync } from "@/lib/knowledge-base-loader";
 import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
@@ -39,13 +39,15 @@ export async function POST(req: Request) {
       console.error("[Doc Chat API] Failed to load documentation guideline:", error);
     }
 
-    // Load knowledge base for this project (if available)
+    // Load knowledge base for this project (served from cache after first load)
     const projectSlug = documentContext?.projectSlug;
     console.log(`[doc-chat] projectSlug=${projectSlug ?? "null"}`);
     const knowledgeBasePrompt = await getKnowledgeBasePromptAsync(projectSlug);
     console.log(`[doc-chat] knowledgeBase loaded=${knowledgeBasePrompt.length > 0}, length=${knowledgeBasePrompt.length}`);
 
-    // Build system prompt with document context
+    // ── System prompt (no KB content here — KB is injected into the first
+    //    user message as a cached block to minimise per-turn token cost) ──────
+
     const basePrompt = `You are an AI assistant helping users improve documentation inside a documentation editor.
 
 Document Context:
@@ -67,7 +69,7 @@ You help with:
 For any product-specific statement, feature description, workflow, UI behavior, configuration detail, limitation, integration, example, or claim:
 
 Allowed sources only:
-1. the PRODUCT KNOWLEDGE BASE
+1. the PRODUCT KNOWLEDGE BASE (provided in <knowledge_base> tags at the start of the conversation)
 2. explicit product-specific information provided by the user in this chat
 
 Disallowed sources:
@@ -86,7 +88,7 @@ Instead say that the detail is not available in the current knowledge base or co
 
 When the user asks to write, expand, improve, or edit product documentation:
 - do not add new product facts unless they are directly supported by the allowed sources
-- do not make the document more “complete” by inventing missing steps, features, examples, benefits, limitations, or technical explanations
+- do not make the document more "complete" by inventing missing steps, features, examples, benefits, limitations, or technical explanations
 - do not add placeholder-looking specifics
 - do not turn generic best practices into product claims
 
@@ -103,7 +105,7 @@ If the source material is sparse:
 - The PRODUCT KNOWLEDGE BASE is the default source of truth for the product.
 - If the user provides product-specific corrections or additions in chat, use them together with the knowledge base.
 - If there is no additional product-specific context from the user, the PRODUCT KNOWLEDGE BASE is the only source of truth for product facts.
-- If the user contradicts the knowledge base, prefer the user’s latest explicit instruction for the current task.
+- If the user contradicts the knowledge base, prefer the user's latest explicit instruction for the current task.
 
 # RESPONSE BEHAVIOR
 
@@ -129,13 +131,9 @@ When editing product documentation:
 
 ${
   knowledgeBasePrompt
-    ? `# PRODUCT KNOWLEDGE BASE
+    ? `# FINAL INSTRUCTION
 
-${knowledgeBasePrompt}
-
-# FINAL INSTRUCTION
-
-For product-specific content, the PRODUCT KNOWLEDGE BASE plus explicit user chat context are your only allowed factual inputs. If something is missing, do not guess.`
+For product-specific content, the PRODUCT KNOWLEDGE BASE (in <knowledge_base> tags) plus explicit user chat context are your only allowed factual inputs. If something is missing, do not guess.`
     : `# FINAL INSTRUCTION
 
 No product knowledge base is available. Only use explicit user-provided product information for product facts. Do not guess missing details.`
@@ -296,7 +294,7 @@ Note: For direct editing, users can use the BlockNote AI toolbar (sparkles butto
       ? `
 # PRODUCT FACTUALITY POLICY
 
-The PRODUCT KNOWLEDGE BASES below are the authoritative sources of truth for the product.
+The PRODUCT KNOWLEDGE BASE is provided in <knowledge_base> tags at the start of the conversation.
 Multiple knowledge base types may be present:
 - Uploaded Knowledge Base: manually curated product information
 - Website Knowledge Base: content crawled from the product website
@@ -309,7 +307,7 @@ When writing about UI screens, forms, or navigation, prefer information from the
 When writing about features or workflows at a higher level, use the Uploaded or Website Knowledge Base.
 
 Allowed product-fact sources:
-1. Any of the PRODUCT KNOWLEDGE BASES below
+1. The PRODUCT KNOWLEDGE BASE in <knowledge_base> tags
 2. Explicit product-specific user statements in this chat
 
 Forbidden:
@@ -324,10 +322,7 @@ When writing or editing documentation:
 - only include product-specific facts supported by the allowed sources
 - if support is missing, omit the claim or state that the detail is not available
 - improve wording and structure without expanding unsupported facts
-- never add “helpful” product details unless explicitly supported
-
-PRODUCT KNOWLEDGE BASES:
-${knowledgeBasePrompt}
+- never add "helpful" product details unless explicitly supported
 `
       : `
 # PRODUCT FACTUALITY POLICY
@@ -342,27 +337,65 @@ Do not guess missing product details.
       : "";
 
     const systemPrompt = `${basePrompt}\n${kbPolicy}${guidelineSection}\n${editorToolsPrompt}`;
+
     // Convert to model messages
     if (!messages || messages.length === 0) {
       throw new Error("No messages provided");
     }
 
-    const modelMessages = messages.map((m: any) => ({
-      role: m.role,
+    const modelMessages: ModelMessage[] = messages.map((m: { role: string; content: unknown }) => ({
+      role: m.role as "user" | "assistant",
       content:
         typeof m.content === "string"
           ? m.content
           : Array.isArray(m.content)
-            ? m.content.map((c: any) => c.text || c).join("")
+            ? (m.content as Array<{ text?: string }>).map((c) => c.text || c).join("")
             : String(m.content),
     }));
+
+    // ── Anthropic prompt caching ───────────────────────────────────────────────
+    //
+    // The knowledge base content is the largest, most stable part of every
+    // request. We inject it as a cached TextPart at the beginning of the first
+    // user message. Anthropic caches the entire prefix up to and including this
+    // block for 5 minutes (ephemeral TTL), so subsequent turns in the same
+    // conversation skip re-processing the KB tokens entirely.
+    //
+    // Cache key: system prompt + first user message KB block (identical across
+    // all turns of the same conversation → cache hits from turn 2 onward).
+
+    let finalMessages: ModelMessage[] = modelMessages;
+
+    if (knowledgeBasePrompt && modelMessages.length > 0 && modelMessages[0].role === "user") {
+      const firstMsg = modelMessages[0];
+      const firstMsgText =
+        typeof firstMsg.content === "string" ? firstMsg.content : "";
+
+      const kbCachePart: TextPart = {
+        type: "text",
+        text: `<knowledge_base>\n${knowledgeBasePrompt}\n</knowledge_base>`,
+        providerOptions: {
+          anthropic: { cacheControl: { type: "ephemeral" } },
+        },
+      };
+
+      const userTextPart: TextPart = {
+        type: "text",
+        text: firstMsgText,
+      };
+
+      finalMessages = [
+        { role: "user", content: [kbCachePart, userTextPart] },
+        ...modelMessages.slice(1),
+      ];
+    }
 
     const anthropic = createAnthropic({ apiKey: config.apiKey });
 
     const result = streamText({
       model: anthropic(config.defaultModel),
       system: systemPrompt,
-      messages: modelMessages,
+      messages: finalMessages,
       temperature: config.temperature,
       maxOutputTokens: config.maxTokens,
       onFinish: async (result) => {

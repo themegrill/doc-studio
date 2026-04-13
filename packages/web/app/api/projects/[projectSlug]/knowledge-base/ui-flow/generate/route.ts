@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db/postgres";
 import { getAIConfig } from "@/lib/ai-config";
 import { list } from "@vercel/blob";
+import { invalidateKbCache } from "@/lib/kb-cache";
 import {
   extractSingleImage,
   mergeScreens,
@@ -164,7 +165,7 @@ export async function GET(
   if (meta._pendingBlobs.length === 0) {
     // Already done — finalize
     const finalKb = mergeScreens(project.name as string, row.content.screens ?? []);
-    await saveResult(sql, project.id, finalKb, meta);
+    await saveResult(sql, project.id, projectSlug, finalKb, meta);
     return NextResponse.json({ status: "done", processed: meta._processed, total: meta._total, failures: meta._failures });
   }
 
@@ -241,6 +242,7 @@ export async function GET(
 async function saveResult(
   sql: ReturnType<typeof getDb>,
   projectId: string,
+  projectSlug: string,
   kb: UiFlowKnowledgeBase,
   meta: JobMetadata
 ) {
@@ -259,4 +261,8 @@ async function saveResult(
       updated_at = NOW()
     WHERE project_id = ${projectId} AND type = 'ui_flow'
   `;
+
+  // Invalidate the server-side KB prompt cache so the next chat request
+  // fetches the newly generated UI flow knowledge base from the database.
+  invalidateKbCache(projectSlug);
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 import { DocumentationKnowledgeBase } from "@/types/knowledge-base";
+import { invalidateKbCache } from "@/lib/kb-cache";
 
 const GITHUB_API_BASE = "https://api.github.com";
 
@@ -149,6 +150,10 @@ export async function POST(
 		metadata   = EXCLUDED.metadata,
 		updated_at = NOW()
 	`;
+
+  // Invalidate the server-side KB prompt cache so the next chat request
+  // fetches the updated knowledge base from the database.
+  invalidateKbCache(projectSlug);
 
   return NextResponse.json({
     success: true,
