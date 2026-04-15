@@ -29,6 +29,12 @@ interface ExtractResult {
   skipped: number;
 }
 
+interface ExtractProgress {
+  current: number;
+  total: number;
+  title: string;
+}
+
 type ChosenAction = "migrate" | "extract-knowledge" | null;
 
 export function MigrationImport({ projectSlug, projectId }: MigrationImportProps) {
@@ -39,6 +45,7 @@ export function MigrationImport({ projectSlug, projectId }: MigrationImportProps
   const [importing, setImporting] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [extractProgress, setExtractProgress] = useState<ExtractProgress | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [extractResult, setExtractResult] = useState<ExtractResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,28 +132,59 @@ export function MigrationImport({ projectSlug, projectId }: MigrationImportProps
   const handleExtractKnowledge = async () => {
     if (!file) return;
 
+    const BATCH_SIZE = 20;
+
     setExtracting(true);
     setError(null);
     setExtractResult(null);
+    setExtractProgress({ current: 0, total: stats?.totalDocs ?? 0, title: "Starting…" });
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("action", "extract-knowledge");
-      formData.append("projectId", projectId);
+      let startIndex = 0;
+      let totalExtracted = 0;
+      let totalSkipped = 0;
+      let totalPublished = stats?.totalDocs ?? 0;
 
-      const response = await fetch(`/api/projects/${projectSlug}/import`, {
-        method: "POST",
-        body: formData,
-      });
+      while (true) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("action", "extract-knowledge");
+        formData.append("projectId", projectId);
+        formData.append("startIndex", String(startIndex));
+        formData.append("batchSize", String(BATCH_SIZE));
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to extract knowledge base");
+        const response = await fetch(`/api/projects/${projectSlug}/import`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          let msg = "Failed to extract knowledge base";
+          try { msg = JSON.parse(text).error || msg; } catch { /* not json */ }
+          throw new Error(msg);
+        }
+
+        const data = await response.json() as {
+          result: { extracted: number; skipped: number; done: boolean; nextIndex: number; totalPublished: number };
+        };
+        const { result } = data;
+
+        totalExtracted += result.extracted;
+        totalSkipped += result.skipped;
+        totalPublished = result.totalPublished;
+        startIndex = result.nextIndex;
+
+        setExtractProgress({
+          current: Math.min(startIndex, totalPublished),
+          total: totalPublished,
+          title: `Batch ${Math.ceil(startIndex / BATCH_SIZE)} of ${Math.ceil(totalPublished / BATCH_SIZE)}`,
+        });
+
+        if (result.done) break;
       }
 
-      const data = await response.json();
-      setExtractResult(data.result);
+      setExtractResult({ success: totalExtracted > 0, extracted: totalExtracted, skipped: totalSkipped });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to extract knowledge base");
     } finally {
@@ -159,6 +197,7 @@ export function MigrationImport({ projectSlug, projectId }: MigrationImportProps
     setStats(null);
     setImportResult(null);
     setExtractResult(null);
+    setExtractProgress(null);
     setError(null);
     setChosenAction(null);
   };
@@ -353,12 +392,30 @@ export function MigrationImport({ projectSlug, projectId }: MigrationImportProps
 
           {/* Extracting Progress */}
           {extracting && (
-            <div className="flex items-center gap-3 text-sm text-purple-700 bg-purple-50 border border-purple-200 rounded-md p-3">
-              <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-              <span>
-                Extracting knowledge from {stats?.totalDocs} documents with
-                Claude AI — this may take a few minutes...
-              </span>
+            <div className="bg-purple-50 border border-purple-200 rounded-md p-3 space-y-2">
+              <div className="flex items-center justify-between text-sm text-purple-700">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
+                  <span>
+                    {extractProgress?.title ?? "Starting extraction…"}
+                  </span>
+                </div>
+                {extractProgress && extractProgress.total > 0 && (
+                  <span className="text-xs font-medium tabular-nums">
+                    {Math.min(extractProgress.current, extractProgress.total)}/{extractProgress.total} docs
+                  </span>
+                )}
+              </div>
+              {extractProgress && extractProgress.total > 0 && (
+                <div className="w-full bg-purple-200 rounded-full h-1.5">
+                  <div
+                    className="bg-purple-600 h-1.5 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.round((Math.min(extractProgress.current, extractProgress.total) / extractProgress.total) * 100)}%`,
+                    }}
+                  />
+                </div>
+              )}
             </div>
           )}
 

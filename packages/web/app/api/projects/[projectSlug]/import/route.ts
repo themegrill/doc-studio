@@ -101,7 +101,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ result });
     }
 
-    // If action is "extract-knowledge", extract KB with Claude and save to DB
+    // If action is "extract-knowledge", process one batch and return JSON.
+    // The frontend calls this repeatedly with increasing startIndex until done=true.
     if (action === "extract-knowledge") {
       const aiConfig = await getAIConfig();
       if (!aiConfig.apiKey) {
@@ -110,14 +111,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           { status: 500 }
         );
       }
-      const result = await extractKnowledgeBase(
+
+      const startIndex = parseInt((formData.get("startIndex") as string) || "0", 10);
+      const batchSize = parseInt((formData.get("batchSize") as string) || "20", 10);
+
+      const result = await extractKnowledgeBaseBatch(
         parseResult,
         project.id,
         projectSlug,
         file.name,
         aiConfig.apiKey,
         aiConfig.defaultModel || "claude-sonnet-4-6",
-        sql
+        sql,
+        startIndex,
+        batchSize
       );
       return NextResponse.json({ result });
     }
@@ -534,103 +541,116 @@ ${bodyText.slice(0, 8000)}`;
   return null;
 }
 
-async function runWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  async function worker() {
-    while (true) {
-      const i = next++;
-      if (i >= items.length) break;
-      results[i] = await fn(items[i]);
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
-
-async function extractKnowledgeBase(
+async function extractKnowledgeBaseBatch(
   parseResult: ParseResult,
   projectId: string,
   projectSlug: string,
   sourceFile: string,
   apiKey: string,
   model: string,
-  sql: ReturnType<typeof getDb>
-): Promise<{ success: boolean; extracted: number; skipped: number }> {
+  sql: ReturnType<typeof getDb>,
+  startIndex: number,
+  batchSize: number
+): Promise<{
+  extracted: number;
+  skipped: number;
+  done: boolean;
+  nextIndex: number;
+  totalPublished: number;
+}> {
   const client = new Anthropic({ apiKey });
-
-  // Only process published docs
   const publishedDocs = parseResult.documents.filter((d) => d.status === "publish");
+  const totalPublished = publishedDocs.length;
+  const batch = publishedDocs.slice(startIndex, startIndex + batchSize);
+  const isFirstBatch = startIndex === 0;
+  const isDone = startIndex + batchSize >= totalPublished;
 
-  console.log(`[KB Extract] Processing ${publishedDocs.length} docs with model=${model}`);
-
+  // Process this batch with concurrency 5
   const extractedDocs: ExtractedKnowledgeDoc[] = [];
   let skipped = 0;
+  let nextIdx = 0;
 
-  const results = await runWithConcurrency(publishedDocs, 5, async (doc) => {
-    return extractSingleDoc(doc, client, model);
-  });
-
-  results.forEach((r, i) => {
-    if (r) {
-      extractedDocs.push(r);
-    } else {
-      skipped++;
-      console.log(`[KB Extract] Skipped: ${publishedDocs[i].title}`);
+  async function worker() {
+    while (true) {
+      const i = nextIdx++;
+      if (i >= batch.length) break;
+      const result = await extractSingleDoc(batch[i], client, model);
+      if (result) extractedDocs.push(result);
+      else skipped++;
     }
-  });
+  }
+  await Promise.all(Array.from({ length: Math.min(5, batch.length) }, worker));
 
-  // Extract FAQs parsed by csv-parser
-  const faqs: FaqEntry[] = (parseResult.faqs || []).map((f) => ({
-    question: f.title,
-    answer: htmlToPlainText(f.answer),
-    slug: f.slug,
-  }));
-
-  const content: DocsKnowledgeBaseContent = {
-    extracted_at: new Date().toISOString(),
-    source_file: sourceFile,
-    model_used: model,
-    total_docs: publishedDocs.length,
-    extracted: extractedDocs.length,
-    skipped,
-    documents: extractedDocs,
-    faqs,
-  };
-
-  const jsonContent = content as unknown as JSONValue;
-
-  // Upsert into project_knowledge_bases with type 'docs-site'
+  // Persist: first batch creates/replaces, subsequent batches append
   const [existing] = await sql`
-    SELECT id FROM project_knowledge_bases
+    SELECT id, content FROM project_knowledge_bases
     WHERE project_id = ${projectId} AND type = 'docs-site'
   `;
 
-  if (existing) {
+  const faqs: FaqEntry[] = isDone
+    ? (parseResult.faqs || []).map((f) => ({
+        question: f.title,
+        answer: htmlToPlainText(f.answer),
+        slug: f.slug,
+      }))
+    : [];
+
+  if (isFirstBatch) {
+    // Write fresh KB for this project
+    const content: DocsKnowledgeBaseContent = {
+      extracted_at: new Date().toISOString(),
+      source_file: sourceFile,
+      model_used: model,
+      total_docs: totalPublished,
+      extracted: extractedDocs.length,
+      skipped,
+      documents: extractedDocs,
+      faqs,
+    };
+    const jsonContent = content as unknown as JSONValue;
+    const jsonMeta = { sourceFile, extractedAt: content.extracted_at } as unknown as JSONValue;
+
+    if (existing) {
+      await sql`
+        UPDATE project_knowledge_bases
+        SET content = ${sql.json(jsonContent)}, metadata = ${sql.json(jsonMeta)}, updated_at = NOW()
+        WHERE id = ${existing.id}
+      `;
+    } else {
+      await sql`
+        INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
+        VALUES (${projectId}, 'docs-site', ${sql.json(jsonContent)}, ${sql.json(jsonMeta)})
+      `;
+    }
+  } else if (existing) {
+    // Append new docs to the existing documents array
+    const prev = (typeof existing.content === "string"
+      ? JSON.parse(existing.content)
+      : existing.content) as DocsKnowledgeBaseContent;
+
+    const merged: DocsKnowledgeBaseContent = {
+      ...prev,
+      extracted: (prev.extracted || 0) + extractedDocs.length,
+      skipped: (prev.skipped || 0) + skipped,
+      documents: [...(prev.documents || []), ...extractedDocs],
+      faqs: isDone ? faqs : (prev.faqs || []),
+    };
+    const jsonMerged = merged as unknown as JSONValue;
+
     await sql`
       UPDATE project_knowledge_bases
-      SET content = ${sql.json(jsonContent)},
-          metadata = ${sql.json({ sourceFile, extractedAt: content.extracted_at } as unknown as JSONValue)},
-          updated_at = NOW()
+      SET content = ${sql.json(jsonMerged)}, updated_at = NOW()
       WHERE id = ${existing.id}
-    `;
-  } else {
-    await sql`
-      INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
-      VALUES (
-        ${projectId},
-        'docs-site',
-        ${sql.json(jsonContent)},
-        ${sql.json({ sourceFile, extractedAt: content.extracted_at } as unknown as JSONValue)}
-      )
     `;
   }
 
-  console.log(`[KB Extract] Done. Extracted=${extractedDocs.length}, Skipped=${skipped}, FAQs=${faqs.length}`);
-  invalidateKbCache(projectSlug);
-  return { success: extractedDocs.length > 0, extracted: extractedDocs.length, skipped };
+  if (isDone) invalidateKbCache(projectSlug);
+
+  return {
+    extracted: extractedDocs.length,
+    skipped,
+    done: isDone,
+    nextIndex: startIndex + batchSize,
+    totalPublished,
+  };
 }
