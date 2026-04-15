@@ -16,6 +16,8 @@ import {
   type RefinedKnowledgeBatch,
 } from "@/lib/crawl-engine";
 
+export const maxDuration = 300;
+
 // Debounce: skip processing if a batch was started within the last 5 seconds.
 // Prevents duplicate work from concurrent poll requests.
 const DEBOUNCE_MS = 5_000;
@@ -177,7 +179,7 @@ export async function GET(
       SELECT raw_pages FROM crawl_sessions WHERE project_slug = ${projectSlug}
     `;
     const existingRawPages: KnowledgeBaseItem[] = rawData.raw_pages ?? [];
-    const newRawPages = [...existingRawPages, ...result.crawled];
+    const newRawPages = [...existingRawPages, ...result.crawled.map(stripLargeFields)];
     const newProgress = Math.min(
       Math.round((newVisitedCount / MAX_PAGES) * 50),
       49

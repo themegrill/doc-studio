@@ -515,6 +515,88 @@ function formatUiFlowKnowledgeBasePrompt(content: unknown): string {
   return sections.join("\n");
 }
 
+// ─── Codebase KB formatter ───────────────────────────────────────────────────
+
+/**
+ * Format a codebase knowledge base (compacted/minified format with abbreviated
+ * keys) into a prompt section. The compaction schema is included so the AI can
+ * expand abbreviated keys while reading the JSON data.
+ *
+ * Compaction rules (applied at generation time, must be reversed by reader):
+ *  - All keys are shortened via a _schema map stored at the top of the file.
+ *  - Missing keys mean empty array / null / false (never written explicitly).
+ *  - The file is minified JSON — parse first, then apply key expansion.
+ */
+function formatCodebaseKnowledgeBasePrompt(
+  content: unknown,
+  metadata: Record<string, unknown>
+): string {
+  const sections: string[] = [];
+
+  const repo = metadata.githubRepo as string | undefined;
+  const branch = metadata.branch as string | undefined;
+  const label = repo
+    ? `Codebase Knowledge Base (GitHub: ${repo}${branch ? `, branch: ${branch}` : ""})`
+    : "Codebase Knowledge Base";
+
+  sections.push(`# ${label}`);
+  sections.push(`
+This knowledge base is stored in a compacted format with abbreviated keys.
+Use the schema below to expand each key to its full name before interpreting the data.
+
+## Key Abbreviation Schema
+
+**Top-level section keys:**
+pn → plugin_name | ga → generated_at | ua → updated_at | bi → batch_info |
+pm → plugin_metadata | tf → task_flows | ue → ui_elements | gl → glossary_terms |
+er → error_messages | ft → features | mn → menus | md → modules | ad → addons |
+fs → form_settings | gs → global_settings | wf → workflows | sc → shortcodes |
+hk → hooks | fl → filters | ae → api_endpoints | pt → post_types |
+cn → constants | fn → functions | cl → classes
+
+**batch_info fields:** bn → batch_number | tb → total_batches
+
+**plugin_metadata fields:** rp → requires_php | tu → tested_up_to | st → stable_tag |
+wt → wp_tested_up_to | sd → short_description
+
+**Shared fields (modules, addons, settings, task_flows, etc.):**
+n → name | pu → purpose | ud → user_description | kc → key_classes |
+hu → hooks_used | se → settings | u → ui_flow | d → dependencies |
+pl → plan | dl → doc_link | pr → prerequisites | gk → gotchas
+
+**Setting fields:** k → key | l → label | t → type | v → default |
+ds → description | ui → user_impact | ap → applies_to | sc → scope | o → options
+
+**Menu fields:** mt → type | mp → parent | ps → page_slug | lt → title |
+cp → capability | tb2 → tab | sx → section
+
+**UI element screen fields:** sr → screen | el → elements | ht → help_text
+
+**Task flow fields:** tk → task | ct → category | df → difficulty | sp → steps | oc → outcome
+
+**Workflow fields:** tr → trigger | vp → validation_points | dg → data_storage | rs → response
+
+**Shortcode fields:** tg → tag | at → attributes | ex → example
+
+**Glossary fields:** gm → term | gd → definition | gc → context
+
+**Error message fields:** em → message | eg → trigger | er_res → resolution
+
+**Function / class fields:** n → name | fs → summary
+
+## Missing Key Rule
+Any absent field should be treated as: arrays → [] | strings → null | booleans → false
+
+## Compacted Knowledge Base Data
+`);
+
+  sections.push("```json");
+  sections.push(JSON.stringify(content));
+  sections.push("```");
+
+  return sections.join("\n");
+}
+
 // ─── Docs-site KB formatter ───────────────────────────────────────────────────
 
 /**
@@ -640,6 +722,10 @@ function formatKbContent(pkb: ProjectKnowledgeBase): string {
 
   if (pkb.type === "docs-site") {
     return formatDocsSiteKnowledgeBasePrompt(pkb.content as unknown);
+  }
+
+  if (pkb.type === "codebase") {
+    return formatCodebaseKnowledgeBasePrompt(pkb.content as unknown, pkb.metadata);
   }
   const c = pkb.content as unknown;
   if (

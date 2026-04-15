@@ -393,8 +393,9 @@ async function updateNavigationStructure(
 // ─── Knowledge Base Extraction ────────────────────────────────────────────────
 
 const KB_EXTRACTION_SYSTEM_PROMPT = `You are a technical knowledge extraction specialist.
-Your job is to read a documentation article (which may be outdated, written inconsistently,
-or describe UI that has changed) and extract the ESSENTIAL, DURABLE knowledge from it.
+Your job is to read a documentation article and extract the ESSENTIAL knowledge from it.
+Some content may be slightly outdated, but treat UI paths and navigation steps as valid
+unless they look significantly version-specific or clearly deprecated.
 
 Return a JSON object with exactly these keys:
 
@@ -408,20 +409,22 @@ Return a JSON object with exactly these keys:
     "Step 1: ...",
     "Step 2: ..."
   ],
-  "important_notes": ["warnings, caveats, or tips that are likely stable over time"],
+  "important_notes": ["warnings, caveats, or tips worth highlighting"],
   "configuration_options": [
     {"name": "option name", "description": "what it does"}
   ],
   "related_topics": ["other features or docs this connects to"],
-  "staleness_flags": ["list anything that looks UI-specific, version-specific, or likely outdated"],
+  "staleness_flags": ["only flag things that are CLEARLY outdated: hardcoded version numbers, deprecated API names, or UI paths that reference features known to be removed"],
   "confidence": "high | medium | low — your confidence that extracted info is still accurate"
 }
 
 Rules:
-- Extract WHAT the feature does and HOW it works conceptually, not WHERE buttons are in the UI.
-- If steps reference specific UI locations, rephrase them as intentions:
-  "Navigate to Settings → Save and Continue" → "Find the Save and Continue settings panel"
-- Flag anything that is a screenshot description, exact menu path, or version number in staleness_flags.
+- Keep navigation steps and UI paths as written — they are useful even if minor labels have changed.
+- Preserve menu paths like 'Settings → Save and Continue' as-is in steps_or_instructions.
+- Only add to staleness_flags if something is explicitly version-locked (e.g. 'v1.2 only'),
+  references a known deprecated feature, or contradicts itself within the same doc.
+- Do NOT flag every UI reference as stale — assume the product structure is mostly intact.
+- Extract both WHAT the feature does and HOW to use it, including specific UI steps.
 - If the doc is very short or unclear, still extract what you can — set confidence to "low".
 - Return ONLY valid JSON, no markdown fences, no explanation.`;
 
