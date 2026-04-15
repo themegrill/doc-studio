@@ -212,10 +212,9 @@ export async function GET(
   };
 
   if (remaining.length === 0) {
-    // All images done — build and save final KB
     const finalKb = mergeScreens(project.name as string, updatedScreens);
     updatedMeta._jobStatus = "done";
-    await saveResult(sql, project.id, finalKb, updatedMeta);
+    await saveResult(sql, project.id, projectSlug, finalKb, updatedMeta);
     return NextResponse.json({
       status: "done",
       processed: updatedMeta._processed,
