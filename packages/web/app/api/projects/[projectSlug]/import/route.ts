@@ -156,10 +156,12 @@ async function importDocuments(
 ): Promise<{
   success: boolean;
   imported: number;
+  skipped: number;
   failed: number;
   errors: string[];
 }> {
   let imported = 0;
+  let skipped = 0;
   let failed = 0;
   const errors: string[] = [];
 
@@ -176,45 +178,34 @@ async function importDocuments(
       `;
 
       if (existing) {
-        // Update existing document (overwrite)
-        await sql`
-          UPDATE documents
-          SET
-            title = ${doc.title},
-            description = ${doc.excerpt || null},
-            blocks = ${sql.json(jsonBlocks)},
-            published = ${doc.status === "publish"},
-            order_index = ${doc.order},
-            updated_by = ${userId},
-            updated_at = NOW()
-          WHERE id = ${existing.id}
-        `;
-      } else {
-        // Insert new document
-        await sql`
-          INSERT INTO documents (
-            project_id,
-            slug,
-            title,
-            description,
-            blocks,
-            published,
-            order_index,
-            created_by,
-            updated_by
-          ) VALUES (
-            ${projectId},
-            ${doc.slug},
-            ${doc.title},
-            ${doc.excerpt || null},
-            ${sql.json(jsonBlocks)},
-            ${doc.status === "publish"},
-            ${doc.order},
-            ${userId},
-            ${userId}
-          )
-        `;
+        // Slug already exists — skip to preserve existing content
+        skipped++;
+        continue;
       }
+
+      await sql`
+        INSERT INTO documents (
+          project_id,
+          slug,
+          title,
+          description,
+          blocks,
+          published,
+          order_index,
+          created_by,
+          updated_by
+        ) VALUES (
+          ${projectId},
+          ${doc.slug},
+          ${doc.title},
+          ${doc.excerpt || null},
+          ${sql.json(jsonBlocks)},
+          ${doc.status === "publish"},
+          ${doc.order},
+          ${userId},
+          ${userId}
+        )
+      `;
 
       imported++;
     } catch (error) {
@@ -238,6 +229,7 @@ async function importDocuments(
   return {
     success: imported > 0,
     imported,
+    skipped,
     failed,
     errors: errors.slice(0, 10), // Limit to first 10 errors
   };
@@ -301,10 +293,31 @@ async function updateNavigationStructure(
     }
   });
 
-  // Build hierarchical navigation structure
-  const routes: unknown[] = [];
+  // Build new routes from the imported documents using the same path schema
+  // as manually-created docs: category node has `path`, children have `orderIndex`.
+  type NavChild = {
+    id: string;
+    title: string;
+    path: string;
+    slug: string;
+    orderIndex: number;
+  };
+  type NavGroup = {
+    path: string;
+    title: string;
+    children: NavChild[];
+  };
+  type NavDoc = {
+    id: string;
+    title: string;
+    path: string;
+    slug: string;
+    orderIndex: number;
+  };
 
-  // Add categorized sections (sorted by category order from CSV)
+  const newGroups: NavGroup[] = [];
+  const newTopLevel: NavDoc[] = [];
+
   Object.keys(categoryGroups)
     .sort((a, b) => {
       const orderA = categories[a]?.order ?? 999;
@@ -315,68 +328,115 @@ async function updateNavigationStructure(
       const category = categories[categoryId];
       const docs = categoryGroups[categoryId];
 
-      const children = docs
+      const children: NavChild[] = docs
         .filter((doc) => slugToIdMap[doc.slug])
         .sort((a, b) => a.order - b.order)
-        .map((doc) => {
+        .map((doc, idx) => {
           const dbDoc = slugToIdMap[doc.slug];
           return {
             id: dbDoc.id,
             title: dbDoc.title,
             path: `/docs/${doc.slug}`,
             slug: doc.slug,
+            orderIndex: idx,
           };
         });
 
       if (children.length > 0) {
         const categoryName = category?.name || `Category ${categoryId}`;
-        routes.push({
-          id: `category-${categoryId}`,
+        const categorySlug = categoryName
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+        newGroups.push({
+          path: `/docs/${categorySlug}`,
           title: categoryName,
           children,
         });
       }
     });
 
-  // Add uncategorized documents at the end
-  uncategorized.forEach((doc) => {
+  uncategorized.forEach((doc, idx) => {
     if (slugToIdMap[doc.slug]) {
       const dbDoc = slugToIdMap[doc.slug];
-      routes.push({
+      newTopLevel.push({
         id: dbDoc.id,
         title: dbDoc.title,
         path: `/docs/${doc.slug}`,
         slug: doc.slug,
+        orderIndex: idx,
       });
     }
   });
 
+  // Load existing navigation and merge — never replace
+  const [existingNav] = await sql`
+    SELECT id, structure FROM navigation
+    WHERE project_id = ${projectId}
+  `;
+
+  type ExistingRoute = Record<string, unknown>;
+
+  let mergedRoutes: ExistingRoute[];
+
+  if (existingNav) {
+    const existing = (
+      typeof existingNav.structure === "string"
+        ? JSON.parse(existingNav.structure)
+        : existingNav.structure
+    ) as { routes?: ExistingRoute[] };
+
+    mergedRoutes = existing.routes ? [...existing.routes] : [];
+
+    // Merge category groups: append children to an existing group with the
+    // same title, or add a new group if none matches.
+    for (const group of newGroups) {
+      const existingGroup = mergedRoutes.find(
+        (r) =>
+          typeof r.title === "string" &&
+          r.title.toLowerCase() === group.title.toLowerCase()
+      ) as (ExistingRoute & { children?: NavChild[] }) | undefined;
+
+      if (existingGroup) {
+        const existingChildIds = new Set(
+          (existingGroup.children || []).map((c) => c.id)
+        );
+        const newChildren = group.children.filter(
+          (c) => !existingChildIds.has(c.id)
+        );
+        if (newChildren.length > 0) {
+          existingGroup.children = [
+            ...(existingGroup.children || []),
+            ...newChildren,
+          ];
+        }
+      } else {
+        mergedRoutes.push(group as unknown as ExistingRoute);
+      }
+    }
+
+    // Append top-level docs that aren't already present
+    const existingTopIds = new Set(
+      mergedRoutes.filter((r) => !r.children).map((r) => r.id as string)
+    );
+    for (const doc of newTopLevel) {
+      if (!existingTopIds.has(doc.id)) {
+        mergedRoutes.push(doc as unknown as ExistingRoute);
+      }
+    }
+  } else {
+    mergedRoutes = [
+      ...(newGroups as unknown as ExistingRoute[]),
+      ...(newTopLevel as unknown as ExistingRoute[]),
+    ];
+  }
+
   const navigationStructure = {
     title: "Documentation",
     version: "1.0",
-    routes,
+    routes: mergedRoutes,
   };
-
-  console.log(
-    "[Import] Created navigation structure with",
-    routes.length,
-    "routes"
-  );
-  console.log(
-    "[Import] First 3 routes:",
-    routes.slice(0, 3).map((r: any) => ({
-      title: r.title,
-      id: r.id,
-      path: r.path,
-      childrenCount: r.children?.length || 0,
-    }))
-  );
-
-  // Update or insert navigation
-  const [existingNav] = await sql`
-    SELECT id FROM navigation
-    WHERE project_id = ${projectId}
-  `;
 
   const jsonNavigation = JSON.parse(
     JSON.stringify(navigationStructure)

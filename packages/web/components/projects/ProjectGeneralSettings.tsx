@@ -16,7 +16,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Trash2, Save, Loader2, Upload, X } from "lucide-react";
+import { Trash2, Save, Loader2, Upload, X, RefreshCw } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
@@ -45,6 +45,7 @@ export function ProjectGeneralSettings({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
+  const [isClearingCache, setIsClearingCache] = useState(false);
 
   const [formData, setFormData] = useState({
     name: projectName,
@@ -307,6 +308,26 @@ export function ProjectGeneralSettings({
       toast({ title: "Error", description: "Failed to upload favicon", variant: "destructive" });
     } finally {
       setIsUploadingFavicon(false);
+    }
+  };
+
+  const handleClearCache = async () => {
+    setIsClearingCache(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectSlug}/knowledge-base/cache`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) throw new Error((await res.json()).error || "Failed to clear cache");
+      toast({ title: "Cache cleared", description: "The prompt cache for this project has been reset." });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to clear cache",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClearingCache(false);
     }
   };
 
@@ -593,6 +614,41 @@ export function ProjectGeneralSettings({
           )}
         </div>
       </div>
+
+      {/* Prompt Cache */}
+      {isSuperAdmin && (
+        <div className="bg-white border rounded-lg p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold">Prompt Cache</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Force the AI chat to reload all knowledge bases from the database on the next
+                request. Use this if a recent knowledge base update is not reflected in chat
+                responses.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearCache}
+              disabled={isClearingCache}
+              className="shrink-0 mt-1"
+            >
+              {isClearingCache ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Clearing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Clear Cache
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Danger Zone */}
       {isSuperAdmin && (

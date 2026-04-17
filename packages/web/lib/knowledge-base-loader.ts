@@ -763,32 +763,274 @@ export function formatAllKnowledgeBasesPrompt(
   return parts.join("\n");
 }
 
+// ─── KB Budget & Topic-Filter Helpers ────────────────────────────────────────
+
+const TOTAL_KB_CHAR_BUDGET = 500_000; // ~125k tokens, leaves room for system prompt + messages
+
+function extractKeywords(text: string): string[] {
+  const stopwords = new Set([
+    'the','a','an','is','it','in','on','at','to','for','of','and','or',
+    'but','how','do','i','my','can','you','what','with','this','that',
+    'using','use','about','help','write','create','please','me','get',
+    'set','up','want','need','make','into','from','your','their'
+  ]);
+  return text
+    .toLowerCase()
+    .split(/\s+/)
+    .map(w => w.replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length > 3 && !stopwords.has(w));
+}
+
+function buildKeywordFrequencyMap(allEntries: unknown[]): Map<string, number> {
+  const freq = new Map<string, number>();
+  for (const entry of allEntries) {
+    const text = JSON.stringify(entry).toLowerCase();
+    const words = new Set(text.split(/\W+/).filter(w => w.length > 3));
+    for (const word of words) {
+      freq.set(word, (freq.get(word) ?? 0) + 1);
+    }
+  }
+  return freq;
+}
+
+function scoreEntry(
+  entryText: string,
+  keywords: string[],
+  totalEntries: number,
+  freqMap: Map<string, number>
+): number {
+  const lower = entryText.toLowerCase();
+  let score = 0;
+  for (const kw of keywords) {
+    if (lower.includes(kw)) {
+      // Rare keyword = high weight, common keyword = low weight
+      const docFreq = freqMap.get(kw) ?? 1;
+      const idfWeight = Math.log(totalEntries / docFreq);
+      score += idfWeight;
+    }
+  }
+  return score;
+}
+
+function selectTopEntries(
+  entries: unknown[],
+  keywords: string[],
+  maxEntries: number,
+  maxChars: number
+): string {
+  const freqMap = buildKeywordFrequencyMap(entries);
+  const total = entries.length;
+
+  const scored = entries
+    .map(entry => {
+      const text = JSON.stringify(entry);
+      return { text, score: scoreEntry(text, keywords, total, freqMap) };
+    })
+    .filter(e => e.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxEntries);
+
+  let budget = maxChars;
+  const selected: string[] = [];
+  for (const entry of scored) {
+    if (budget <= 0) break;
+    selected.push(entry.text.slice(0, budget));
+    budget -= entry.text.length;
+  }
+
+  return selected.join(',\n');
+}
+
 // ─── Public convenience functions ─────────────────────────────────────────────
 
 /**
  * Load and format all knowledge bases for a project into a prompt string.
- * This is the primary function used by the AI chat route.
+ * Accepts an optional userTopic to apply topic-based filtering so that only
+ * the most relevant entries from each source are injected, keeping total
+ * context well within the model's context window.
  *
- * Results are cached in memory per project slug. The cache is invalidated
- * by `invalidateKbCache()` whenever a KB source is updated by an admin.
+ * Results are cached in memory per project slug when no topic is supplied.
+ * The cache is invalidated by `invalidateKbCache()` whenever a KB is updated.
  */
 export async function getKnowledgeBasePromptAsync(
-  projectSlug: string | null | undefined
+  projectSlug: string | null | undefined,
+  userTopic?: string
 ): Promise<string> {
   if (!projectSlug) return "";
 
-  const cached = getCachedKbPrompt(projectSlug);
-  if (cached !== null) {
-    console.log(`[KB] Cache hit for: ${projectSlug} (${cached.length} chars)`);
-    return cached;
+  const keywords = extractKeywords(userTopic ?? '');
+
+  // Only use the cache for unfiltered (no topic) requests
+  if (!userTopic) {
+    const cached = getCachedKbPrompt(projectSlug);
+    if (cached !== null) {
+      console.log(`[KB] Cache hit for: ${projectSlug} (${cached.length} chars)`);
+      return cached;
+    }
   }
 
   const kbs = await loadAllKnowledgeBases(projectSlug);
-  const prompt = formatAllKnowledgeBasesPrompt(kbs);
+  if (kbs.length === 0) return '';
 
-  setCachedKbPrompt(projectSlug, prompt);
-  console.log(`[KB] Cache populated for: ${projectSlug} (${prompt.length} chars)`);
-  return prompt;
+  let docCount = 0, websiteCount = 0, uiFlowCount = 0, codebaseCount = 0;
+
+  interface FormattedPart { pkb: ProjectKnowledgeBase; formatted: string }
+  const parts: FormattedPart[] = [];
+
+  for (const pkb of kbs) {
+    let formatted = '';
+
+    if (pkb.type === 'docs-site') {
+      const raw = pkb.content as unknown;
+      const kb = (raw && typeof raw === 'object' && !Array.isArray(raw))
+        ? raw as Record<string, unknown> : {};
+      const docs = Array.isArray(kb.documents) ? kb.documents : [];
+      const docsFreqMap = buildKeywordFrequencyMap(docs);
+
+      const scored = docs
+        .map((e: unknown) => ({ e, score: scoreEntry(JSON.stringify(e), keywords, docs.length, docsFreqMap) }))
+        .filter(x => x.score > 0 || keywords.length === 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 30);
+
+      let budget = 200_000;
+      const selected: unknown[] = [];
+      for (const { e } of scored) {
+        if (budget <= 0) break;
+        selected.push(e);
+        budget -= JSON.stringify(e).length;
+      }
+      docCount = selected.length;
+      formatted = formatDocsSiteKnowledgeBasePrompt({ ...kb, documents: selected });
+
+    } else if (pkb.type === 'website') {
+      const raw = pkb.content as unknown;
+      const entries = Array.isArray(raw) ? raw : [raw];
+      const websiteFreqMap = buildKeywordFrequencyMap(entries);
+
+      const scored = entries
+        .map((e: unknown) => ({ e, score: scoreEntry(JSON.stringify(e), keywords, entries.length, websiteFreqMap) }))
+        .filter(x => x.score > 0 || keywords.length === 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 20);
+
+      let budget = 150_000;
+      const selected: unknown[] = [];
+      for (const { e } of scored) {
+        if (budget <= 0) break;
+        selected.push(e);
+        budget -= JSON.stringify(e).length;
+      }
+      websiteCount = selected.length;
+      formatted = formatWebsiteKnowledgeBasePrompt(selected);
+
+    } else if (pkb.type === 'ui_flow') {
+      const raw = pkb.content as unknown;
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const kb = raw as Record<string, unknown>;
+        const screens = Array.isArray(kb.screens) ? kb.screens : [];
+        const flows = Array.isArray(kb.flows) ? kb.flows : [];
+        const allItems = [
+          ...screens.map((s: unknown) => ({ item: s, isScreen: true })),
+          ...flows.map((f: unknown) => ({ item: f, isScreen: false })),
+        ];
+        const uiFreqMap = buildKeywordFrequencyMap(allItems.map(x => x.item));
+
+        const scored = allItems
+          .map(({ item, isScreen }) => ({
+            item, isScreen,
+            score: scoreEntry(JSON.stringify(item), keywords, allItems.length, uiFreqMap),
+          }))
+          .filter(x => x.score > 0 || keywords.length === 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 30);
+
+        let budget = 50_000;
+        const selScreens: unknown[] = [], selFlows: unknown[] = [];
+        for (const { item, isScreen } of scored) {
+          if (budget <= 0) break;
+          budget -= JSON.stringify(item).length;
+          if (isScreen) selScreens.push(item);
+          else selFlows.push(item);
+        }
+        uiFlowCount = selScreens.length + selFlows.length;
+        formatted = formatUiFlowKnowledgeBasePrompt({ ...kb, screens: selScreens, flows: selFlows });
+      }
+
+    } else if (pkb.type === 'codebase') {
+      const raw = pkb.content as unknown;
+      if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+        const kb = raw as Record<string, unknown>;
+        const CODEBASE_KEYS = ['ad', 'md', 'mn', 'fs', 'gs', 'wf', 'hk', 'fl'] as const;
+        const filteredKb: Record<string, unknown> = {};
+
+        // Copy non-array top-level fields (schema, plugin_name, metadata, etc.)
+        for (const [k, v] of Object.entries(kb)) {
+          if (!Array.isArray(v)) filteredKb[k] = v;
+        }
+
+        let totalBudget = 100_000;
+
+        for (const key of CODEBASE_KEYS) {
+          if (!Array.isArray(kb[key]) || totalBudget <= 0) continue;
+          const entries = kb[key] as unknown[];
+          const sectionStr = selectTopEntries(entries, keywords, entries.length, totalBudget);
+          try {
+            filteredKb[key] = sectionStr ? JSON.parse(`[${sectionStr}]`) as unknown[] : [];
+          } catch {
+            filteredKb[key] = [];
+          }
+          codebaseCount += (filteredKb[key] as unknown[]).length;
+          totalBudget -= sectionStr.length;
+        }
+        formatted = formatCodebaseKnowledgeBasePrompt(filteredKb, pkb.metadata);
+      }
+
+    } else {
+      // upload or other types: no filtering, use existing formatter
+      formatted = formatKbContent(pkb);
+    }
+
+    if (formatted) parts.push({ pkb, formatted });
+  }
+
+  // Post-join trimming: trim codebase first, then website, keeping docs and uiFlow intact
+  const totalChars = parts.reduce((s, p) => s + p.formatted.length, 0);
+  if (totalChars > TOTAL_KB_CHAR_BUDGET) {
+    let excess = totalChars - TOTAL_KB_CHAR_BUDGET;
+
+    const codebasePart = parts.find(p => p.pkb.type === 'codebase');
+    if (codebasePart && excess > 0) {
+      const trim = Math.min(codebasePart.formatted.length, excess);
+      codebasePart.formatted = codebasePart.formatted.slice(0, codebasePart.formatted.length - trim);
+      excess -= trim;
+    }
+
+    const websitePart = parts.find(p => p.pkb.type === 'website');
+    if (websitePart && excess > 0) {
+      websitePart.formatted = websitePart.formatted.slice(0, websitePart.formatted.length - excess);
+    }
+  }
+
+  let result: string;
+  if (parts.length === 1) {
+    result = parts[0].formatted;
+  } else {
+    result = parts
+      .map(p => `## ${kbTypeLabel(p.pkb)}\n\n${p.formatted}`)
+      .join('\n\n---\n\n');
+  }
+
+  console.log(`[KB] topic keywords: [${keywords.join(', ')}]`);
+  console.log(`[KB] selected — docs: ${docCount} entries, website: ${websiteCount} entries, uiFlow: ${uiFlowCount} entries, codebase: ${codebaseCount} entries`);
+  console.log(`[KB] final KB chars: ${result.length} (~${Math.round(result.length / 4)} tokens)`);
+
+  if (!userTopic) {
+    setCachedKbPrompt(projectSlug, result);
+    console.log(`[KB] Cache populated for: ${projectSlug} (${result.length} chars)`);
+  }
+
+  return result;
 }
 
 /**

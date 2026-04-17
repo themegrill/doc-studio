@@ -19,6 +19,7 @@ interface ImportStats {
 interface ImportResult {
   success: boolean;
   imported: number;
+  skipped: number;
   failed: number;
   errors?: string[];
 }
@@ -215,7 +216,8 @@ export function MigrationImport({ projectSlug, projectId }: MigrationImportProps
             <p className="text-sm text-blue-700 mt-1">
               Upload a CSV file exported from BetterDocs. Choose to migrate the
               docs directly or extract a knowledge base for the AI writing
-              assistant.
+              assistant. Documents that already exist in the project will be
+              skipped.
             </p>
           </div>
         </div>
@@ -354,8 +356,8 @@ export function MigrationImport({ projectSlug, projectId }: MigrationImportProps
                   </div>
                   <p className="text-xs text-gray-600 leading-relaxed">
                     Import all documents directly into this project, preserving
-                    structure, categories, and navigation. Existing docs with
-                    the same slug will be overwritten.
+                    structure, categories, and navigation. Documents that
+                    already exist are skipped.
                   </p>
                 </button>
               </div>
@@ -467,9 +469,11 @@ export function MigrationImport({ projectSlug, projectId }: MigrationImportProps
             <div>
               <h4 className="font-medium text-green-900">Import Successful!</h4>
               <p className="text-sm text-green-700 mt-1">
-                Successfully imported {importResult.imported} document(s).
+                Successfully imported {importResult.imported} new document(s).
+                {importResult.skipped > 0 &&
+                  ` ${importResult.skipped} already existed and were skipped.`}
                 {importResult.failed > 0 &&
-                  ` ${importResult.failed} document(s) failed.`}
+                  ` ${importResult.failed} failed.`}
               </p>
               {importResult.errors && importResult.errors.length > 0 && (
                 <div className="mt-2 text-sm text-green-800">
