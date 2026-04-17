@@ -16,14 +16,17 @@ export async function POST(
   }
 
   const { projectSlug } = await params;
-  const { title, slug, sectionSlug, description } = await request.json();
+  const { title, slug: rawSlug, sectionSlug: rawSectionSlug, description } = await request.json();
 
-  if (!title || !slug || !sectionSlug) {
+  if (!title || !rawSlug || !rawSectionSlug) {
     return Response.json(
       { error: "Title, slug, and sectionSlug are required" },
       { status: 400 }
     );
   }
+
+  const slug = rawSlug.replace(/^\/+|\/+$/g, "");
+  const sectionSlug = rawSectionSlug.replace(/^\/+|\/+$/g, "");
 
   const sql = getDb();
 

@@ -113,6 +113,7 @@ export default function SectionPage({
       editingContext.setIsEditing(false);
       editingContext.setIsSaving(false);
       editingContext.setSaveSuccess(true);
+      editingContext.setIsDirty(false);
       router.refresh();
 
       setTimeout(() => {
@@ -134,6 +135,7 @@ export default function SectionPage({
     setIsEditing(false);
     editingContext.setIsEditing(false);
     editingContext.setSaveError("");
+    editingContext.setIsDirty(false);
   }, [sectionTitle, editingContext]);
 
   // Register save and cancel handlers - update when they change
@@ -158,7 +160,7 @@ export default function SectionPage({
               <Input
                 type="text"
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                onChange={(e) => { setTitle(e.target.value); editingContext.setIsDirty(true); }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
                   if (e.key === "Escape") handleCancel();

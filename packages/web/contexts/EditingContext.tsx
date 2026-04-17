@@ -26,6 +26,10 @@ interface EditingContextType {
   isEditing: boolean;
   setIsEditing: (value: boolean) => void;
 
+  // Whether there are unsaved changes
+  isDirty: boolean;
+  setIsDirty: (value: boolean) => void;
+
   // Handler functions (registered by DocRenderer or SectionPage)
   onSave: () => Promise<void>;
   setOnSave: (fn: (() => Promise<void>) | null) => void;
@@ -56,6 +60,7 @@ const EditingContext = createContext<EditingContextType | undefined>(undefined);
 export function EditingProvider({ children }: { children: ReactNode }) {
   // Edit mode and save operation state
   const [isEditing, setIsEditing] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [draftEnabled, setDraftEnabled] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -134,6 +139,8 @@ export function EditingProvider({ children }: { children: ReactNode }) {
     () => ({
       isEditing,
       setIsEditing,
+      isDirty,
+      setIsDirty,
       draftEnabled,
       setDraftEnabled,
       isPublished,
@@ -151,7 +158,7 @@ export function EditingProvider({ children }: { children: ReactNode }) {
       saveError,
       setSaveError,
     }),
-    [isEditing, draftEnabled, isPublished, isSaving, saveSuccess, saveError],
+    [isEditing, isDirty, draftEnabled, isPublished, isSaving, saveSuccess, saveError],
   );
 
   return (

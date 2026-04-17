@@ -154,6 +154,18 @@ function DocsLayoutContent({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session } = useSession();
   const pathname = usePathname();
+  const { isEditing, isDirty } = useEditing();
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isEditing && isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isEditing, isDirty]);
 
   // Extract project slug from pathname if in project context
   // Memoized to avoid regex computation on every render

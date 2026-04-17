@@ -387,15 +387,20 @@ async function updateNavigationStructure(
         : existingNav.structure
     ) as { routes?: ExistingRoute[] };
 
-    mergedRoutes = existing.routes ? [...existing.routes] : [];
+    // Strip unresolved placeholder groups left by previous failed imports
+    // ("Category 5", "Category 12", etc.) so a fresh import can replace them.
+    const badCategoryTitle = /^category\s+\d+$/i;
+    mergedRoutes = (existing.routes ?? []).filter(
+      (r) => !badCategoryTitle.test((r.title as string) ?? "")
+    );
 
-    // Merge category groups: append children to an existing group with the
-    // same title, or add a new group if none matches.
+    // Merge category groups: match by title OR by path, then append children.
     for (const group of newGroups) {
       const existingGroup = mergedRoutes.find(
         (r) =>
-          typeof r.title === "string" &&
-          r.title.toLowerCase() === group.title.toLowerCase()
+          (typeof r.title === "string" &&
+            r.title.toLowerCase() === group.title.toLowerCase()) ||
+          (typeof r.path === "string" && r.path === group.path)
       ) as (ExistingRoute & { children?: NavChild[] }) | undefined;
 
       if (existingGroup) {

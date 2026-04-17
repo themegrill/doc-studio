@@ -240,16 +240,15 @@ function parseCategoryRow(row: string[], columnMap: Record<string, number>): Cat
       return null;
     }
 
-    // Only process doc_category taxonomy
-    if (taxonomy !== 'doc_category') {
-      return null;
-    }
-
+    // Accept all term rows — taxonomy values vary across BetterDocs exports
+    // (e.g. 'doc_category', 'Doc_Category', 'betterdocs-category').
+    // Terms not referenced by any document's categoryIds are ignored during
+    // navigation building, so including tags here causes no harm.
     return {
       id: termId,
       name: decodeHTMLEntities(termName),
       parent: termParent && termParent !== '0' ? termParent : null,
-      taxonomy,
+      taxonomy: taxonomy || 'doc_category',
       order: parseInt(categoryOrder || '999', 10),
     };
   } catch (error) {

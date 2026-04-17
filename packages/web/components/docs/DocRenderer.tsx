@@ -166,6 +166,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       sectionTitle: undefined,
     });
     editingContext.setIsEditing(false);
+    editingContext.setIsDirty(false);
   }, [doc.title, doc.description, editingContext]);
 
   // Initialize chat state - always start with false to match SSR
@@ -966,6 +967,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         editingContext.setIsSaving(false);
         editingContext.setSaveSuccess(true);
         editingContext.setSaveError("");
+        editingContext.setIsDirty(false);
         setSaveState({ isSaving: false, success: true, error: "" });
 
         // Refresh the page to show updated content
@@ -1036,6 +1038,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         editingContext.setIsSaving(false);
         editingContext.setSaveSuccess(true);
         editingContext.setSaveError("");
+        editingContext.setIsDirty(false);
         setSaveState({ isSaving: false, success: true, error: "" });
         router.refresh();
         setTimeout(() => {
@@ -1122,12 +1125,13 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
               <Input
                 type="text"
                 value={editorState.sectionTitle || ""}
-                onChange={(e) =>
+                onChange={(e) => {
                   setEditorState((prev) => ({
                     ...prev,
                     sectionTitle: e.target.value,
-                  }))
-                }
+                  }));
+                  editingContext.setIsDirty(true);
+                }}
                 className="text-3xl font-bold border-2 border-blue-200 focus:border-blue-400"
                 placeholder="Section title"
               />
@@ -1138,12 +1142,13 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                 <Input
                   type="text"
                   value={editorState.title}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setEditorState((prev) => ({
                       ...prev,
                       title: e.target.value,
-                    }))
-                  }
+                    }));
+                    editingContext.setIsDirty(true);
+                  }}
                   onMouseUp={(e) => handleTextSelect("title", e)}
                   onKeyUp={(e) =>
                     handleTextSelect(
@@ -1183,12 +1188,13 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                 <Input
                   type="text"
                   value={editorState.description}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setEditorState((prev) => ({
                       ...prev,
                       description: e.target.value,
-                    }))
-                  }
+                    }));
+                    editingContext.setIsDirty(true);
+                  }}
                   onMouseUp={(e) => handleTextSelect("description", e)}
                   onKeyUp={(e) =>
                     handleTextSelect(
@@ -1313,6 +1319,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
               setEditorState((prev) => ({ ...prev, isEditing: true }));
               editingContext.setIsEditing(true);
             }
+            if (isAuthenticated) editingContext.setIsDirty(true);
 
             // Transform markdown image paragraphs inserted by AI into proper image blocks
             if (!isTransformingRef.current) {
