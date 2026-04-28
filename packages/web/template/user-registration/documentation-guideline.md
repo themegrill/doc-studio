@@ -507,6 +507,32 @@ Use prose (not lists) for:
 - FAQ answers
 - Notes and callouts
 
+## 19. Image Usage (Selective)
+
+Use images only when they add clarity.
+
+Use when:
+
+- Navigation is complex
+- UI layout is important
+- Visual confirmation helps
+
+Do NOT:
+
+- Add images for trivial steps
+- Overuse images
+
+Format:
+
+```md
+![Description of what the image shows](https://placehold.co/800x400)
+```
+
+Alt text must describe:
+
+- What the user should look for
+- Why the image matters
+
 ### Quick Reference Card
 
 Paste this card into your writing environment as a daily reminder.

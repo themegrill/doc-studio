@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { BlockNoteView } from "@blocknote/mantine";
 import {
@@ -11,7 +10,6 @@ import {
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
   getFormattingToolbarItems,
-  createReactBlockSpec,
 } from "@blocknote/react";
 import { defaultBlockSpecs, BlockNoteSchema } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
@@ -25,8 +23,14 @@ import {
   Sparkles,
   Loader2,
   Video,
-  X,
 } from "lucide-react";
+import {
+  VideoBlockEditorProps,
+  VideoInputModal,
+  VideoEmbedBlock,
+  migrateVideoBlocks,
+  setOpenVideoModalRef,
+} from "@/components/docs/VideoEmbedBlock";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
 import { useEditing } from "@/contexts/EditingContext";
@@ -51,296 +55,17 @@ const MemoAIMenuController = memo(AIMenuController);
 
 type InlineContentItem = { type: "text"; text: string; styles: Record<string, boolean> };
 
-function getEmbedInfo(url: string): { type: "iframe" | "video"; src: string } | null {
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-
-  // youtube.com/watch?v=ID  (any subdomain: www, m, music)
-  const ytWatch = trimmed.match(/(?:https?:\/\/)?(?:\w+\.)?youtube\.com\/watch\?(?:[^#]*&)?v=([a-zA-Z0-9_-]{11})/);
-  if (ytWatch) return { type: "iframe", src: `https://www.youtube.com/embed/${ytWatch[1]}` };
-
-  // youtu.be/ID
-  const ytShort = trimmed.match(/(?:https?:\/\/)?youtu\.be\/([a-zA-Z0-9_-]{11})/);
-  if (ytShort) return { type: "iframe", src: `https://www.youtube.com/embed/${ytShort[1]}` };
-
-  // youtube.com/shorts/ID
-  const ytShorts = trimmed.match(/(?:https?:\/\/)?(?:\w+\.)?youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
-  if (ytShorts) return { type: "iframe", src: `https://www.youtube.com/embed/${ytShorts[1]}` };
-
-  // youtube.com/embed/ID  (already an embed URL — pass through)
-  const ytEmbed = trimmed.match(/(?:https?:\/\/)?(?:\w+\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
-  if (ytEmbed) return { type: "iframe", src: `https://www.youtube.com/embed/${ytEmbed[1]}` };
-
-  // vimeo.com/ID
-  const vimeo = trimmed.match(/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/);
-  if (vimeo) return { type: "iframe", src: `https://player.vimeo.com/video/${vimeo[1]}` };
-
-  // direct video file
-  if (/\.(mp4|webm|ogg|mov)(\?|#|$)/i.test(trimmed)) return { type: "video", src: trimmed };
-
-  return null;
-}
-
-type VideoBlockEditorProps = {
-  block: { id: string; type: "videoEmbed"; props: { url: string } };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  editor: any;
-};
-
-// Survives component remounts within a page session (e.g. edit↔view toggle).
-// Keyed by block ID so each video block tracks its own committed URL.
-const videoUrlCache = new Map<string, string>();
-
-// Tracks which blocks currently have their input modal open.
-// When BlockNote remounts a block (e.g. because editable changes), the useState
-// initialiser reads from this set so the modal re-opens transparently.
-const videoModalOpenCache = new Set<string>();
-
-interface VideoInputModalProps {
-  onCommit: (url: string) => void;
-  onClose: () => void;
-}
-
-// Rendered via createPortal into document.body, completely outside ProseMirror's DOM.
-// This sidesteps ProseMirror's native mousedown/keydown listeners on the editor root,
-// which call preventDefault() on leaf nodes and block child inputs from receiving focus.
-const VideoInputModal = memo(function VideoInputModal({ onCommit, onClose }: VideoInputModalProps) {
-  const [inputUrl, setInputUrl] = useState("");
-  const [embedError, setEmbedError] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const commitUrl = () => {
-    const trimmed = inputUrl.trim();
-    if (!trimmed) return;
-    if (!getEmbedInfo(trimmed)) {
-      setEmbedError("Unsupported URL. Paste a YouTube, Vimeo, or direct video link (.mp4, .webm…)");
-      return;
-    }
-    onCommit(trimmed);
-    onClose();
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadError("");
-    if (file.size > 100 * 1024 * 1024) {
-      setUploadError("File too large. Maximum size is 100MB.");
-      return;
-    }
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/upload", { method: "POST", body: formData });
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || "Upload failed");
-      }
-      const { url } = await response.json();
-      onCommit(url);
-      onClose();
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed. Please try again.");
-      console.error("[VideoBlock] Upload failed:", err);
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
-
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="bg-white rounded-xl shadow-2xl p-5 w-full max-w-md mx-4 space-y-4"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
-            <Video size={16} />
-            Embed or upload a video
-          </h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          <input
-            autoFocus
-            type="text"
-            value={inputUrl}
-            onChange={(e) => { setInputUrl(e.target.value); setEmbedError(""); }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitUrl();
-              if (e.key === "Escape") onClose();
-            }}
-            placeholder="Paste YouTube, Vimeo, or video URL…"
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
-          />
-          {embedError && <p className="text-xs text-red-500">{embedError}</p>}
-          <button
-            onClick={commitUrl}
-            disabled={!inputUrl.trim()}
-            className="w-full py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 rounded-lg transition-colors"
-          >
-            Embed
-          </button>
-        </div>
-
-        <div className="relative flex items-center gap-3">
-          <div className="flex-1 h-px bg-gray-200" />
-          <span className="text-xs text-gray-400">or</span>
-          <div className="flex-1 h-px bg-gray-200" />
-        </div>
-
-        <div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="video/mp4,video/webm,video/ogg,video/quicktime"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
-            className="w-full py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 transition-colors"
-          >
-            {isUploading ? "Uploading…" : "Upload a video file (max 100MB)"}
-          </button>
-          {uploadError && <p className="text-xs text-red-500 mt-1">{uploadError}</p>}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
+// Schema is built once at module load, not inside DocRenderer, for two reasons:
+// 1. Avoids reconstructing TipTap Node objects on every render cycle.
+// 2. Isolates factory/schema errors from React's render cycle so a bad spec
+//    doesn't silently swallow the error inside a setState call.
+// The built-in `video` block is excluded so BlockNote's FilePanelExtension
+// never fires — all video content goes through the custom videoEmbed block.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const { video: _builtinVideo, ...blockSpecsWithoutBuiltinVideo } = defaultBlockSpecs;
+const editorSchema = BlockNoteSchema.create({
+  blockSpecs: { ...blockSpecsWithoutBuiltinVideo, videoEmbed: VideoEmbedBlock() },
 });
-
-function VideoBlockContent({ block, editor }: VideoBlockEditorProps) {
-  // Always-current block ref — BlockNote may pass a new block object between renders
-  // but applyUrl/clearEmbed need the latest version for updateBlock to work correctly.
-  const blockRef = useRef(block);
-  blockRef.current = block;
-
-  // DO NOT use useState for the URL. Using React state creates a race condition:
-  // editor.updateBlock() triggers TipTap's NodeView.update() synchronously inside
-  // the ProseMirror transaction, which calls contentComponent.setRenderer() causing
-  // a ContentComponent re-render BEFORE React's batch commits setDisplayUrl(url).
-  // In that intermediate render displayUrl is still "" → embed is null → iframe unmounts.
-  // This also fires on every selectionUpdate (TipTap calls updateProps({selected}) via rAF).
-  //
-  // Fix: read block.props.url directly — ProseMirror has already updated it synchronously
-  // before any re-render fires, so there is never an intermediate empty-URL state.
-  // The cache is a fallback for surviving NodeView remounts (e.g. when editable toggles).
-  if (block.props.url) videoUrlCache.set(block.id, block.props.url);
-  const currentUrl = block.props.url || videoUrlCache.get(block.id) || "";
-
-  // Read initial modal state from the cache so it survives BlockNote remounts
-  // (e.g. when editable toggles and BlockNote recreates its node views).
-  const [showModal, setShowModal] = useState(() => videoModalOpenCache.has(block.id));
-
-  // useCallback so memo on VideoInputModal actually works — without stable refs,
-  // memo always fails (new function instances every render) and the modal
-  // re-renders on every VideoBlockContent render, losing input focus.
-  const openModal = useCallback(() => {
-    videoModalOpenCache.add(blockRef.current.id);
-    setShowModal(true);
-  }, []);
-
-  const closeModal = useCallback(() => {
-    videoModalOpenCache.delete(blockRef.current.id);
-    setShowModal(false);
-  }, []);
-
-  const applyUrl = useCallback((url: string) => {
-    videoUrlCache.set(blockRef.current.id, url);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (editor as any).updateBlock(blockRef.current, { props: { url } });
-  }, [editor]);
-
-  const clearEmbed = useCallback(() => {
-    videoUrlCache.delete(blockRef.current.id);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (editor as any).updateBlock(blockRef.current, { props: { url: "" } });
-  }, [editor]);
-
-  const embed = getEmbedInfo(currentUrl);
-
-  if (embed) {
-    return (
-      <div className="my-1 w-full" contentEditable={false}>
-        {embed.type === "video" ? (
-          <video controls preload="none" className="w-full rounded-lg" src={embed.src} />
-        ) : (
-          <div className="relative w-full rounded-lg overflow-hidden" style={{ paddingBottom: "56.25%" }}>
-            <iframe
-              className="absolute inset-0 w-full h-full"
-              src={embed.src}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              title="Embedded video"
-            />
-          </div>
-        )}
-        {editor.isEditable && (
-          <button
-            onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
-            onClick={clearEmbed}
-            className="mt-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
-          >
-            Remove
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div contentEditable={false} className="my-1 w-full">
-      <div
-        className="border border-dashed border-gray-300 rounded-lg p-4 bg-gray-50 flex items-center gap-2 cursor-pointer hover:bg-gray-100 hover:border-gray-400 transition-colors select-none"
-        onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-        onClick={() => { if (editor.isEditable) openModal(); }}
-      >
-        <Video size={16} className="text-gray-400 shrink-0" />
-        <span className="text-sm text-gray-400">Click to embed or upload a video…</span>
-      </div>
-      {showModal && (
-        <VideoInputModal
-          onCommit={applyUrl}
-          onClose={closeModal}
-        />
-      )}
-    </div>
-  );
-}
-
-const VideoEmbedBlock = createReactBlockSpec(
-  {
-    type: "videoEmbed" as const,
-    propSchema: {
-      url: { default: "" as const },
-    },
-    content: "none" as const,
-  },
-  {
-    render: (props) => (
-      <VideoBlockContent
-        block={props.block as VideoBlockEditorProps["block"]}
-        editor={props.editor}
-      />
-    ),
-  }
-);
 
 // memo + module-level: prevents remount AND re-render when DocRenderer re-renders.
 // Without memo, every DocRenderer render would re-render these, potentially causing
@@ -499,6 +224,11 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     isImproving: false,
     error: "",
   });
+
+  const [videoModalState, setVideoModalState] = useState<{
+    block: VideoBlockEditorProps["block"];
+    editor: VideoBlockEditorProps["editor"];
+  } | null>(null);
 
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
@@ -981,26 +711,9 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   });
 }
 
-  // Convert legacy built-in `video` blocks to our custom `videoEmbed` blocks.
-  // Built-in video blocks trigger BlockNote's FilePanelExtension when editable,
-  // causing a visible flicker on edit-mode entry. videoEmbed avoids that entirely.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function migrateVideoBlocks(blocks: any[]): any[] {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return blocks.map((block: any) => {
-      if (block.type === "video" && block.props?.url) {
-        return { type: "videoEmbed", props: { url: block.props.url } };
-      }
-      return block;
-    });
-  }
-
   const editor = useCreateBlockNote({
     initialContent: doc.blocks.length > 0 ? applyInlineMarkdownToBlocks(transformMarkdownImages(normalizeLegacyMarkdownBlocks(migrateVideoBlocks(doc.blocks)))) : undefined,
-    schema: BlockNoteSchema.create({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      blockSpecs: { ...defaultBlockSpecs, videoEmbed: VideoEmbedBlock() } as any,
-    }),
+    schema: editorSchema,
     dictionary: {
       ...blockNoteLocale,
       ai: aiLocale, // AI dictionary should be nested under 'ai' key
@@ -1041,6 +754,15 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   useEffect(() => {
     editorRef.current = editor;
   }, [editor]);
+
+  useEffect(() => {
+    setOpenVideoModalRef((block, editor) => {
+      setVideoModalState({ block, editor });
+    });
+    return () => {
+      setOpenVideoModalRef(null);
+    };
+  }, []);
 
   // Compute document context for AI chat
   const documentContext = useMemo(
@@ -1435,6 +1157,10 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   // BlockNote to re-subscribe its listener, potentially firing onChange and cascading.
   // contextSetIsEditing/contextSetIsDirty are React state setters (stable references).
   const handleEditorChange = useCallback(() => {
+    // When editable transitions true→false, BlockNote fires onChange internally.
+    // Skip entirely: this isn't a user edit, so don't re-enter edit mode or mark dirty.
+    if (!editorStateRef.current.isEditing && !editor.isEditable) return;
+
     if (!editorStateRef.current.isEditing && isAuthenticated) {
       // Bail out (return prev) if state is already editing to avoid creating
       // a new object reference that would trigger an unnecessary re-render cascade.
@@ -1729,6 +1455,14 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           <SuggestionMenuWithAI editor={editor} />
         </BlockNoteView>
       </div>
+
+      {videoModalState && (
+        <VideoInputModal
+          block={videoModalState.block}
+          editor={videoModalState.editor}
+          onClose={() => setVideoModalState(null)}
+        />
+      )}
 
       {/* Metadata */}
       {doc.updatedAt && (
