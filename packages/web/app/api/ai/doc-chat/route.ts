@@ -54,8 +54,35 @@ export async function POST(req: Request) {
       );
     }
 
-    // Load knowledge base for this project (served from cache after first load)
+    // Load project-specific documentation guideline if it exists (overrides general)
     const projectSlug = documentContext?.projectSlug;
+    let projectSpecificGuidelinePrompt = "";
+    if (projectSlug) {
+      try {
+        const projectGuidelinePath = path.join(
+          process.cwd(),
+          "template",
+          projectSlug,
+          "documentation-guideline.md"
+        );
+        if (fs.existsSync(projectGuidelinePath)) {
+          projectSpecificGuidelinePrompt = fs.readFileSync(
+            projectGuidelinePath,
+            "utf-8"
+          );
+          console.log(
+            `[Doc Chat API] Loaded project-specific guideline for ${projectSlug}`
+          );
+        }
+      } catch (error) {
+        console.error(
+          "[Doc Chat API] Failed to load project-specific documentation guideline:",
+          error
+        );
+      }
+    }
+
+    // Load knowledge base for this project (served from cache after first load)
     console.log(`[doc-chat] projectSlug=${projectSlug ?? "null"}`);
     const lastUserMessage =
       (messages[messages.length - 1]?.content as string) ?? "";
@@ -209,7 +236,9 @@ No product knowledge base is available for this project. For all Tier 1 product 
 
     // ── Documentation guideline section ───────────────────────────────────────
 
-    const guidelineSection = documentationGuidelinePrompt
+    const guidelineSection = projectSpecificGuidelinePrompt
+      ? `\n\n---\n\n## DOCUMENTATION WRITING STANDARDS\n\nThis project has specific documentation guidelines loaded in <project_documentation_guidelines> tags at the start of the conversation. These PROJECT-SPECIFIC guidelines OVERRIDE the general documentation standards. Always apply them when writing or editing documentation for this project.`
+      : documentationGuidelinePrompt
       ? `\n\n---\n\n## DOCUMENTATION WRITING STANDARDS\n\nApply these standards to all documentation you write or edit:\n\n${documentationGuidelinePrompt}`
       : "";
 
@@ -363,36 +392,49 @@ Direct editing is not active in this session. Provide your edits as suggested te
 
     const firstUserIndex = modelMessages.findIndex((m) => m.role === "user");
 
-    if (knowledgeBasePrompt && firstUserIndex !== -1) {
+    if (firstUserIndex !== -1 && (projectSpecificGuidelinePrompt || knowledgeBasePrompt)) {
       const firstUserMsg = modelMessages[firstUserIndex];
       const firstMsgText =
         typeof firstUserMsg.content === "string" ? firstUserMsg.content : "";
 
-      const kbCachePart: TextPart = {
-        type: "text",
-        text: `<knowledge_base>\n${knowledgeBasePrompt}\n</knowledge_base>\n\nThe PRODUCT KNOWLEDGE BASE above is your primary source of truth for all product-specific facts. Read it directly — it requires no searching or tool calls. Before writing any documentation, scan all sections for relevant information.`,
-        providerOptions: {
-          anthropic: { cacheControl: { type: "ephemeral" } },
-        },
-      };
+      const parts: TextPart[] = [];
 
-      const userTextPart: TextPart = {
-        type: "text",
-        text: firstMsgText,
-      };
+      // Inject project-specific guideline as the first cache breakpoint
+      if (projectSpecificGuidelinePrompt) {
+        parts.push({
+          type: "text",
+          text: `<project_documentation_guidelines>\n${projectSpecificGuidelinePrompt}\n</project_documentation_guidelines>\n\nThe PROJECT DOCUMENTATION GUIDELINES above define the specific writing standards for this project. Apply them to every piece of documentation you write or edit. These override the general documentation guidelines.`,
+          providerOptions: {
+            anthropic: { cacheControl: { type: "ephemeral" } },
+          },
+        });
+      }
+
+      // Inject KB as the next cache breakpoint
+      if (knowledgeBasePrompt) {
+        parts.push({
+          type: "text",
+          text: `<knowledge_base>\n${knowledgeBasePrompt}\n</knowledge_base>\n\nThe PRODUCT KNOWLEDGE BASE above is your primary source of truth for all product-specific facts. Read it directly — it requires no searching or tool calls. Before writing any documentation, scan all sections for relevant information.`,
+          providerOptions: {
+            anthropic: { cacheControl: { type: "ephemeral" } },
+          },
+        });
+      }
+
+      parts.push({ type: "text", text: firstMsgText });
 
       finalMessages = [
         ...modelMessages.slice(0, firstUserIndex),
-        { role: "user", content: [kbCachePart, userTextPart] },
+        { role: "user", content: parts },
         ...modelMessages.slice(firstUserIndex + 1),
       ];
 
       console.log(
-        `[doc-chat] KB injected into message index ${firstUserIndex}`
+        `[doc-chat] Injected into message index ${firstUserIndex}: projectGuideline=${!!projectSpecificGuidelinePrompt}, KB=${!!knowledgeBasePrompt}`
       );
     } else {
       console.warn(
-        "[doc-chat] KB injection skipped — no user message found or KB empty"
+        "[doc-chat] Injection skipped — no user message found or nothing to inject"
       );
     }
 
