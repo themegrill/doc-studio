@@ -1288,6 +1288,17 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       contextSetDraftEnabled, contextSetIsPublished,
       contextSetOnSave, contextSetOnSaveDraft, contextSetOnCancel]);
 
+  // Reset editing state when navigating away from this doc.
+  // Kept in a separate effect with empty deps so the cleanup only fires on
+  // unmount — not on every dependency change — avoiding re-render cascades.
+  useEffect(() => {
+    return () => {
+      contextSetIsEditing(false);
+      contextSetIsDirty(false);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="max-w-[1000px] mx-auto">
       {/* Text Selection Improve Button */}
