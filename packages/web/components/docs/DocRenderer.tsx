@@ -37,6 +37,8 @@ import { useEditing } from "@/contexts/EditingContext";
 import ChatPanel from "@/components/chat/ChatPanel";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
 import { Badge } from "@/components/ui/badge-pro";
+import SeoPanel from "@/components/docs/SeoPanel";
+import type { SeoData } from "@/lib/db/ContentManager";
 import { useAIFeatures } from "@/hooks/use-ai-features";
 import {
   AIExtension,
@@ -137,6 +139,7 @@ interface EditorState {
   isEditing: boolean;
   title: string;
   description: string;
+  seo: SeoData;
   sectionTitle?: string;
   isEditingSectionTitle?: boolean;
 }
@@ -196,6 +199,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     isEditing: false,
     title: doc.title,
     description: doc.description || "",
+    seo: doc.seo || {},
   });
 
   // isSectionOverview is passed as a prop - section overview docs don't support draft mode
@@ -270,12 +274,13 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       isEditing: false,
       title: doc.title,
       description: doc.description || "",
+      seo: doc.seo || {},
       isEditingSectionTitle: false,
       sectionTitle: undefined,
     });
     contextSetIsEditing(false);
     contextSetIsDirty(false);
-  }, [doc.title, doc.description, contextSetIsEditing, contextSetIsDirty]);
+  }, [doc.title, doc.description, doc.seo, contextSetIsEditing, contextSetIsDirty]);
 
   // Initialize chat state - always start with false to match SSR
   const [chatOpen, setChatOpen] = useState(false);
@@ -495,10 +500,22 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
 
     // Run after a short delay to ensure BlockNote has rendered
     // Using a single timeout is fine - no need for polling here
+    const setImageAltTexts = () => {
+      document.querySelectorAll<HTMLImageElement>(".bn-editor img").forEach((img) => {
+        if (img.getAttribute("alt")) return;
+        const container = img.closest("[data-content-type]") ?? img.closest("[data-node-type]");
+        const caption = container?.querySelector<HTMLElement>(
+          ".bn-image-block-caption, figcaption, [data-placeholder='Enter caption']"
+        )?.textContent?.trim();
+        if (caption) img.setAttribute("alt", caption);
+      });
+    };
+
     const timer = setTimeout(() => {
       addHeadingAnchors();
     //   renderImages();
       makeLinksClickable();
+      setImageAltTexts();
     }, 150);
 
     return () => clearTimeout(timer);
@@ -1035,6 +1052,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         description: currentEditorState.description,
         blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
         published: true,
+        seo: currentEditorState.seo,
       };
 
       const response = await fetch(`/api/docs/${slug}`, {
@@ -1114,6 +1132,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         description: currentEditorState.description,
         blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
         published: false,
+        seo: currentEditorState.seo,
       };
 
       const response = await fetch(`/api/docs/${slug}`, {
@@ -1367,6 +1386,16 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                   {descriptionAIState.error}
                 </p>
               )}
+              <SeoPanel
+                seo={editorState.seo}
+                onChange={(seo) => {
+                  setEditorState((prev) => ({ ...prev, seo }));
+                  editingContext.setIsDirty(true);
+                }}
+                docTitle={editorState.title}
+                docDescription={editorState.description}
+                contentPreview={documentContext.blocksPreview}
+              />
             </div>
           ) : (
             <>
