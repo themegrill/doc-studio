@@ -269,6 +269,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingContext.isEditing]);
 
+
   const handleCancel = useCallback(() => {
     setEditorState({
       isEditing: false,
@@ -521,6 +522,43 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     return () => clearTimeout(timer);
   }, [editorState.isEditing, doc.blocks]);
 
+  // Walk an HTML DOM node and emit BlockNote inline content items.
+  // Inherits `styles` from parent tags (<strong> → bold, <em> → italic, etc.)
+  function walkHtmlNode(node: Node, styles: Record<string, boolean>, out: InlineContentItem[]) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent ?? "";
+      if (text) out.push({ type: "text", text, styles: { ...styles } });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const el = node as Element;
+    const s = { ...styles };
+    switch (el.tagName.toLowerCase()) {
+      case "strong": case "b":  s.bold          = true; break;
+      case "em":     case "i":  s.italic        = true; break;
+      case "u":                 s.underline      = true; break;
+      case "s": case "del": case "strike": s.strikethrough = true; break;
+      case "code":              s.code          = true; break;
+    }
+    el.childNodes.forEach((child) => walkHtmlNode(child, s, out));
+  }
+
+  // Convert an HTML-tagged string into an array of BlockNote inline items.
+  // Falls back to stripping tags when DOMParser is unavailable (SSR guard).
+  function parseInlineHtml(html: string, baseStyles: Record<string, boolean> = {}): InlineContentItem[] {
+    if (typeof window === "undefined" || !window.DOMParser) {
+      return [{ type: "text", text: html.replace(/<[^>]+>/g, ""), styles: baseStyles }];
+    }
+    try {
+      const doc = new window.DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+      const out: InlineContentItem[] = [];
+      doc.body.childNodes.forEach((n) => walkHtmlNode(n, baseStyles, out));
+      return out.length > 0 ? out : [{ type: "text", text: html.replace(/<[^>]+>/g, ""), styles: baseStyles }];
+    } catch {
+      return [{ type: "text", text: html.replace(/<[^>]+>/g, ""), styles: baseStyles }];
+    }
+  }
+
   function parseInlineMarkdown(text: string): InlineContentItem[] {
     const result: InlineContentItem[] = [];
     const regex = /\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`/g;
@@ -550,21 +588,40 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function applyInlineMarkdownToBlocks(blocks: any[]): any[] {
-    return blocks.map((block) => {
-      if (!Array.isArray(block.content)) return block;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function processBlock(block: any): any {
+      const processed = { ...block };
 
-      const newContent: unknown[] = [];
-      for (const item of block.content) {
-        const inline = item as { type?: string; text?: string };
-        if (inline?.type === "text" && typeof inline.text === "string" && /\*\*|`|\*/.test(inline.text)) {
-          newContent.push(...parseInlineMarkdown(inline.text));
-        } else {
-          newContent.push(item);
+      if (Array.isArray(block.content)) {
+        const newContent: unknown[] = [];
+        for (const item of block.content) {
+          const inline = item as { type?: string; text?: string; styles?: Record<string, boolean> };
+          if (inline?.type === "text" && typeof inline.text === "string") {
+            if (/\*\*|`|\*/.test(inline.text)) {
+              // Markdown formatting
+              newContent.push(...parseInlineMarkdown(inline.text));
+            } else if (/<[a-zA-Z]/.test(inline.text)) {
+              // Raw HTML tags from AI output — convert to inline content objects
+              newContent.push(...parseInlineHtml(inline.text, inline.styles ?? {}));
+            } else {
+              newContent.push(item);
+            }
+          } else {
+            newContent.push(item);
+          }
         }
+        processed.content = newContent;
       }
 
-      return { ...block, content: newContent };
-    });
+      // Recurse into children (e.g. nested list items)
+      if (Array.isArray(block.children) && block.children.length > 0) {
+        processed.children = block.children.map(processBlock);
+      }
+
+      return processed;
+    }
+
+    return blocks.map(processBlock);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -165,7 +165,7 @@ When writing or significantly expanding documentation, follow this process:
 
 1. **Scan the entire knowledge base** ...
 2. **Group the relevant facts** ...
-3. **Write the documentation** ...
+3. **Insert the documentation** — use insert_blocks to place all content into the editor. Do NOT write documentation as plain text in your chat response.
 4. **Add structure freely** ...
 5. **Do not fill gaps with assumptions** ...
 
@@ -264,10 +264,12 @@ You can directly edit the document using the tools below. Use them whenever the 
   - \`"numberedListItem"\` — Numbered list item (NOT "list")
   - \`"checkListItem"\` — Checkbox item with \`props: { checked: boolean }\`
   - \`"codeBlock"\` — Code block with \`props: { language: string }\`
+- **\`content\` must be a plain text string.** Do NOT use HTML tags (\`<strong>\`, \`<em>\`, \`<b>\`, \`<code>\`, etc.) or markdown formatting (\`**bold**\`, \`*italic*\`). Plain text only — the editor handles rendering. HTML tags appear as literal characters to the user.
 
 **2. update_block** — Modify an existing block
 - Parameters: \`{ blockId: string, update: { type?, content?, props? } }\`
 - Always search for the block first to get its ID.
+- Same rule: \`content\` must be plain text, no HTML tags.
 
 **3. delete_blocks** — Remove blocks
 - Parameters: \`{ blockIds: [string, ...] }\`
@@ -295,11 +297,21 @@ You can directly edit the document using the tools below. Use them whenever the 
 [/TOOL_CALL]
 \`\`\`
 
+### CRITICAL: All content must go into the editor
+
+When the user asks you to write, generate, add, or rewrite documentation:
+- **ALWAYS** use \`insert_blocks\` to place the content into the document.
+- **NEVER** write documentation content as plain text in your chat response.
+- If you write content as plain text, the user is forced to manually copy-paste it — this defeats the purpose of the editor tools.
+- A single \`insert_blocks\` call can contain ALL blocks for a full section or page — insert everything at once.
+
 ### Tool Usage Rules
 
-- Always explain what you will do before a tool call.
-- Use **one tool per response**. After a search executes, read the \`[Tool Result: ...]\` in the conversation and use the returned IDs in your next call.
-- For **exact matches**: proceed directly with the update.
+- Write one brief sentence explaining what you are about to do, then emit the tool call.
+- **INSERT / WRITE**: Use a single \`insert_blocks\` call containing all blocks. Do not split into multiple calls.
+- **REWRITE**: Use \`delete_blocks\` followed immediately by \`insert_blocks\` in the **same response** — you already know what to delete and what to insert, so no intermediate result is needed.
+- **UPDATE existing block**: First do \`search_blocks\` alone (you need the block ID from the result), then use the returned ID to \`update_block\` in the next response.
+- **Multiple independent tool calls** in one response are allowed when the second call does not depend on the result of the first.
 - For **fuzzy matches**: show the matched content to the user and confirm before updating.
 
 ### Workflow Examples
@@ -314,6 +326,25 @@ You can directly edit the document using the tools below. Use them whenever the 
       { "type": "heading", "props": { "level": 2 }, "content": "Installation" },
       { "type": "paragraph", "content": "To install, run the following command:" },
       { "type": "codeBlock", "props": { "language": "bash" }, "content": "npm install my-package" }
+    ],
+    "position": "end"
+  }
+}
+[/TOOL_CALL]
+\`\`\`
+
+**Rewriting an existing section (delete old + insert new in ONE response):**
+\`\`\`
+[TOOL_CALL]
+{ "tool": "delete_blocks", "parameters": { "blockIds": ["block-10", "block-11", "block-12"] } }
+[/TOOL_CALL]
+[TOOL_CALL]
+{
+  "tool": "insert_blocks",
+  "parameters": {
+    "blocks": [
+      { "type": "heading", "props": { "level": 2 }, "content": "Overview" },
+      { "type": "paragraph", "content": "This section explains..." }
     ],
     "position": "end"
   }
