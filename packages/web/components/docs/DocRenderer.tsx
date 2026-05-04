@@ -31,6 +31,7 @@ import {
   migrateVideoBlocks,
   setOpenVideoModalRef,
 } from "@/components/docs/VideoEmbedBlock";
+import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
 import { useEditing } from "@/contexts/EditingContext";
@@ -50,6 +51,7 @@ import { en as aiLocale } from "@blocknote/xl-ai/locales";
 import { DefaultChatTransport } from "ai";
 import "@blocknote/xl-ai/style.css";
 import { filterSuggestionItems } from "@blocknote/core/extensions";
+import { Plugin, PluginKey, NodeSelection } from "prosemirror-state";
 
 // Memoized so it never re-renders when DocRenderer re-renders (no props, stable).
 // Without this, AIMenuController would re-register its BlockNote handler on every render.
@@ -64,9 +66,13 @@ type InlineContentItem = { type: "text"; text: string; styles: Record<string, bo
 // The built-in `video` block is excluded so BlockNote's FilePanelExtension
 // never fires — all video content goes through the custom videoEmbed block.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { video: _builtinVideo, ...blockSpecsWithoutBuiltinVideo } = defaultBlockSpecs;
+const { video: _builtinVideo, image: _builtinImage, ...baseBlockSpecs } = defaultBlockSpecs;
 const editorSchema = BlockNoteSchema.create({
-  blockSpecs: { ...blockSpecsWithoutBuiltinVideo, videoEmbed: VideoEmbedBlock() },
+  blockSpecs: {
+    ...baseBlockSpecs,
+    image: ImageBlockWithAlt(),
+    videoEmbed: VideoEmbedBlock(),
+  },
 });
 
 // memo + module-level: prevents remount AND re-render when DocRenderer re-renders.
@@ -499,24 +505,10 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       });
     };
 
-    // Run after a short delay to ensure BlockNote has rendered
-    // Using a single timeout is fine - no need for polling here
-    const setImageAltTexts = () => {
-      document.querySelectorAll<HTMLImageElement>(".bn-editor img").forEach((img) => {
-        if (img.getAttribute("alt")) return;
-        const container = img.closest("[data-content-type]") ?? img.closest("[data-node-type]");
-        const caption = container?.querySelector<HTMLElement>(
-          ".bn-image-block-caption, figcaption, [data-placeholder='Enter caption']"
-        )?.textContent?.trim();
-        if (caption) img.setAttribute("alt", caption);
-      });
-    };
-
     const timer = setTimeout(() => {
       addHeadingAnchors();
     //   renderImages();
       makeLinksClickable();
-      setImageAltTexts();
     }, 150);
 
     return () => clearTimeout(timer);
@@ -827,6 +819,43 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   // Update editor ref when editor is created
   useEffect(() => {
     editorRef.current = editor;
+  }, [editor]);
+
+  // Chrome-specific fix: clicking an image block triggers ProseMirror's Chrome workaround
+  // (input.ts MouseDown.up) which resets NodeSelection to TextSelection when posAtCoords
+  // returns inside=-1 for contentEditable=false elements. Intercepting handleClick before
+  // that workaround fires and explicitly creating a NodeSelection prevents the reset.
+  useEffect(() => {
+    const pluginKey = new PluginKey("imageClickFix");
+    const plugin = new Plugin({
+      key: pluginKey,
+      props: {
+        handleClick(view, pos, event) {
+          const target = event.target as HTMLElement;
+          if (target.tagName !== "IMG" && !target.closest("img")) return false;
+
+          const doc = view.state.doc;
+          for (let testPos = Math.max(0, pos - 5); testPos <= Math.min(doc.content.size - 1, pos + 5); testPos++) {
+            try {
+              const $pos = doc.resolve(testPos);
+              const node = $pos.nodeAfter;
+              if (node && node.isAtom && NodeSelection.isSelectable(node)) {
+                view.dispatch(view.state.tr.setSelection(NodeSelection.create(doc, testPos)));
+                return true;
+              }
+            } catch {
+              // skip invalid positions
+            }
+          }
+          return false;
+        },
+      },
+    });
+
+    editor._tiptapEditor.registerPlugin(plugin);
+    return () => {
+      editor._tiptapEditor.unregisterPlugin(pluginKey);
+    };
   }, [editor]);
 
   useEffect(() => {
