@@ -94,6 +94,66 @@ export async function PUT(
       return NextResponse.json({ error: "Save failed" }, { status: 500 });
     }
 
+    // Handle slug rename if requested
+    const newSlug = typeof body.newSlug === "string" ? body.newSlug.trim() : null;
+    if (newSlug && newSlug !== slug) {
+      const sql = getDb();
+
+      // Check the doc exists in this project
+      const [existing] = await sql`
+        SELECT id FROM documents WHERE project_id = ${project.id} AND slug = ${slug}
+      `;
+      if (!existing) {
+        return NextResponse.json({ error: "Document not found" }, { status: 404 });
+      }
+
+      // Check new slug is not already taken
+      const [conflict] = await sql`
+        SELECT id FROM documents WHERE project_id = ${project.id} AND slug = ${newSlug}
+      `;
+      if (conflict) {
+        return NextResponse.json({ error: "Slug already in use" }, { status: 409 });
+      }
+
+      // Update the slug in the documents table
+      await sql`
+        UPDATE documents SET slug = ${newSlug} WHERE project_id = ${project.id} AND slug = ${slug}
+      `;
+
+      // Update the slug in the navigation structure
+      const [nav] = await sql`
+        SELECT id, structure FROM navigation WHERE project_id = ${project.id} ORDER BY updated_at DESC LIMIT 1
+      `;
+      if (nav?.structure) {
+        const structure = nav.structure as any;
+        const oldPath = `/docs/${slug}`;
+        const newPath = `/docs/${newSlug}`;
+        let updated = false;
+        if (structure.routes) {
+          structure.routes = structure.routes.map((route: any) => {
+            if (route.children) {
+              route.children = route.children.map((child: any) => {
+                if (child.path === oldPath || child.slug === slug) {
+                  updated = true;
+                  return { ...child, path: newPath, slug: newSlug };
+                }
+                return child;
+              });
+            }
+            return route;
+          });
+        }
+        if (updated) {
+          await sql`
+            UPDATE navigation SET structure = ${sql.json(structure)}, updated_at = NOW()
+            WHERE id = ${nav.id}
+          `;
+        }
+      }
+
+      return NextResponse.json({ success: true, slug: newSlug });
+    }
+
     return NextResponse.json({ success: true, slug });
   } catch (error: unknown) {
     const err = error as Error;

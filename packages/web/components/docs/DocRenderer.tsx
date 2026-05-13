@@ -145,6 +145,7 @@ interface EditorState {
   isEditing: boolean;
   title: string;
   description: string;
+  slug: string;
   seo: SeoData;
   sectionTitle?: string;
   isEditingSectionTitle?: boolean;
@@ -205,6 +206,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     isEditing: false,
     title: doc.title,
     description: doc.description || "",
+    slug: doc.slug,
     seo: doc.seo || {},
   });
 
@@ -1132,6 +1134,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         currentEditorState.isEditingSectionTitle && currentEditorState.sectionTitle
           ? currentEditorState.sectionTitle
           : currentEditorState.title;
+      const slugChanged = currentEditorState.slug && currentEditorState.slug !== doc.slug;
       const updatedDoc = {
         slug: doc.slug,
         title: effectiveTitle,
@@ -1139,6 +1142,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
         published: true,
         seo: currentEditorState.seo,
+        ...(slugChanged && { newSlug: currentEditorState.slug }),
       };
 
       const response = await fetch(`/api/docs/${slug}`, {
@@ -1150,12 +1154,14 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       const responseData = await response.json();
 
       if (response.ok) {
+        const savedSlug = responseData.slug || slug;
         setEditorState((prev) => ({
           ...prev,
           isEditing: false,
           isEditingSectionTitle: false,
           sectionTitle: undefined,
           title: effectiveTitle,
+          slug: savedSlug,
         }));
         contextSetIsEditing(false);
         contextSetIsSaving(false);
@@ -1164,8 +1170,11 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         contextSetIsDirty(false);
         setSaveState({ isSaving: false, success: true, error: "" });
 
-        // Refresh the page to show updated content
-        router.refresh();
+        if (savedSlug !== slug && projectSlug) {
+          router.push(`/projects/${projectSlug}/docs/${savedSlug}`);
+        } else {
+          router.refresh();
+        }
 
         setTimeout(() => {
           setSaveState((prev) => ({ ...prev, success: false }));
@@ -1492,6 +1501,11 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                 docTitle={editorState.title}
                 docDescription={editorState.description}
                 contentPreview={documentContext.blocksPreview}
+                slug={!isSectionOverview ? editorState.slug : undefined}
+                onSlugChange={!isSectionOverview ? (newSlug) => {
+                  setEditorState((prev) => ({ ...prev, slug: newSlug }));
+                  editingContext.setIsDirty(true);
+                } : undefined}
               />
             </div>
           ) : (

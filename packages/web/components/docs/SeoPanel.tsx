@@ -19,6 +19,8 @@ interface SeoPanelProps {
   docTitle?: string;
   docDescription?: string;
   contentPreview?: string;
+  slug?: string;
+  onSlugChange?: (slug: string) => void;
 }
 
 export default function SeoPanel({
@@ -27,6 +29,8 @@ export default function SeoPanel({
   docTitle,
   docDescription,
   contentPreview,
+  slug,
+  onSlugChange,
 }: SeoPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [titleGenerating, setTitleGenerating] = useState(false);
@@ -213,6 +217,36 @@ export default function SeoPanel({
               </p>
             )}
           </div>
+
+          {/* Slug */}
+          {slug !== undefined && onSlugChange && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-gray-600">Slug</Label>
+              <div className="flex items-center border border-input rounded-md overflow-hidden bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                {slug.includes("/") && (
+                  <span className="pl-3 text-sm text-gray-400 shrink-0 select-none">
+                    {slug.split("/")[0]}/
+                  </span>
+                )}
+                <input
+                  type="text"
+                  value={slug.includes("/") ? slug.split("/").slice(1).join("/") : slug}
+                  onChange={(e) => {
+                    const sectionPart = slug.includes("/") ? slug.split("/")[0] : "";
+                    onSlugChange(sectionPart ? `${sectionPart}/${e.target.value}` : e.target.value);
+                  }}
+                  onBlur={(e) => {
+                    const sectionPart = slug.includes("/") ? slug.split("/")[0] : "";
+                    const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
+                    onSlugChange(sectionPart ? `${sectionPart}/${sanitized}` : sanitized);
+                  }}
+                  className="flex-1 px-3 py-2 text-sm outline-none bg-transparent"
+                  placeholder="document-slug"
+                />
+              </div>
+              <p className="text-xs text-gray-400">URL-safe identifier for this document</p>
+            </div>
+          )}
 
           {/* Schema Type */}
           <div className="space-y-1.5">
