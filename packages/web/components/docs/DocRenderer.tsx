@@ -31,6 +31,7 @@ import {
   migrateVideoBlocks,
   setOpenVideoModalRef,
 } from "@/components/docs/VideoEmbedBlock";
+import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
 import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
@@ -72,6 +73,7 @@ const editorSchema = BlockNoteSchema.create({
     ...baseBlockSpecs,
     image: ImageBlockWithAlt(),
     videoEmbed: VideoEmbedBlock(),
+    linkCard: LinkCardBlock(),
   },
 });
 
@@ -117,6 +119,21 @@ const SuggestionMenuWithAI = memo(function SuggestionMenuWithAI({ editor }: { ed
               (editor as any).replaceBlocks(
                 [cursorBlock],
                 [{ type: "videoEmbed", props: { url: "" } }],
+              );
+            },
+          },
+          {
+            title: "Link Card",
+            group: "Embeds",
+            icon: <LinkIcon size={18} />,
+            subtext: "Insert a styled link block",
+            onItemClick: () => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { block: cursorBlock } = (editor as any).getTextCursorPosition();
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (editor as any).replaceBlocks(
+                [cursorBlock],
+                [{ type: "linkCard", props: { url: "", label: "" } }],
               );
             },
           },
