@@ -300,13 +300,14 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       isEditing: false,
       title: doc.title,
       description: doc.description || "",
+      slug: doc.slug,
       seo: doc.seo || {},
       isEditingSectionTitle: false,
       sectionTitle: undefined,
     });
     contextSetIsEditing(false);
     contextSetIsDirty(false);
-  }, [doc.title, doc.description, doc.seo, contextSetIsEditing, contextSetIsDirty]);
+  }, [doc.title, doc.description, doc.slug, doc.seo, contextSetIsEditing, contextSetIsDirty]);
 
   // Initialize chat state - always start with false to match SSR
   const [chatOpen, setChatOpen] = useState(false);
