@@ -1,7 +1,7 @@
 "use client";
 
-import { signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { handleSignOut } from "@/lib/actions/auth";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, LayoutDashboard, Settings } from "lucide-react";
@@ -16,13 +16,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export default function UserMenu() {
   const { data: session, status } = useSession();
-  const router = useRouter();
-
-  const handleSignOut = async () => {
-    await signOut({ redirect: false });
-    router.push("/login");
-    router.refresh();
-  };
 
   if (status === "loading") return null;
   if (!session?.user) return null;
@@ -73,7 +66,7 @@ export default function UserMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut}>
+        <DropdownMenuItem onClick={() => handleSignOut()}>
           <LogOut size={16} className="mr-2" />
           Sign Out
         </DropdownMenuItem>

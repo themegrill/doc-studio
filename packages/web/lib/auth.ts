@@ -1,12 +1,10 @@
 import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { PostgresAdapter } from "@/lib/auth/adapter";
 import { getDb } from "@/lib/db/postgres";
 import bcrypt from "bcryptjs";
 
 export const authConfig: NextAuthConfig = {
-  adapter: PostgresAdapter(),
   providers: [
     Credentials({
       name: "credentials",

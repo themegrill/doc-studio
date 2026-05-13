@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { handleSignIn } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,17 +37,9 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
+      const result = await handleSignIn(email, password);
       if (result?.error) {
-        setError("Invalid email or password");
-      } else {
-        router.push("/projects");
-        router.refresh();
+        setError(result.error);
       }
     } catch (error: unknown) {
       const err = error as Error;
