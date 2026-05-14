@@ -46,10 +46,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> }
 ) {
-  const resolvedParams = await params;
-  const slug = resolvedParams.slug.join("/");
-
   try {
+    const resolvedParams = await params;
+    const slug = resolvedParams.slug.join("/");
     // Check authentication with NextAuth
     const session = await auth();
 
@@ -128,21 +127,31 @@ export async function PUT(
         const structure = nav.structure as any;
         const oldPath = `/docs/${slug}`;
         const newPath = `/docs/${newSlug}`;
+        const docId = existing.id;
+
+        const updateEntry = (child: any) => {
+          if (
+            child.id === docId ||
+            child.path === oldPath ||
+            child.slug === slug
+          ) {
+            return { ...child, path: newPath, slug: newSlug };
+          }
+          return child;
+        };
+
         let updated = false;
         if (structure.routes) {
           structure.routes = structure.routes.map((route: any) => {
-            if (route.children) {
-              route.children = route.children.map((child: any) => {
-                if (child.path === oldPath || child.slug === slug) {
-                  updated = true;
-                  return { ...child, path: newPath, slug: newSlug };
-                }
-                return child;
-              });
+            if (route.children?.length) {
+              const next = route.children.map(updateEntry);
+              if (JSON.stringify(next) !== JSON.stringify(route.children)) updated = true;
+              return { ...route, children: next };
             }
             return route;
           });
         }
+
         if (updated) {
           await sql`
             UPDATE navigation SET structure = ${sql.json(structure)}, updated_at = NOW()
@@ -169,10 +178,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string[] }> },
 ) {
-  const resolvedParams = await params;
-  const slug = resolvedParams.slug.join("/");
-
   try {
+    const resolvedParams = await params;
+    const slug = resolvedParams.slug.join("/");
     // Check authentication
     const session = await auth();
 

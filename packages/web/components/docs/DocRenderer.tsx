@@ -1169,7 +1169,9 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         body: JSON.stringify(updatedDoc),
       });
 
-      const responseData = await response.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let responseData: any = {};
+      try { responseData = await response.json(); } catch { /* non-JSON body (e.g. HTML error page) */ }
 
       if (response.ok) {
         const savedSlug = responseData.slug || slug;
@@ -1190,6 +1192,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
 
         if (savedSlug !== slug && projectSlug) {
           router.push(`/projects/${projectSlug}/docs/${savedSlug}`);
+          router.refresh();
         } else {
           router.refresh();
         }
@@ -1254,7 +1257,9 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         body: JSON.stringify(updatedDoc),
       });
 
-      const responseData = await response.json();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let responseData: any = {};
+      try { responseData = await response.json(); } catch { /* non-JSON body */ }
 
       if (response.ok) {
         setEditorState((prev) => ({ ...prev, isEditing: false, isEditingSectionTitle: false, sectionTitle: undefined }));

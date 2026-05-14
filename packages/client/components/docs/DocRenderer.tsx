@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -10,6 +11,19 @@ import { DocContent } from "@/lib/db/ContentManager";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
 import { Badge } from "@/components/ui/badge-pro";
 import Breadcrumb, { type BreadcrumbItem } from "@/components/docs/Breadcrumb";
+import { VideoEmbedBlock } from "@/components/docs/VideoEmbedBlock";
+import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
+import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
+
+const { video: _builtinVideo, image: _builtinImage, ...baseBlockSpecs } = defaultBlockSpecs;
+const editorSchema = BlockNoteSchema.create({
+  blockSpecs: {
+    ...baseBlockSpecs,
+    image: ImageBlockWithAlt(),
+    videoEmbed: VideoEmbedBlock(),
+    linkCard: LinkCardBlock(),
+  },
+});
 
 interface Props {
   doc: DocContent;
@@ -25,15 +39,17 @@ export default function DocRenderer({ doc, breadcrumbs }: Props) {
   );
 
   const editor = useCreateBlockNote({
+    schema: editorSchema,
     blocks: doc.blocks?.length ? (doc.blocks as any) : undefined,
     dictionary: blockNoteLocale,
   });
 
-  // Keep editor content in sync if doc changes
   useEffect(() => {
-    if (doc.blocks?.length) {
+    if (!doc.blocks?.length) return;
+    const t = setTimeout(() => {
       editor.replaceBlocks(editor.document, doc.blocks as any);
-    }
+    }, 0);
+    return () => clearTimeout(t);
   }, [doc.blocks, editor]);
 
   // BlockNote read-only mode doesn't assign id attributes to headings.
