@@ -91,14 +91,11 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
     return () => clearTimeout(timer);
   }, [query, performSearch]);
 
-  // Handle result selection
+  // Handle result selection — client app routes are always /${slug}
   const handleSelect = useCallback((result: SearchResult) => {
-    const url = projectSlug
-      ? `/projects/${projectSlug}/docs/${result.slug}`
-      : `/${result.slug}`;
-    router.push(url);
+    router.push(`/${result.slug}`);
     setOpen(false);
-  }, [projectSlug, router]);
+  }, [router]);
 
   // Keyboard navigation
   useEffect(() => {

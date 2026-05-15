@@ -12,18 +12,33 @@ export async function GET(
     const resolvedParams = await params;
     const slug = resolvedParams.slug.join("/");
 
-    // Find which project this document belongs to
-    const sql = getDb();
-    const [doc] = await sql`
-      SELECT project_id FROM documents WHERE slug = ${slug} LIMIT 1
-    `;
+    const hostname = request.headers.get("host") || "localhost";
 
-    if (!doc) {
+    // Prefer explicit projectSlug query param (e.g. from packages/client server-side calls
+    // that have no Referer); fall back to Referer-based detection used by the web app.
+    const { searchParams } = new URL(request.url);
+    const projectSlugParam = searchParams.get("projectSlug");
+    let pathname = `/docs/${slug}`;
+    if (projectSlugParam) {
+      pathname = `/projects/${projectSlugParam}/docs/${slug}`;
+    } else {
+      const referer = request.headers.get("referer") || "";
+      if (referer) {
+        try {
+          pathname = new URL(referer).pathname;
+        } catch {
+          // fallback to default
+        }
+      }
+    }
+
+    const project = await getProjectFromRequest(hostname, pathname);
+    if (!project) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     const cm = ContentManager.create();
-    const docContent = await cm.getDoc(doc.project_id, slug);
+    const docContent = await cm.getDoc(project.id, slug);
 
     if (!docContent) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -181,9 +196,8 @@ export async function DELETE(
   try {
     const resolvedParams = await params;
     const slug = resolvedParams.slug.join("/");
-    // Check authentication
-    const session = await auth();
 
+    const session = await auth();
     if (!session?.user) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -191,19 +205,41 @@ export async function DELETE(
       );
     }
 
-    // Find which project this document belongs to
+    const hostname = request.headers.get("host") || "localhost";
+
+    // Prefer explicit projectSlug query param (sent by client); fall back to Referer.
+    const { searchParams } = new URL(request.url);
+    const projectSlugParam = searchParams.get("projectSlug");
+    let pathname = `/docs/${slug}`;
+    if (projectSlugParam) {
+      pathname = `/projects/${projectSlugParam}/docs/${slug}`;
+    } else {
+      const referer = request.headers.get("referer") || "";
+      if (referer) {
+        try {
+          pathname = new URL(referer).pathname;
+        } catch {
+          // fallback to default
+        }
+      }
+    }
+
+    const project = await getProjectFromRequest(hostname, pathname);
+    if (!project) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const sql = getDb();
     const [doc] = await sql`
-      SELECT project_id FROM documents WHERE slug = ${slug} LIMIT 1
+      SELECT id FROM documents WHERE project_id = ${project.id} AND slug = ${slug} LIMIT 1
     `;
 
     if (!doc) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Delete the document
     const cm = ContentManager.create();
-    await cm.deleteDoc(doc.project_id, slug);
+    await cm.deleteDoc(project.id, slug);
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

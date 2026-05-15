@@ -209,7 +209,7 @@ export default async function ProjectDocPage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <DocRendererClient doc={doc} slug={slug} projectSlug={projectSlug} />
+      <DocRendererClient key={`${projectSlug}/${slug}`} doc={doc} slug={slug} projectSlug={projectSlug} />
     </>
   );
 }

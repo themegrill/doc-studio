@@ -59,7 +59,7 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
           {/* Center: search */}
           <div className="flex justify-center">
             <div className="w-full max-w-md">
-              <SearchDialog projectSlug={null} />
+              <SearchDialog projectSlug={process.env.PROJECT_SLUG ?? null} />
             </div>
           </div>
 

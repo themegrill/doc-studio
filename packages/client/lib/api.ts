@@ -79,9 +79,10 @@ export async function getNavigation(): Promise<Navigation | null> {
 
 export async function getDoc(slug: string): Promise<DocContent | null> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/docs/${slug}`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `${API_BASE_URL}/api/docs/${slug}?projectSlug=${PROJECT_SLUG}`,
+      { cache: "no-store" }
+    );
     if (!res.ok) return null;
     return res.json();
   } catch {
