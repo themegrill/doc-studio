@@ -10,6 +10,7 @@ import {
   SuggestionMenuController,
   getDefaultReactSlashMenuItems,
   getFormattingToolbarItems,
+  LinkToolbarController,
 } from "@blocknote/react";
 import { defaultBlockSpecs, BlockNoteSchema } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
@@ -32,10 +33,13 @@ import {
   setOpenVideoModalRef,
 } from "@/components/docs/VideoEmbedBlock";
 import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
+import { DocLinkToolbar } from "@/components/docs/DocLinkToolbar";
+import { DocCreateLinkButton } from "@/components/docs/DocCreateLinkButton";
 import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
 import { useEditing } from "@/contexts/EditingContext";
+import { DocContextProvider } from "@/contexts/DocContext";
 import ChatPanel from "@/components/chat/ChatPanel";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
 import { Badge } from "@/components/ui/badge-pro";
@@ -85,7 +89,8 @@ const FormattingToolbarWithAI = memo(function FormattingToolbarWithAI() {
     <FormattingToolbarController
       formattingToolbar={() => (
         <FormattingToolbar>
-          {getFormattingToolbarItems()}
+          {getFormattingToolbarItems().filter((item) => item.key !== "createLinkButton")}
+          <DocCreateLinkButton />
           <AIToolbarButton />
         </FormattingToolbar>
       )}
@@ -525,14 +530,93 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       });
     };
 
+    // TipTap's renderHTML strips "doc:" via isAllowedUri, producing href="" in the DOM.
+    // We read doc: links from ProseMirror state (which preserves the raw attrs) and
+    // then use view.domAtPos to find and patch the corresponding DOM anchor elements.
+    const patchInternalLinks = () => {
+      const currentEditor = editorRef.current as any;
+      if (!currentEditor) return;
+      const tiptap = currentEditor._tiptapEditor;
+      if (!tiptap?.state || !tiptap?.view) return;
+      const linkMarkType = tiptap.state.schema.marks.link;
+      if (!linkMarkType) return;
+      tiptap.state.doc.nodesBetween(0, tiptap.state.doc.content.size, (node: any, pos: number) => {
+        if (!node.isText) return;
+        const linkMark = node.marks.find((m: any) => m.type === linkMarkType);
+        if (!linkMark?.attrs.href?.startsWith("doc:")) return;
+        const slug = linkMark.attrs.href.slice(4);
+        const href = projectSlug
+          ? `/projects/${projectSlug}/docs/${slug}`
+          : `/docs/${slug}`;
+        try {
+          const domInfo = tiptap.view.domAtPos(pos + 1);
+          let el: Node | null = domInfo.node;
+          if (el?.nodeType === Node.TEXT_NODE) el = el.parentElement;
+          while (el && (el as Element).tagName !== "A") el = (el as Element).parentElement;
+          if (el && (el as Element).tagName === "A") {
+            (el as HTMLElement).setAttribute("href", href);
+            (el as HTMLElement).removeAttribute("target");
+            (el as HTMLElement).removeAttribute("rel");
+          }
+        } catch { /* skip invalid positions */ }
+      });
+    };
+
+    // In ProseMirror read-only mode the browser doesn't follow <a> hrefs on a
+    // plain click. Attach a delegated listener (capture phase so it fires before
+    // TipTap's own handlers) that handles both doc: slugs and patched links.
+    const handleDocLinkClick = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement).closest("a") as HTMLAnchorElement | null;
+      if (!anchor) return;
+      const href = anchor.getAttribute("href") ?? "";
+      if (href.startsWith("#")) return;
+      if (href.startsWith("/")) {
+        e.preventDefault();
+        e.stopPropagation();
+        router.push(href);
+        return;
+      }
+      if (href.startsWith("doc:")) {
+        e.preventDefault();
+        e.stopPropagation();
+        const slug = href.slice(4);
+        router.push(projectSlug ? `/projects/${projectSlug}/docs/${slug}` : `/docs/${slug}`);
+        return;
+      }
+      if (href.startsWith("http://") || href.startsWith("https://")) return;
+      // href="" — TipTap stripped a doc: href via isAllowedUri. Look up from ProseMirror state.
+      const currentEditor = editorRef.current as any;
+      if (!currentEditor) return;
+      const tiptap = currentEditor._tiptapEditor;
+      if (!tiptap?.state || !tiptap?.view) return;
+      try {
+        const pos = tiptap.view.posAtDOM(anchor, 0);
+        const $pos = tiptap.state.doc.resolve(pos);
+        const linkMark = $pos.marks().find((m: any) => m.type.name === "link");
+        if (linkMark?.attrs.href?.startsWith("doc:")) {
+          e.preventDefault();
+          e.stopPropagation();
+          const slug = linkMark.attrs.href.slice(4);
+          router.push(projectSlug ? `/projects/${projectSlug}/docs/${slug}` : `/docs/${slug}`);
+        }
+      } catch { /* ignore */ }
+    };
+
     const timer = setTimeout(() => {
       addHeadingAnchors();
     //   renderImages();
       makeLinksClickable();
+      patchInternalLinks();
     }, 150);
 
-    return () => clearTimeout(timer);
-  }, [editorState.isEditing, doc.blocks]);
+    const editorEl = document.querySelector(".bn-editor");
+    editorEl?.addEventListener("click", handleDocLinkClick as EventListener, true);
+
+    return () => {
+      clearTimeout(timer);
+      editorEl?.removeEventListener("click", handleDocLinkClick as EventListener, true);
+    };
+  }, [editorState.isEditing, doc.blocks, projectSlug, router]);
 
   // Walk an HTML DOM node and emit BlockNote inline content items.
   // Inherits `styles` from parent tags (<strong> → bold, <em> → italic, etc.)
@@ -1175,27 +1259,34 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
 
       if (response.ok) {
         const savedSlug = responseData.slug || slug;
-        setEditorState((prev) => ({
-          ...prev,
-          isEditing: false,
-          isEditingSectionTitle: false,
-          sectionTitle: undefined,
-          title: effectiveTitle,
-          slug: savedSlug,
-        }));
-        contextSetIsEditing(false);
+        // Immediately update the non-editor context (hides saving spinner, shows success).
         contextSetIsSaving(false);
         contextSetSaveSuccess(true);
         contextSetSaveError("");
         contextSetIsDirty(false);
         setSaveState({ isSaving: false, success: true, error: "" });
 
-        if (savedSlug !== slug && projectSlug) {
-          router.push(`/projects/${projectSlug}/docs/${savedSlug}`);
+        // Defer the isEditing→false transition and navigation to the next macrotask.
+        // Changing `editable` on BlockNoteView during the same React render batch that
+        // resolves the save triggers a TipTap "editor view not available" error because
+        // the AI/formatting extensions access editor.view during the editable transition
+        // before BlockNote has re-mounted the view.  A setTimeout(0) lets React commit
+        // the current render first, so BlockNote's view is stable when editable changes.
+        setTimeout(() => {
+          setEditorState((prev) => ({
+            ...prev,
+            isEditing: false,
+            isEditingSectionTitle: false,
+            sectionTitle: undefined,
+            title: effectiveTitle,
+            slug: savedSlug,
+          }));
+          contextSetIsEditing(false);
+          if (savedSlug !== slug && projectSlug) {
+            router.push(`/projects/${projectSlug}/docs/${savedSlug}`);
+          }
           router.refresh();
-        } else {
-          router.refresh();
-        }
+        }, 0);
 
         setTimeout(() => {
           setSaveState((prev) => ({ ...prev, success: false }));
@@ -1262,14 +1353,16 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       try { responseData = await response.json(); } catch { /* non-JSON body */ }
 
       if (response.ok) {
-        setEditorState((prev) => ({ ...prev, isEditing: false, isEditingSectionTitle: false, sectionTitle: undefined }));
-        contextSetIsEditing(false);
         contextSetIsSaving(false);
         contextSetSaveSuccess(true);
         contextSetSaveError("");
         contextSetIsDirty(false);
         setSaveState({ isSaving: false, success: true, error: "" });
-        router.refresh();
+        setTimeout(() => {
+          setEditorState((prev) => ({ ...prev, isEditing: false, isEditingSectionTitle: false, sectionTitle: undefined }));
+          contextSetIsEditing(false);
+          router.refresh();
+        }, 0);
         setTimeout(() => {
           setSaveState((prev) => ({ ...prev, success: false }));
           contextSetSaveSuccess(false);
@@ -1361,6 +1454,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   }, []);
 
   return (
+    <DocContextProvider projectSlug={projectSlug}>
     <div className="max-w-[1000px] mx-auto">
       {/* Text Selection Improve Button */}
       {textSelection && textSelection.rect && isFeatureEnabled("textGeneration") && (
@@ -1610,12 +1704,14 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           editable={editorState.isEditing}
           theme="light"
           formattingToolbar={false}
+          linkToolbar={false}
           onChange={handleEditorChange}
         >
           {/* Add the AI Command menu to the editor */}
           <MemoAIMenuController />
           <FormattingToolbarWithAI />
           <SuggestionMenuWithAI editor={editor} />
+          <LinkToolbarController linkToolbar={DocLinkToolbar} />
         </BlockNoteView>
       </div>
 
@@ -1669,5 +1765,6 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         </>
       )}
     </div>
+    </DocContextProvider>
   );
 }

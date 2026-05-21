@@ -34,6 +34,8 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        // Let BlockNote handle Ctrl+K when the editor is focused (inline link creation)
+        if (document.activeElement?.closest(".bn-editor")) return;
         e.preventDefault();
         setOpen((open) => !open);
       }
