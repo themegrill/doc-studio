@@ -1,7 +1,41 @@
 import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db/postgres";
+import { ContentManager } from "@/lib/db/ContentManager";
 import { checkProjectAccess } from "@/lib/project-helpers";
 import { NextRequest } from "next/server";
+
+/**
+ * List published documents for a project (used by Redirects settings combobox)
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectSlug: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { projectSlug } = await params;
+  const sql = getDb();
+
+  const [project] = await sql`
+    SELECT id FROM projects WHERE slug = ${projectSlug} LIMIT 1
+  `;
+
+  if (!project) {
+    return Response.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  const hasAccess = await checkProjectAccess(session.user.id, project.id, "viewer");
+  if (!hasAccess) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const cm = ContentManager.create();
+  const docs = await cm.listDocs(project.id);
+  return Response.json({ documents: docs });
+}
 
 /**
  * Create a new document under a section

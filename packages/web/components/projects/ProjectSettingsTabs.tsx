@@ -4,9 +4,10 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Settings, BookOpen, Globe, Upload } from "lucide-react";
+import { Users, Settings, BookOpen, Globe, Upload, ArrowLeftRight } from "lucide-react";
 import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
 import { DeploySettings } from "./DeploySettings";
+import { RedirectsSettings } from "./RedirectsSettings";
 
 interface DeployState {
   domain: string;
@@ -23,6 +24,11 @@ interface KbEntry {
   updatedAt: string;
 }
 
+interface Redirect {
+  from: string;
+  to: string;
+}
+
 interface ProjectSettingsTabsProps {
   projectSlug: string;
   projectId: string;
@@ -35,9 +41,10 @@ interface ProjectSettingsTabsProps {
   isSuperAdmin: boolean;
   githubConfigured: boolean;
   existingKbs: KbEntry[];
+  projectRedirects: Redirect[];
 }
 
-type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy";
+type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy" | "redirects";
 
 export function ProjectSettingsTabs({
   projectSlug,
@@ -51,6 +58,7 @@ export function ProjectSettingsTabs({
   isSuperAdmin,
   githubConfigured,
   existingKbs,
+  projectRedirects,
 }: ProjectSettingsTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("general");
 
@@ -79,6 +87,11 @@ export function ProjectSettingsTabs({
       id: "import" as const,
       label: "Import",
       icon: Upload,
+    },
+    {
+      id: "redirects" as const,
+      label: "Redirects",
+      icon: ArrowLeftRight,
     },
   ];
 
@@ -204,6 +217,22 @@ export function ProjectSettingsTabs({
             </div>
 
             <MigrationImport projectSlug={projectSlug} projectId={projectId} />
+          </div>
+        )}
+
+        {activeTab === "redirects" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">URL Redirects</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Map old documentation URLs to their new locations. Redirects are applied with a 301 (permanent) status on the client site.
+              </p>
+            </div>
+
+            <RedirectsSettings
+              projectSlug={projectSlug}
+              initialRedirects={projectRedirects}
+            />
           </div>
         )}
       </div>
