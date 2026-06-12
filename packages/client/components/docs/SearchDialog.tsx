@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -29,6 +29,8 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const isMac = useMemo(() => typeof navigator !== "undefined" && /mac/i.test(navigator.platform), []);
 
   // Keyboard shortcut to open search (Cmd+K / Ctrl+K)
   useEffect(() => {
@@ -130,7 +132,7 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
         <Search size={16} />
         <span className="flex-1 text-left">Search documentation...</span>
         <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-200 rounded">
-          <span className="text-xs">⌘</span>K
+          <span className="text-xs">{isMac ? "⌘" : "Ctrl"}</span>K
         </kbd>
       </button>
 

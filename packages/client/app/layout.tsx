@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./mainStyle.css";
 import { Toaster } from "@/components/ui/toaster";
 import { notFound } from "next/navigation";
 import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
