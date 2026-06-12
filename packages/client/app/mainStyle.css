@@ -441,7 +441,6 @@ button[class*="search"] {
     color: #ffffff;
 }
 
-
 /* Navbar in responsive and mobile design fix */
 @media screen and (max-width: 992px) {
     .tg-docs-navbar {
