@@ -77,6 +77,20 @@ export async function getNavigation(): Promise<Navigation | null> {
   }
 }
 
+export async function getIntegrations(): Promise<{ crispWebsiteId?: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/projects/${PROJECT_SLUG}/integrations`,
+      { next: { revalidate: 300 } }
+    );
+    if (!res.ok) return {};
+    const { integrations } = await res.json();
+    return integrations ?? {};
+  } catch {
+    return {};
+  }
+}
+
 export async function getDoc(slug: string): Promise<DocContent | null> {
   try {
     const res = await fetch(

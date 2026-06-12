@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useCallback } from "react";
+import { useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
@@ -36,6 +36,8 @@ interface Props {
 
 export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs }: Props) {
   const router = useRouter();
+  const titleBtnRef = useRef<HTMLButtonElement>(null);
+
   const { cleanTitle, badges } = useMemo(
     () => parseTitleWithBadges(doc.title),
     [doc.title]
@@ -58,6 +60,7 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
   // BlockNote read-only mode doesn't assign id attributes to headings.
   // The TableOfContents component requires ids to function, so we add them
   // based on slugified heading text after the editor renders.
+  // We also inject a copy-link anchor button after each heading.
   useEffect(() => {
     const assignHeadingIds = () => {
       const headings = document.querySelectorAll<HTMLElement>(
@@ -65,22 +68,59 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
       );
       const seen = new Map<string, number>();
       headings.forEach((el) => {
-        if (el.id) return; // already has id
-        const text = el.textContent?.trim() ?? "";
-        if (!text) return;
-        const base = text
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "");
-        const count = seen.get(base) ?? 0;
-        el.id = count === 0 ? base : `${base}-${count}`;
-        seen.set(base, count + 1);
+        if (!el.id) {
+          const text = el.textContent?.trim() ?? "";
+          if (!text) return;
+          const base = text
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "");
+          const count = seen.get(base) ?? 0;
+          el.id = count === 0 ? base : `${base}-${count}`;
+          seen.set(base, count + 1);
+        }
+
+        // Inject copy-link button if not already present
+        if (el.id && !el.querySelector(".doc-anchor-btn")) {
+          el.style.position = "relative";
+          el.classList.add("group");
+
+          const btn = document.createElement("button");
+          btn.className = "doc-anchor-btn";
+          btn.setAttribute("aria-label", "Copy link to section");
+          btn.setAttribute("data-section-id", el.id);
+          btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`;
+          el.appendChild(btn);
+
+          btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            const url = `${window.location.origin}${window.location.pathname}#${el.id}`;
+            navigator.clipboard.writeText(url).then(() => {
+              btn.classList.add("copied");
+              setTimeout(() => btn.classList.remove("copied"), 2000);
+            });
+          });
+        }
       });
     };
 
     // Retry until headings are in the DOM
     const delays = [100, 300, 600, 1000];
     const timers = delays.map((d) => setTimeout(assignHeadingIds, d));
+
+    // After IDs are assigned, scroll to the hash if present in the URL
+    const scrollToHash = () => {
+      const hash = window.location.hash.slice(1);
+      if (!hash) return;
+      const target = document.getElementById(hash);
+      if (target) {
+        // Small offset so the heading isn't hidden under a sticky header
+        setTimeout(() => target.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+      }
+    };
+    // Run after the last heading-id pass
+    timers.push(setTimeout(scrollToHash, 1100));
+
     return () => timers.forEach(clearTimeout);
   }, [doc.slug]);
 
@@ -179,7 +219,22 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
       {/* Title */}
       <div className="flex justify-between items-start mb-6 pb-4 border-b">
         <div className="flex-1 mr-4">
-          <h1 className="text-3xl font-medium mb-2">{cleanTitle}</h1>
+          <h1 className="text-3xl font-medium mb-2 inline group">
+            {cleanTitle}
+            <button
+              ref={titleBtnRef}
+              aria-label="Copy link to this doc"
+              className="doc-anchor-btn"
+              onClick={() => {
+                const url = `${window.location.origin}${window.location.pathname}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  titleBtnRef.current?.classList.add("copied");
+                  setTimeout(() => titleBtnRef.current?.classList.remove("copied"), 2000);
+                });
+              }}
+              dangerouslySetInnerHTML={{ __html: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>` }}
+            />
+          </h1>
           {badges.map((badge, i) => (
             <Badge key={i} variant={badge.variant}>
               {badge.text}
@@ -193,6 +248,7 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
 
       {/* Read-only content */}
       <style>{`
+        html { scroll-behavior: smooth; }
         .bn-editor a[href] {
           color: #2563eb;
           text-decoration: underline;
@@ -200,6 +256,39 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
         }
         .bn-editor a[href]:hover {
           color: #1d4ed8;
+        }
+        .bn-editor h1, .bn-editor h2, .bn-editor h3, .bn-editor h4 {
+          display: inline;
+        }
+        .doc-anchor-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0;
+          color: #9ca3af;
+          background: none;
+          border: none;
+          padding: 2px;
+          margin-left: 0.35em;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: opacity 0.15s, color 0.15s;
+          vertical-align: middle;
+          position: relative;
+          top: -1px;
+        }
+        h1.group:hover .doc-anchor-btn,
+        .bn-editor h1:hover .doc-anchor-btn,
+        .bn-editor h2:hover .doc-anchor-btn,
+        .bn-editor h3:hover .doc-anchor-btn,
+        .bn-editor h4:hover .doc-anchor-btn {
+          opacity: 1;
+        }
+        .doc-anchor-btn:hover {
+          color: #3b82f6;
+        }
+        .doc-anchor-btn.copied {
+          opacity: 1;
         }
       `}</style>
       <BlockNoteView editor={editor} editable={false} theme="light" />
