@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Home, Settings, Users, User, LogOut } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { handleSignOut } from "@/lib/actions/auth";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -134,7 +134,7 @@ export function Sidebar({ user }: SidebarProps) {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={() => handleSignOut()}
               className="flex items-center gap-2 text-red-600 cursor-pointer"
             >
               <LogOut className="h-4 w-4" />

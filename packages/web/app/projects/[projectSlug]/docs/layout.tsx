@@ -90,3 +90,5 @@ export default async function ProjectDocsLayout({
     </DocsLayoutClient>
   );
 }
+
+export const dynamic = "force-dynamic";

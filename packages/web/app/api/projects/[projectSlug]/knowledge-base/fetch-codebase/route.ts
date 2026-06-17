@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 import { DocumentationKnowledgeBase } from "@/types/knowledge-base";
+import { invalidateKbCache } from "@/lib/kb-cache";
+
+export const maxDuration = 60; // seconds — requires Vercel Pro or higher
 
 const GITHUB_API_BASE = "https://api.github.com";
 
@@ -97,23 +100,82 @@ export async function POST(
 
   let knowledgeBase: DocumentationKnowledgeBase | null = null;
   let resolvedFilePath: string | null = null;
+  const attemptResults: string[] = [];
 
   for (const fp of filePaths) {
     const apiUrl = `${GITHUB_API_BASE}/repos/${repo}/contents/${fp}?ref=${branch}`;
 
     try {
       const res = await fetch(apiUrl, { headers });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (res.status === 401) {
+          // Auth failure affects all paths — no point continuing
+          return NextResponse.json(
+            {
+              error:
+                `GitHub authentication failed (HTTP ${res.status}) for repo '${repo}'. ` +
+                `Please check the token in Settings → GitHub Integration.`,
+            },
+            { status: 400 }
+          );
+        }
+        if (res.status === 403) {
+          // Could be auth OR "blob too large" — check the response body
+          const errData = await res.json().catch(() => ({}));
+          const isTooLarge =
+            typeof errData?.message === "string" &&
+            errData.message.toLowerCase().includes("too large");
+          if (!isTooLarge) {
+            return NextResponse.json(
+              {
+                error:
+                  `GitHub access denied (HTTP 403) for repo '${repo}'. ` +
+                  `Please check the token in Settings → GitHub Integration.`,
+              },
+              { status: 400 }
+            );
+          }
+          // Fall through — large file will be retried via raw URL below
+          attemptResults.push(`${fp} (too large for contents API, trying raw)`);
+          const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${fp}`;
+          const rawRes = await fetch(rawUrl, { headers });
+          if (!rawRes.ok) {
+            attemptResults.push(`${fp} raw (${rawRes.status})`);
+            continue;
+          }
+          const rawText = await rawRes.text();
+          knowledgeBase = JSON.parse(rawText) as DocumentationKnowledgeBase;
+          resolvedFilePath = fp;
+          break;
+        }
+        attemptResults.push(`${fp} (${res.status})`);
+        continue;
+      }
 
       const data = await res.json();
 
       if (data.content && data.encoding === "base64") {
+        // Normal small file — base64 encoded content
         const decoded = Buffer.from(data.content, "base64").toString("utf-8");
         knowledgeBase = JSON.parse(decoded) as DocumentationKnowledgeBase;
         resolvedFilePath = fp;
         break;
+      } else if (data.download_url && data.size > 0) {
+        // Large file (>1 MB) — GitHub omits base64 content, use download_url
+        const rawRes = await fetch(data.download_url, { headers });
+        if (!rawRes.ok) {
+          attemptResults.push(`${fp} download_url (${rawRes.status})`);
+          continue;
+        }
+        const rawText = await rawRes.text();
+        knowledgeBase = JSON.parse(rawText) as DocumentationKnowledgeBase;
+        resolvedFilePath = fp;
+        break;
+      } else {
+        attemptResults.push(`${fp} (empty or unreadable response)`);
       }
     } catch {
+      attemptResults.push(`${fp} (error)`);
       continue;
     }
   }
@@ -123,7 +185,7 @@ export async function POST(
       {
         error:
           `Could not find a knowledge base file in '${repo}' (branch: ${branch}). ` +
-          `Tried: ${filePaths.join(", ")}`,
+          `Tried: ${attemptResults.join(", ")}`,
       },
       { status: 404 }
     );
@@ -149,6 +211,10 @@ export async function POST(
 		metadata   = EXCLUDED.metadata,
 		updated_at = NOW()
 	`;
+
+  // Invalidate the server-side KB prompt cache so the next chat request
+  // fetches the updated knowledge base from the database.
+  invalidateKbCache(projectSlug);
 
   return NextResponse.json({
     success: true,

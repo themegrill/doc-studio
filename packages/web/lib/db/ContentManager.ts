@@ -2,6 +2,12 @@ import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 import type { JSONValue } from "postgres";
 
+export interface SeoData {
+  metaTitle?: string;
+  metaDescription?: string;
+  schemaType?: "Article" | "TechArticle" | "HowTo" | "FAQPage";
+}
+
 export interface DocMeta {
   id?: string;
   title: string;
@@ -30,6 +36,7 @@ export interface DocContent {
   published?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  seo?: SeoData;
 }
 
 export interface Navigation {
@@ -78,6 +85,7 @@ export class ContentManager {
         published: doc.published,
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
+        seo: (doc.seo as SeoData) || {},
       };
     } catch (error) {
       console.error("Error fetching document:", error);
@@ -109,6 +117,7 @@ export class ContentManager {
         published: doc.published,
         createdAt: doc.created_at,
         updatedAt: doc.updated_at,
+        seo: (doc.seo as SeoData) || {},
       };
     } catch (error) {
       console.error("Error fetching document:", error);
@@ -138,6 +147,7 @@ export class ContentManager {
       const title = content.title || "Untitled";
       const description = content.description || null;
       const blocks = content.blocks || [];
+      const seo = content.seo || {};
       const userId = session.user.id;
       const published = content.published;
 
@@ -151,6 +161,7 @@ export class ContentManager {
               description = ${description},
               blocks = ${this.sql.json(blocks as any)},
               published = ${published},
+              seo = ${this.sql.json(seo as any)},
               updated_by = ${userId}
             WHERE project_id = ${projectId} AND slug = ${slug}
           `;
@@ -161,6 +172,7 @@ export class ContentManager {
               title = ${title},
               description = ${description},
               blocks = ${this.sql.json(blocks as any)},
+              seo = ${this.sql.json(seo as any)},
               updated_by = ${userId}
             WHERE project_id = ${projectId} AND slug = ${slug}
           `;
@@ -264,13 +276,14 @@ export class ContentManager {
       } else {
         // Insert new document as draft by default
         await this.sql`
-          INSERT INTO documents (project_id, slug, title, description, blocks, created_by, updated_by, published)
+          INSERT INTO documents (project_id, slug, title, description, blocks, seo, created_by, updated_by, published)
           VALUES (
             ${projectId},
             ${slug},
             ${title},
             ${description},
             ${this.sql.json(blocks as any)},
+            ${this.sql.json(seo as any)},
             ${userId},
             ${userId},
             false

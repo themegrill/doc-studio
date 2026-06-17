@@ -13,6 +13,7 @@ import {
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from "react";
 import AddSectionButton from "@/components/docs/AddSectionButton";
 import AddDocumentButton from "@/components/docs/AddDocumentButton";
+import { useEditing } from "@/contexts/EditingContext";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
 import { Badge } from "@/components/ui/badge-pro";
 import {
@@ -40,14 +41,14 @@ const TitleWithBadges = memo(({ title }: { title: string }) => {
 TitleWithBadges.displayName = "TitleWithBadges";
 import {
   DndContext,
-  closestCenter,
+  closestCorners,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
+  DragOverEvent,
+  type ClientRect,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -71,9 +72,11 @@ export default function SidebarWithDnd({
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { isEditing, isDirty } = useEditing();
   const [routes, setRoutes] = useState<NavRoute[]>(navigation?.routes || []);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [openSectionPath, setOpenSectionPath] = useState<string | null>(null);
+  const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+  const dragOverSectionIdRef = useRef<string | null>(null);
   const prevNavigationRef = useRef<Navigation | null>(null);
 
   // Sync routes with navigation prop when it changes
@@ -127,6 +130,51 @@ export default function SidebarWithDnd({
     }
   }, [pathname, routes, projectSlug]);
 
+  // When dragging a doc, dnd-kit applies CSS transforms to other docs in the source
+  // section to fill the gap. Those transforms shift doc bounding rects into the header
+  // area of adjacent sections, causing them to beat the actual section header in
+  // closestCorners detection. Fix: check section headers first with a direct rect-hit
+  // test — if the cursor is inside a section header, return it immediately before any
+  // doc can compete. Fall back to cursor-point closestCorners for within-section sorting.
+  const SECTION_HEADER_HEIGHT = 48;
+  const collisionDetection = useCallback(
+    (args: Parameters<typeof closestCorners>[0]) => {
+      const activeId = args.active.id as string;
+      if (!activeId.startsWith("doc-") || !args.pointerCoordinates) {
+        return closestCorners(args);
+      }
+
+      const { x, y } = args.pointerCoordinates;
+
+      for (const container of args.droppableContainers) {
+        if (!(container.id as string).startsWith("section-")) continue;
+        const rect = args.droppableRects.get(container.id);
+        if (!rect) continue;
+        if (
+          y >= rect.top &&
+          y <= rect.top + SECTION_HEADER_HEIGHT &&
+          x >= rect.left &&
+          x <= rect.right
+        ) {
+          // Return this section as the sole collision using closestCorners
+          // restricted to just this container so the return type stays correct.
+          return closestCorners({
+            ...args,
+            droppableContainers: args.droppableContainers.filter(
+              (c) => c.id === container.id,
+            ),
+          });
+        }
+      }
+
+      // Cursor is not in any section header — use a cursor-point rect so
+      // within-section doc sorting is based on actual pointer position.
+      const cursorRect: ClientRect = { left: x, right: x + 1, top: y, bottom: y + 1, width: 1, height: 1 };
+      return closestCorners({ ...args, collisionRect: cursorRect });
+    },
+    [],
+  );
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -138,19 +186,87 @@ export default function SidebarWithDnd({
     }),
   );
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    const activeItemId = active.id as string;
+
+    if (!activeItemId.startsWith("doc-") || !over) {
+      if (dragOverSectionIdRef.current !== null) {
+        dragOverSectionIdRef.current = null;
+        setDragOverSectionId(null);
+      }
+      return;
+    }
+
+    const overId = over.id as string;
+    const sourceSectionId = active.data?.current?.sortable?.containerId as string | undefined;
+    let targetSectionId: string | null = null;
+
+    if (overId.startsWith("section-")) {
+      // Strip the "section-" prefix to get the raw route id/path
+      targetSectionId = overId.slice("section-".length);
+    } else if (overId.startsWith("doc-")) {
+      targetSectionId = (over.data?.current?.sortable?.containerId as string) ?? null;
+    }
+
+    // sourceSectionId comes from String(route.id || route.path) set on the inner SortableContext
+    const next = targetSectionId && targetSectionId !== sourceSectionId ? targetSectionId : null;
+    if (dragOverSectionIdRef.current !== next) {
+      dragOverSectionIdRef.current = next;
+      setDragOverSectionId(next);
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
+    const lastDragOverSectionId = dragOverSectionIdRef.current;
+    dragOverSectionIdRef.current = null;
+    setDragOverSectionId(null);
+
+    const activeId = active.id as string;
+
+    // If a doc was being dragged and a section was highlighted, use that section as the drop target
+    if (activeId.startsWith("doc-") && lastDragOverSectionId !== null) {
+      const activeDocId = activeId.replace("doc-", "");
+      const targetSectionIndex = routes.findIndex(
+        (r) => String(r.id || r.path) === lastDragOverSectionId,
+      );
+
+      let activeSectionIndex = -1;
+      let activeDocIndex = -1;
+      routes.forEach((route, sIdx) => {
+        route.children?.forEach((child, dIdx) => {
+          if (child.path === activeDocId) {
+            activeSectionIndex = sIdx;
+            activeDocIndex = dIdx;
+          }
+        });
+      });
+
+      if (activeSectionIndex !== -1 && targetSectionIndex !== -1 && activeSectionIndex !== targetSectionIndex) {
+        const newRoutes = [...routes];
+        const activeSection = { ...newRoutes[activeSectionIndex], children: [...(newRoutes[activeSectionIndex].children ?? [])] };
+        const targetSection = { ...newRoutes[targetSectionIndex], children: [...(newRoutes[targetSectionIndex].children ?? [])] };
+
+        const [movedDoc] = activeSection.children.splice(activeDocIndex, 1);
+        targetSection.children.push(movedDoc);
+
+        activeSection.children = activeSection.children.map((child, index) => ({ ...child, orderIndex: index }));
+        targetSection.children = targetSection.children.map((child, index) => ({ ...child, orderIndex: index }));
+
+        newRoutes[activeSectionIndex] = activeSection;
+        newRoutes[targetSectionIndex] = targetSection;
+
+        setRoutes(newRoutes);
+        await updateNavigationOrder(newRoutes);
+      }
+      return;
+    }
 
     if (!over || active.id === over.id) {
       return;
     }
 
-    const activeId = active.id as string;
     const overId = over.id as string;
 
     // Check if we're moving a section or a document
@@ -277,22 +393,12 @@ export default function SidebarWithDnd({
     }
   };
 
-  // Get the active item for drag overlay
-  const activeItem = useMemo(() => {
-    if (!activeId) return null;
-
-    if (activeId.startsWith("section-")) {
-      const id = activeId.replace("section-", "");
-      return routes.find((r) => (r.id || r.path) === id);
-    } else if (activeId.startsWith("doc-")) {
-      const path = activeId.replace("doc-", "");
-      for (const route of routes) {
-        const doc = route.children?.find((c) => c.path === path);
-        if (doc) return doc;
-      }
+  const onLinkClick = useCallback((e: React.MouseEvent) => {
+    if (isEditing && isDirty) {
+      const confirmed = window.confirm("You have unsaved changes. Leave without saving?");
+      if (!confirmed) e.preventDefault();
     }
-    return null;
-  }, [activeId, routes]);
+  }, [isEditing, isDirty]);
 
   const sectionIds = useMemo(
     () => routes.map((route) => `section-${route.id || route.path}`),
@@ -311,8 +417,8 @@ export default function SidebarWithDnd({
 
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
+          collisionDetection={collisionDetection}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <nav className="space-y-1.5 flex-1">
@@ -330,11 +436,13 @@ export default function SidebarWithDnd({
                     isAuthenticated={isAuthenticated}
                     projectSlug={projectSlug}
                     isOpen={openSectionPath === routeId}
+                    isDropTarget={dragOverSectionId === routeId}
                     onToggle={() =>
                       setOpenSectionPath(
                         openSectionPath === routeId ? null : ( routeId ?? null ),
                       )
                     }
+                    onLinkClick={onLinkClick}
                   />
                 );
               })}
@@ -348,20 +456,6 @@ export default function SidebarWithDnd({
             )}
           </nav>
 
-          <DragOverlay dropAnimation={null}>
-            {activeItem && (
-              <div className="flex items-center gap-1 cursor-grabbing">
-                <div className="p-1 bg-white rounded">
-                  <GripVertical size={14} className="text-gray-400" />
-                </div>
-                <div className="flex items-center px-3 py-2.5 bg-white border-2 border-blue-500 rounded-md shadow-xl">
-                  <span className="text-sm font-semibold text-gray-900">
-                    {activeItem.title}
-                  </span>
-                </div>
-              </div>
-            )}
-          </DragOverlay>
         </DndContext>
       </aside>
     </TooltipProvider>
@@ -375,14 +469,18 @@ const SortableNavItem = memo(function SortableNavItem({
   isAuthenticated,
   projectSlug: propProjectSlug,
   isOpen,
+  isDropTarget,
   onToggle,
+  onLinkClick,
 }: {
   route: NavRoute;
   pathname: string;
   isAuthenticated?: boolean;
   projectSlug?: string | null;
   isOpen: boolean;
+  isDropTarget?: boolean;
   onToggle: () => void;
+  onLinkClick?: (e: React.MouseEvent) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -399,9 +497,8 @@ const SortableNavItem = memo(function SortableNavItem({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition: transition || "transform 200ms ease",
+    transition: transition ?? undefined,
     opacity: isDragging ? 0.3 : 1,
-    cursor: isDragging ? "grabbing" : "default",
   };
 
   const projectSlug = useMemo(() => {
@@ -482,14 +579,17 @@ const SortableNavItem = memo(function SortableNavItem({
 
             <Link
               href={parentLink}
-              onClick={() => {
-                if (hasChildren) {
+              onClick={(e) => {
+                onLinkClick?.(e);
+                if (!e.defaultPrevented && hasChildren) {
                   onToggle();
                 }
               }}
               className={`flex-1 flex items-center justify-between px-3 py-2.5 text-sm font-semibold rounded-md transition-colors ${
                 isParentActive
                   ? "bg-blue-100 text-blue-700"
+                  : isDropTarget
+                  ? "bg-blue-50 text-blue-600 ring-1 ring-blue-300"
                   : "text-gray-700 hover:bg-gray-100"
               }`}
             >
@@ -537,6 +637,7 @@ const SortableNavItem = memo(function SortableNavItem({
               {hasChildren && (
                 <div className="ml-1 mt-1.5 space-y-1 pl-1">
                   <SortableContext
+                    id={String(route.id || route.path)}
                     items={childrenIds}
                     strategy={verticalListSortingStrategy}
                   >
@@ -547,6 +648,8 @@ const SortableNavItem = memo(function SortableNavItem({
                         buildLink={buildLink}
                         pathname={pathname}
                         isAuthenticated={isAuthenticated}
+                        onLinkClick={onLinkClick}
+                        disabled={!isOpen}
                       />
                     ))}
                   </SortableContext>
@@ -579,6 +682,7 @@ const SortableNavItem = memo(function SortableNavItem({
           )}
           <Link
             href={buildLink(route.path)}
+            onClick={onLinkClick}
             className={`flex-1 flex items-center font-semibold px-3 py-2.5 text-sm rounded-md transition-colors ${
               pathname === buildLink(route.path)
                 ? "bg-blue-100 text-blue-700 "
@@ -599,11 +703,15 @@ const SortableDocItem = memo(function SortableDocItem({
   buildLink,
   pathname,
   isAuthenticated,
+  onLinkClick,
+  disabled,
 }: {
   child: NavRoute;
   buildLink: (path: string) => string;
   pathname: string;
   isAuthenticated?: boolean;
+  onLinkClick?: (e: React.MouseEvent) => void;
+  disabled?: boolean;
 }) {
   const {
     attributes,
@@ -612,13 +720,12 @@ const SortableDocItem = memo(function SortableDocItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `doc-${child.path}` });
+  } = useSortable({ id: `doc-${child.path}`, disabled });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition: transition || "transform 200ms ease",
+    transition: transition ?? undefined,
     opacity: isDragging ? 0.3 : 1,
-    cursor: isDragging ? "grabbing" : "default",
   };
 
   const childLink = child.path ? buildLink(child.path) : "#";
@@ -640,6 +747,7 @@ const SortableDocItem = memo(function SortableDocItem({
       )}
       <Link
         href={childLink}
+        onClick={onLinkClick}
         className={`flex-1 flex items-center px-3 py-2 text-sm rounded-md transition-colors ${
           pathname === childLink
             ? "bg-blue-100 text-blue-700 font-medium"

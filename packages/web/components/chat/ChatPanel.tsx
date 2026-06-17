@@ -13,7 +13,9 @@ import { Button } from "@/components/ui/button";
 
 interface Message {
   id: string;
-  role: "user" | "assistant" | "system";
+  // "system" = UI-only tool status (never sent to API)
+  // "internal" = auto-generated guidance sent to API as "user", hidden from UI
+  role: "user" | "assistant" | "system" | "internal";
   content: string;
   createdAt: Date;
   toolCall?: EditorToolCall;
@@ -84,10 +86,10 @@ export default function ChatPanel({
 
     setIsAutoContinuing(true);
 
-    // Add a hidden system message to guide the AI
+    // Add an internal guidance message — sent to AI as "user" but hidden from chat UI
     const systemPrompt: Message = {
       id: Date.now().toString(),
-      role: "user",
+      role: "internal",
       content: prompt,
       createdAt: new Date(),
     };
@@ -119,16 +121,19 @@ export default function ChatPanel({
         body: JSON.stringify({
           messages: messagesToSend
             .filter((m) => m.content.trim().length > 0)
+            // "system" messages are UI-only status feedback — never send to API
+            // "internal" auto-continue prompts go to API as "user" role
+            .filter((m) => m.role !== "system")
             .map((m) => {
               let content = m.content;
 
-              // Include tool results in the conversation so AI can reference them
+              // Include tool results inline so AI can reference the data (block IDs etc.)
               if (m.toolResult && m.toolResult.data) {
                 content += `\n\n[Tool Result: ${m.toolResult.message}]\n${JSON.stringify(m.toolResult.data, null, 2)}`;
               }
 
               return {
-                role: m.role === "system" ? "assistant" : m.role,
+                role: m.role === "internal" ? "user" : m.role,
                 content,
               };
             }),
@@ -369,18 +374,19 @@ export default function ChatPanel({
 
       setMessages((prev) => [...prev, systemMessage]);
 
-      // Return auto-continue prompt for search_blocks exact matches so the caller
-      // can decide whether to trigger it (after all tool calls have completed).
-      if (result.success && result.data &&
-          toolCall.tool === "search_blocks" &&
-          Array.isArray(result.data) &&
-          result.data.length >= 1 &&
-          result.data.length <= 3) {
-        const hasExactMatch = result.data.some(
-          (item: { matchType?: string }) => !item.matchType || item.matchType === "exact"
-        );
-        if (hasExactMatch) {
-          return "The search found exact matches. Please proceed with the requested update/modification using the block IDs from the search results above.";
+      // Auto-continue: after search/structure retrieval, prompt AI to act on the results.
+      // The caller checks hasInsertBlocks before firing, so this won't double-write.
+      if (result.success && result.data && Array.isArray(result.data) && result.data.length >= 1) {
+        if (toolCall.tool === "search_blocks") {
+          const hasExactMatch = result.data.some(
+            (item: { matchType?: string }) => !item.matchType || item.matchType === "exact"
+          );
+          if (hasExactMatch) {
+            return "The search found exact matches. Please proceed with the requested update/modification using the block IDs from the search results above.";
+          }
+        }
+        if (toolCall.tool === "get_blocks_structure") {
+          return "The document structure has been retrieved with all block IDs. Please proceed with the requested changes now.";
         }
       }
 
@@ -525,7 +531,7 @@ export default function ChatPanel({
         {messages.map((message) => (
           <div key={message.id}>
             {/* Only render ChatMessage for user and assistant messages */}
-            {message.role !== "system" && (
+            {message.role !== "system" && message.role !== "internal" && (
               <ChatMessage
                 message={{
                   id: message.id,
@@ -563,7 +569,7 @@ export default function ChatPanel({
               </div>
             )}
 
-            {/* System messages with special styling */}
+            {/* System messages: tool status feedback — shown, internal guidance — hidden */}
             {message.role === "system" && (
               <div className="p-2 bg-gray-50 border border-gray-200 rounded text-xs text-gray-600">
                 {message.content}

@@ -47,10 +47,11 @@ export default function DeleteDocumentButton({
           }
         );
       } else {
-        // Delete just the document
-        response = await fetch(`/api/docs/${documentSlug}`, {
-          method: "DELETE",
-        });
+        // Delete just the document — include projectSlug so the API can scope to the right project
+        response = await fetch(
+          `/api/docs/${documentSlug}?projectSlug=${encodeURIComponent(projectSlug)}`,
+          { method: "DELETE" },
+        );
       }
 
       if (!response.ok) {

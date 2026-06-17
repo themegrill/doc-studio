@@ -31,9 +31,16 @@ export interface ParsedDocument {
   order: number;
 }
 
+export interface FaqRow {
+  title: string;
+  answer: string;
+  slug: string;
+}
+
 export interface ParseResult {
   documents: ParsedDocument[];
   categories: Record<string, CategoryDefinition>;
+  faqs: FaqRow[];
 }
 
 /**
@@ -52,6 +59,7 @@ export async function parseBetterDocsCSV(csvText: string): Promise<ParseResult> 
   // Parse rows
   const documents: ParsedDocument[] = [];
   const categories: Record<string, CategoryDefinition> = {};
+  const faqs: FaqRow[] = [];
   let currentLine = '';
   let inQuotes = false;
 
@@ -85,6 +93,13 @@ export async function parseBetterDocsCSV(csvText: string): Promise<ParseResult> 
           if (category) {
             categories[category.id] = category;
           }
+        } else if (type === 'faq') {
+          const title = decodeHTMLEntities(row[columnMap.docsTitle]?.trim() || '');
+          const slug = row[columnMap.docsSlug]?.trim() || '';
+          const answer = row[columnMap.docsContent] || '';
+          if (title && answer) {
+            faqs.push({ title, answer, slug });
+          }
         }
       } catch (error) {
         console.error('Error parsing CSV line:', error);
@@ -94,7 +109,7 @@ export async function parseBetterDocsCSV(csvText: string): Promise<ParseResult> 
     currentLine = '';
   }
 
-  return { documents, categories };
+  return { documents, categories, faqs };
 }
 
 /**
@@ -225,16 +240,15 @@ function parseCategoryRow(row: string[], columnMap: Record<string, number>): Cat
       return null;
     }
 
-    // Only process doc_category taxonomy
-    if (taxonomy !== 'doc_category') {
-      return null;
-    }
-
+    // Accept all term rows — taxonomy values vary across BetterDocs exports
+    // (e.g. 'doc_category', 'Doc_Category', 'betterdocs-category').
+    // Terms not referenced by any document's categoryIds are ignored during
+    // navigation building, so including tags here causes no harm.
     return {
       id: termId,
       name: decodeHTMLEntities(termName),
       parent: termParent && termParent !== '0' ? termParent : null,
-      taxonomy,
+      taxonomy: taxonomy || 'doc_category',
       order: parseInt(categoryOrder || '999', 10),
     };
   } catch (error) {

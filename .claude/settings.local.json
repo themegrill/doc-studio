@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(find \"/e/Work/doc-studio/node_modules/.pnpm/@blocknote+react@0.46.2\"* -name \"*.d.ts\")",
+      "Bash(xargs grep *)",
+      "Bash(curl -s \"https://api.github.com/repos/TypeCellOS/BlockNote/pulls/1904/comments?per_page=100\")"
+    ]
+  }
+}

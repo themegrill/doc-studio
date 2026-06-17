@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db/postgres";
+import { invalidateKbCache } from "@/lib/kb-cache";
 import {
   crawlPageBatch,
   refineBatch,
@@ -14,6 +15,8 @@ import {
   type KnowledgeBaseItem,
   type RefinedKnowledgeBatch,
 } from "@/lib/crawl-engine";
+
+export const maxDuration = 300;
 
 // Debounce: skip processing if a batch was started within the last 5 seconds.
 // Prevents duplicate work from concurrent poll requests.
@@ -176,7 +179,7 @@ export async function GET(
       SELECT raw_pages FROM crawl_sessions WHERE project_slug = ${projectSlug}
     `;
     const existingRawPages: KnowledgeBaseItem[] = rawData.raw_pages ?? [];
-    const newRawPages = [...existingRawPages, ...result.crawled];
+    const newRawPages = [...existingRawPages, ...result.crawled.map(stripLargeFields)];
     const newProgress = Math.min(
       Math.round((newVisitedCount / MAX_PAGES) * 50),
       49
@@ -252,6 +255,10 @@ export async function GET(
           metadata   = EXCLUDED.metadata,
           updated_at = NOW()
       `;
+
+      // Invalidate the server-side KB prompt cache so the next chat request
+      // fetches the newly crawled website knowledge base from the database.
+      invalidateKbCache(projectSlug);
 
       await sql`
         UPDATE crawl_sessions SET

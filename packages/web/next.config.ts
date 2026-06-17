@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "100mb",
+    },
+    proxyClientMaxBodySize: "100mb",
+  },
   images: {
     remotePatterns: [
       {
@@ -13,6 +18,12 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "*.public.blob.vercel-storage.com",
+        port: "",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "img.youtube.com",
         port: "",
         pathname: "/**",
       },

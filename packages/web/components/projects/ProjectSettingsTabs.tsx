@@ -4,9 +4,11 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Settings, BookOpen, Globe } from "lucide-react";
+import { Users, Settings, BookOpen, Globe, Upload, ArrowLeftRight, Puzzle } from "lucide-react";
 import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
 import { DeploySettings } from "./DeploySettings";
+import { RedirectsSettings } from "./RedirectsSettings";
+import { IntegrationsSettings } from "./IntegrationsSettings";
 
 interface DeployState {
   domain: string;
@@ -23,6 +25,11 @@ interface KbEntry {
   updatedAt: string;
 }
 
+interface Redirect {
+  from: string;
+  to: string;
+}
+
 interface ProjectSettingsTabsProps {
   projectSlug: string;
   projectId: string;
@@ -35,9 +42,11 @@ interface ProjectSettingsTabsProps {
   isSuperAdmin: boolean;
   githubConfigured: boolean;
   existingKbs: KbEntry[];
+  projectRedirects: Redirect[];
+  projectIntegrations: Record<string, any>;
 }
 
-type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy";
+type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy" | "redirects" | "integrations";
 
 export function ProjectSettingsTabs({
   projectSlug,
@@ -51,6 +60,8 @@ export function ProjectSettingsTabs({
   isSuperAdmin,
   githubConfigured,
   existingKbs,
+  projectRedirects,
+  projectIntegrations,
 }: ProjectSettingsTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("general");
 
@@ -75,11 +86,21 @@ export function ProjectSettingsTabs({
       label: "Deploy",
       icon: Globe,
     },
-    // {
-    //   id: "import" as const,
-    //   label: "Import",
-    //   icon: Upload,
-    // },
+    {
+      id: "import" as const,
+      label: "Import",
+      icon: Upload,
+    },
+    {
+      id: "redirects" as const,
+      label: "Redirects",
+      icon: ArrowLeftRight,
+    },
+    {
+      id: "integrations" as const,
+      label: "Integrations",
+      icon: Puzzle,
+    },
   ];
 
   return (
@@ -194,7 +215,7 @@ export function ProjectSettingsTabs({
           </div>
         )}
 
-        {/* {activeTab === "import" && (
+        {activeTab === "import" && (
           <div>
             <div className="mb-6">
               <h2 className="text-xl font-semibold">Import Documentation</h2>
@@ -205,7 +226,39 @@ export function ProjectSettingsTabs({
 
             <MigrationImport projectSlug={projectSlug} projectId={projectId} />
           </div>
-        )} */}
+        )}
+
+        {activeTab === "redirects" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">URL Redirects</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Map old documentation URLs to their new locations. Redirects are applied with a 301 (permanent) status on the client site.
+              </p>
+            </div>
+
+            <RedirectsSettings
+              projectSlug={projectSlug}
+              initialRedirects={projectRedirects}
+            />
+          </div>
+        )}
+
+        {activeTab === "integrations" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">Integrations</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Connect third-party services to your documentation site.
+              </p>
+            </div>
+
+            <IntegrationsSettings
+              projectSlug={projectSlug}
+              initialIntegrations={projectIntegrations}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

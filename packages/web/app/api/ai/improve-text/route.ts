@@ -1,4 +1,4 @@
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { generateText } from "ai";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Improve text using Claude with settings from database
+    const anthropic = createAnthropic({ apiKey: config.apiKey });
     const { text: improvedText, usage } = await generateText({
       model: anthropic(config.defaultModel),
       system: `You are a helpful writing assistant that improves text clarity, grammar, and professionalism.

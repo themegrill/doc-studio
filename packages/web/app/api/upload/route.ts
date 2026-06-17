@@ -45,19 +45,28 @@ export async function POST(request: NextRequest) {
       "image/webp",
       "image/svg+xml",
     ];
-    if (!validImageTypes.includes(file.type)) {
+    const validVideoTypes = [
+      "video/mp4",
+      "video/webm",
+      "video/ogg",
+      "video/quicktime",
+      "video/x-msvideo",
+    ];
+    const isImage = validImageTypes.includes(file.type);
+    const isVideo = validVideoTypes.includes(file.type);
+    if (!isImage && !isVideo) {
       console.error("[POST /api/upload] Invalid file type:", { type: file.type });
       return NextResponse.json(
-        { error: "Invalid file type. Only images are allowed." },
+        { error: "Invalid file type. Only images and videos are allowed." },
         { status: 400 },
       );
     }
 
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = isVideo ? 100 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > maxSize) {
       console.error("[POST /api/upload] File too large:", { size: file.size, maxSize });
       return NextResponse.json(
-        { error: "File too large. Maximum size is 5MB." },
+        { error: `File too large. Maximum size is ${isVideo ? "100MB" : "5MB"}.` },
         { status: 400 },
       );
     }

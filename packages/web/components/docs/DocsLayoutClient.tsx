@@ -64,7 +64,7 @@ function EditControls() {
   return (
     <div className="flex items-center gap-2">
       {saveSuccess && (
-        <div className="flex items-center gap-1 text-green-600 text-sm">
+        <div className="flex items-center gap-1 text-sm text-green-600">
           <CheckCircle size={16} />
           <span className="hidden sm:inline">Saved!</span>
         </div>
@@ -72,7 +72,7 @@ function EditControls() {
       {saveError && (
         <div className="flex items-center gap-1 text-red-600 text-sm max-w-[150px] truncate">
           <AlertCircle size={16} />
-          <span className="hidden sm:inline truncate">{saveError}</span>
+          <span className="hidden truncate sm:inline">{saveError}</span>
         </div>
       )}
       <Button
@@ -154,6 +154,18 @@ function DocsLayoutContent({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session } = useSession();
   const pathname = usePathname();
+  const { isEditing, isDirty } = useEditing();
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isEditing && isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isEditing, isDirty]);
 
   // Extract project slug from pathname if in project context
   // Memoized to avoid regex computation on every render
@@ -177,14 +189,14 @@ function DocsLayoutContent({
   return (
     <div className="flex flex-col h-screen">
       {/* Top bar - Full width */}
-      <div className="border-b bg-white px-4 md:px-8 py-3 flex-shrink-0">
-        <div className="grid grid-cols-3 items-center gap-4">
+      <div className="flex-shrink-0 px-4 py-3 bg-white border-b md:px-8 tg-docs-navbar">
+        <div className="grid items-center grid-cols-3 gap-4 tg-docs-navbar-elements">
           {/* Left: Logo and Version */}
           <div className="flex items-center gap-4">
             {/* Hamburger Menu - Mobile/Tablet */}
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-md transition-colors"
+              className="p-2 transition-colors rounded-md lg:hidden hover:bg-gray-100"
               aria-label="Toggle menu"
             >
               <Menu size={20} />
@@ -212,7 +224,7 @@ function DocsLayoutContent({
           </div>
 
           {/* Right: Settings, Edit Controls & User Menu */}
-          <div className="flex justify-end items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             {session?.user && projectSlug && (userProjectRole === "owner" || userProjectRole === "admin") && (
               <Link href={`/projects/${projectSlug}/settings`}>
                 <Button
@@ -233,11 +245,11 @@ function DocsLayoutContent({
       </div>
 
       {/* Content area with sidebars */}
-      <div className="flex flex-1 min-h-0 relative">
+      <div className="relative flex flex-1 min-h-0">
         {/* Mobile Overlay */}
         {isSidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
             onClick={() => setIsSidebarOpen(false)}
           />
         )}
@@ -250,10 +262,10 @@ function DocsLayoutContent({
             ${isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
           `}
         >
-          <div className="h-full lg:hidden absolute top-4 right-4">
+          <div className="absolute h-full lg:hidden top-4 right-4">
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="p-2 hover:bg-gray-200 rounded-md transition-colors"
+              className="p-2 transition-colors rounded-md hover:bg-gray-200"
               aria-label="Close menu"
             >
               <X size={20} />
@@ -266,7 +278,7 @@ function DocsLayoutContent({
           />
         </div>
 
-        <main className="flex-1 p-4 md:p-8 bg-white overflow-y-auto">
+        <main className="flex-1 p-4 overflow-y-auto bg-white md:p-8">
           {children}
         </main>
         <TableOfContents />

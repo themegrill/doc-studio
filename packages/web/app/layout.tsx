@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./mainStyle.css";
 import SessionProvider from "@/components/providers/SessionProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { auth } from "@/lib/auth";

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./mainStyle.css";
 import { Toaster } from "@/components/ui/toaster";
 import { notFound } from "next/navigation";
 import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
-import { getNavigation, getProject } from "@/lib/api";
+import { CrispChat } from "@/components/CrispChat";
+import { getNavigation, getProject, getIntegrations } from "@/lib/api";
 
 export async function generateMetadata(): Promise<Metadata> {
   const project = await getProject();
@@ -23,7 +25,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [navigation, project] = await Promise.all([getNavigation(), getProject()]);
+  const [navigation, project, integrations] = await Promise.all([
+    getNavigation(),
+    getProject(),
+    getIntegrations(),
+  ]);
 
   if (!navigation) notFound();
 
@@ -34,6 +40,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {children}
         </DocsLayoutClient>
         <Toaster />
+        {integrations.crispWebsiteId && (
+          <CrispChat websiteId={integrations.crispWebsiteId} />
+        )}
       </body>
     </html>
   );

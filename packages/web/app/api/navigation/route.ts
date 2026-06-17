@@ -23,6 +23,14 @@ export async function GET(request: NextRequest) {
   `;
   const publishedSlugs = new Set(publishedDocs.map((d) => d.slug as string));
 
+  // Track which routes are sections (originally had children) so they stay visible
+  // even when all their child documents are unpublished
+  const sectionIds = new Set(
+    nav.routes
+      .filter((route) => route.children && route.children.length > 0)
+      .map((route) => route.id ?? route.path ?? route.title)
+  );
+
   nav.routes = nav.routes
     .map((route) => {
       if (route.children && route.children.length > 0) {
@@ -37,11 +45,12 @@ export async function GET(request: NextRequest) {
       return route;
     })
     .filter((route) => {
-      if (!route.children || route.children.length === 0) {
-        const slug = route.path?.replace(/^\/docs\//, "") ?? route.slug ?? "";
-        return !slug || publishedSlugs.has(slug);
-      }
-      return true;
+      const routeKey = route.id ?? route.path ?? route.title;
+      // Sections (originally had children) are always visible even if all docs are unpublished
+      if (sectionIds.has(routeKey)) return true;
+      // Standalone top-level document routes: only show if published
+      const slug = route.path?.replace(/^\/docs\//, "") ?? route.slug ?? "";
+      return !slug || publishedSlugs.has(slug);
     });
 
   return NextResponse.json(nav);

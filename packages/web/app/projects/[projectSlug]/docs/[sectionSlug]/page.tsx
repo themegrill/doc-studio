@@ -164,7 +164,7 @@ export default async function SectionPage({
       ) : documents.length > 0 ? (
         <>
           {sectionDoc && (
-            <h2 className="text-2xl font-semibold mb-4">Documents in this section</h2>
+            <h2 className="text-xl font-semibold mb-4">Documents in this section</h2>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {documents.map((doc) => (

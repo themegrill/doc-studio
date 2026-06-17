@@ -1,5 +1,8 @@
+/* @import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap'); */
+/* @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap'); */
 @import "tailwindcss";
 @import "tw-animate-css";
+
 
 @custom-variant dark (&:is(.dark *));
 
@@ -135,9 +138,9 @@
   --doc-code-size: 0.875rem;
 
   /* Font weights */
-  --doc-h1-weight: 700;
-  --doc-h2-weight: 600;
-  --doc-h3-weight: 600;
+  --doc-h1-weight: 500;
+  --doc-h2-weight: 500;
+  --doc-h3-weight: 500;
   --doc-body-weight: 400;
 
   /* Line heights */
@@ -217,4 +220,25 @@
 /* Remove top margin from first heading in editor */
 .bn-editor [data-content-type="heading"]:first-child {
   margin-top: 0;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  /* font-family: "Plus Jakarta Sans", sans-serif; */
+  color: #1a1a1a;
+}
+
+.bn-editor [data-content-type="heading"] h1,
+.bn-editor [data-content-type="heading"] h2,
+.bn-editor [data-content-type="heading"] h3,
+.bn-editor [data-content-type="heading"] h4,
+.bn-editor [data-content-type="heading"] h5,
+.bn-editor [data-content-type="heading"] h6 {
+  /* font-family: "Google Sans", sans-serif; */
+  /* font-family: "Plus Jakarta Sans", sans-serif; */
+  /* color: #1a1a1a; */
+  /* font-optical-sizing: auto; */
+}
+
+p, .bn-inline-content:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) {
+  color: #374151;
 }

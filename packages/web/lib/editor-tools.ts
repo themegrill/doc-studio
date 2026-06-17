@@ -49,7 +49,8 @@ export async function executeEditorTool(
 }
 
 /**
- * Convert any content format to a plain string
+ * Convert any content format to a plain string (strips HTML/inline formatting).
+ * Used to extract readable text from BlockNote's internal inline content arrays.
  */
 function contentToString(content: unknown): string {
   if (typeof content === 'string') {
@@ -67,6 +68,91 @@ function contentToString(content: unknown): string {
       .join('');
   }
   return '';
+}
+
+// ── Inline HTML parser ────────────────────────────────────────────────────────
+//
+// The AI sometimes emits HTML markup inside block content strings
+// (e.g. "Go to <strong>Settings</strong>"). BlockNote does not render
+// inline HTML — it shows the tags as literal text. These helpers parse the
+// HTML string into BlockNote's inline content object format so the editor
+// renders bold/italic/code/links correctly.
+
+type ParsedInlineNode =
+  | { type: 'text'; text: string; styles: Record<string, boolean> }
+  | { type: 'link'; href: string; content: Array<{ type: 'text'; text: string; styles: Record<string, boolean> }> };
+
+function extractInlineNodes(node: Node, styles: Record<string, boolean>): ParsedInlineNode[] {
+  const result: ParsedInlineNode[] = [];
+
+  node.childNodes.forEach((child) => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      const text = child.textContent ?? '';
+      if (text) result.push({ type: 'text', text, styles: { ...styles } });
+      return;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) return;
+
+    const el = child as Element;
+    const tag = el.tagName.toLowerCase();
+    const newStyles = { ...styles };
+    let href = '';
+
+    switch (tag) {
+      case 'strong': case 'b': newStyles.bold = true; break;
+      case 'em':     case 'i': newStyles.italic = true; break;
+      case 'u':                newStyles.underline = true; break;
+      case 's': case 'del': case 'strike': newStyles.strikethrough = true; break;
+      case 'code':             newStyles.code = true; break;
+      case 'a':                href = el.getAttribute('href') ?? ''; break;
+    }
+
+    const children = extractInlineNodes(child, newStyles);
+
+    if (href) {
+      const textNodes = children.filter(
+        (c): c is { type: 'text'; text: string; styles: Record<string, boolean> } => c.type === 'text'
+      );
+      if (textNodes.length > 0) result.push({ type: 'link', href, content: textNodes });
+    } else {
+      result.push(...children);
+    }
+  });
+
+  return result;
+}
+
+/**
+ * Parse an HTML-annotated string into BlockNote inline content.
+ * Returns the original string unchanged if no HTML tags are present.
+ * Falls back to tag-stripped plain text if DOMParser is unavailable.
+ */
+function parseHtmlContent(
+  html: string
+): string | ParsedInlineNode[] {
+  // Fast path: no HTML tags
+  if (!/<[a-zA-Z]/.test(html)) return html;
+
+  // DOMParser is only available in the browser
+  if (typeof window === 'undefined' || typeof window.DOMParser === 'undefined') {
+    return html.replace(/<[^>]+>/g, '');
+  }
+
+  try {
+    const doc = new window.DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+    const nodes = extractInlineNodes(doc.body, {});
+
+    if (nodes.length === 0) return '';
+
+    // Single unstyled text node → return plain string (no wrapping needed)
+    if (nodes.length === 1 && nodes[0].type === 'text' && Object.keys(nodes[0].styles).length === 0) {
+      return nodes[0].text;
+    }
+
+    return nodes;
+  } catch {
+    return html.replace(/<[^>]+>/g, '');
+  }
 }
 
 /**
@@ -255,15 +341,17 @@ async function insertBlocks(
         }
       }
 
-      // Step 2: Update blocks with text content
+      // Step 2: Update blocks with text content.
+      // parseHtmlContent converts any HTML markup (<strong> etc.) that the AI
+      // may have emitted into BlockNote inline content objects so the editor
+      // renders bold/italic/code correctly instead of showing raw HTML tags.
       for (let i = 0; i < insertedBlockIds.length; i++) {
         const blockId = insertedBlockIds[i];
         const textContent = normalizedData[i]?.textContent;
 
         if (textContent && textContent.trim()) {
-          editor.updateBlock(blockId, {
-            content: textContent,
-          });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          editor.updateBlock(blockId, { content: parseHtmlContent(textContent) as any });
         }
       }
     } catch (blockInsertError) {
@@ -311,12 +399,13 @@ async function updateBlock(
       return { success: false, message: `Block not found: ${blockId}` };
     }
 
-    // Normalize the update content - convert to string to avoid inline content issues
+    // Normalize content: extract text then parse HTML markup → BlockNote inline nodes
     const normalizedUpdate = { ...update };
     if ('content' in update && update.content !== undefined) {
       const textContent = contentToString(update.content);
       if (textContent) {
-        normalizedUpdate.content = textContent;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        normalizedUpdate.content = parseHtmlContent(textContent) as any;
       }
     }
 
@@ -577,9 +666,70 @@ async function replaceText(
 }
 
 /**
+ * Scan all blocks in the editor and repair any whose text content contains raw
+ * HTML markup (e.g. <strong>, <em>) that was stored as literal text by a
+ * previous version of the AI tool. Converts the markup to proper BlockNote
+ * inline content objects so the editor renders it correctly.
+ *
+ * Returns the number of blocks that were repaired.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function repairBlocksHtml(editor: BlockNoteEditor<any, any, any>): number {
+  let count = 0;
+
+  // BlockNote's updateBlock dispatches a ProseMirror transaction. If the
+  // editor is currently read-only, temporarily enable editing so the
+  // programmatic update goes through, then restore the original state.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tiptap = (editor as any)._tiptapEditor;
+  const wasEditable = editor.isEditable;
+  if (!wasEditable && tiptap?.setEditable) {
+    tiptap.setEditable(true, false); // false = suppress update event
+  }
+
+  try {
+    editor.forEachBlock((block) => {
+      if (!block.content || !Array.isArray(block.content)) return false;
+
+      // Detect any text inline-node whose text contains a raw HTML tag
+      const hasRawHtml = block.content.some((node) => {
+        if (node && typeof node === 'object' && 'text' in node) {
+          return /<[a-zA-Z]/.test(String((node as { text: unknown }).text));
+        }
+        return false;
+      });
+
+      if (!hasRawHtml) return false; // continue traversal
+
+      // Reconstruct the full raw text from inline nodes, then re-parse HTML
+      const rawText = extractTextFromBlock(block);
+      if (!rawText.trim()) return false;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        editor.updateBlock(block.id, { content: parseHtmlContent(rawText) as any });
+        count++;
+      } catch {
+        // Block could not be updated — skip silently
+      }
+
+      return false; // continue traversal
+    });
+  } finally {
+    // Always restore the original editable state
+    if (!wasEditable && tiptap?.setEditable) {
+      tiptap.setEditable(false, false);
+    }
+  }
+
+  return count;
+}
+
+/**
  * Extract text content from a block
  */
-function extractTextFromBlock(block: Block): string {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTextFromBlock(block: Block<any, any, any>): string {
   if (!block.content || !Array.isArray(block.content)) {
     return "";
   }
