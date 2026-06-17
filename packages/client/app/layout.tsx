@@ -4,7 +4,8 @@ import "./mainStyle.css";
 import { Toaster } from "@/components/ui/toaster";
 import { notFound } from "next/navigation";
 import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
-import { getNavigation, getProject } from "@/lib/api";
+import { CrispChat } from "@/components/CrispChat";
+import { getNavigation, getProject, getIntegrations } from "@/lib/api";
 
 export async function generateMetadata(): Promise<Metadata> {
   const project = await getProject();
@@ -24,17 +25,31 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [navigation, project] = await Promise.all([getNavigation(), getProject()]);
+  const [navigation, project, integrations] = await Promise.all([
+    getNavigation(),
+    getProject(),
+    getIntegrations(),
+  ]);
 
   if (!navigation) notFound();
 
   return (
     <html lang="en">
       <body>
-        <DocsLayoutClient navigation={navigation} logo={project?.metadata?.logo || undefined}>
+        <DocsLayoutClient
+          navigation={navigation}
+          logo={project?.metadata?.logo || undefined}
+          projectName={project?.name}
+          navWebsite={project?.metadata?.nav_website}
+          navChangelog={project?.metadata?.nav_changelog}
+          navCta={project?.metadata?.nav_cta}
+        >
           {children}
         </DocsLayoutClient>
         <Toaster />
+        {integrations.crispWebsiteId && (
+          <CrispChat websiteId={integrations.crispWebsiteId} />
+        )}
       </body>
     </html>
   );

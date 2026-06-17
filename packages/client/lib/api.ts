@@ -47,7 +47,14 @@ export interface Project {
   name: string;
   slug: string;
   description?: string;
-  metadata?: { logo?: string; favicon?: string; [key: string]: any };
+  metadata?: {
+    logo?: string;
+    favicon?: string;
+    nav_website?: string;
+    nav_changelog?: string;
+    nav_cta?: string;
+    [key: string]: any;
+  };
 }
 
 export async function getProject(): Promise<Project | null> {
@@ -74,6 +81,20 @@ export async function getNavigation(): Promise<Navigation | null> {
     return res.json();
   } catch {
     return null;
+  }
+}
+
+export async function getIntegrations(): Promise<{ crispWebsiteId?: string }> {
+  try {
+    const res = await fetch(
+      `${API_BASE_URL}/api/projects/${PROJECT_SLUG}/integrations`,
+      { next: { revalidate: 300 } }
+    );
+    if (!res.ok) return {};
+    const { integrations } = await res.json();
+    return integrations ?? {};
+  } catch {
+    return {};
   }
 }
 

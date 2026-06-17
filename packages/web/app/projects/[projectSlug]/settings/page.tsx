@@ -101,6 +101,7 @@ export default async function ProjectSettingsPage({
           projectDomain={project.domain ?? null}
           projectDeploy={project.settings?.deploy ?? null}
           projectRedirects={project.redirects ?? []}
+          projectIntegrations={project.settings?.integrations ?? {}}
           currentUserRole={effectiveRole}
           isSuperAdmin={isSuperAdmin}
           githubConfigured={githubConfigured}

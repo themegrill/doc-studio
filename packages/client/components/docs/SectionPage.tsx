@@ -28,7 +28,7 @@ export default function SectionPage({ sectionTitle, hideTitle, childDocs }: Sect
     <div className="max-w-[1000px] mx-auto">
       {!hideTitle && (
         <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-medium">{sectionTitle}</h1>
+          <h1 className="text-3xl font-medium mb-2">{sectionTitle}</h1>
 		</div>
       )}
       {docs.length > 0 && (

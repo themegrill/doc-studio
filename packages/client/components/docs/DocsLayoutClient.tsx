@@ -6,18 +6,22 @@ import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, X } from "lucide-react";
+import { Menu, X, ScrollText, Globe, Rocket } from "lucide-react";
 import { useState, useEffect } from "react";
 
 interface DocsLayoutClientProps {
   children: React.ReactNode;
   navigation: Navigation;
   logo?: string;
+  projectName?: string;
+  navWebsite?: string;
+  navChangelog?: string;
+  navCta?: string;
 }
 
 const FALLBACK_LOGO = "https://themegrill.com/wp-content/uploads/2021/08/tg-logo-black.png";
 
-export default function DocsLayoutClient({ children, navigation, logo }: DocsLayoutClientProps) {
+export default function DocsLayoutClient({ children, navigation, logo, projectName, navWebsite, navChangelog, navCta }: DocsLayoutClientProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -33,7 +37,7 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
       {/* Top bar */}
       <div className="border-b bg-white px-4 md:px-8 py-3 flex-shrink-0">
         <div className="grid grid-cols-3 items-center gap-4">
-          {/* Left: hamburger + logo + version */}
+          {/* Left: hamburger + logo */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -51,9 +55,6 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
                 className="object-contain max-h-10"
               />
             </Link>
-            <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              v{navigation.version}
-            </span>
           </div>
 
           {/* Center: search */}
@@ -63,8 +64,42 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
             </div>
           </div>
 
-          {/* Right: empty — no auth/edit controls */}
-          <div />
+          {/* Right: nav links */}
+          <div className="flex items-center justify-end gap-1">
+            {navChangelog && (
+              <a
+                href={navChangelog}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <ScrollText size={15} />
+                Changelog
+              </a>
+            )}
+            {navWebsite && (
+              <a
+                href={navWebsite}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <Globe size={15} />
+                Website
+              </a>
+            )}
+            {navCta && (
+              <a
+                href={navCta}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-700 rounded-md transition-colors"
+              >
+                <Rocket size={14} />
+                Get {projectName || "Started"}
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
