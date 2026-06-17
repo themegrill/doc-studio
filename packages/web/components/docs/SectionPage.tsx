@@ -153,7 +153,7 @@ export default function SectionPage({
   return (
     <div className="max-w-[1000px] mx-auto">
       {/* Header */}
-      <div className="flex justify-between items-start mb-6 pb-4 border-b">
+      <div className="flex items-start justify-between pb-4 mb-6 border-b">
         <div className="flex-1 mr-4">
           {isEditing ? (
             <div className="space-y-3">
@@ -176,7 +176,7 @@ export default function SectionPage({
               {error && <p className="text-sm text-red-500">{error}</p>}
             </div>
           ) : (
-            <h1 className="text-3xl font-medium mb-2">{title}</h1>
+            <h1 className="mb-2 text-3xl font-medium">{title}</h1>
           )}
         </div>
 
@@ -200,10 +200,10 @@ export default function SectionPage({
           ) : (
             <Button
               onClick={() => setChatOpen(true)}
-              className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-40 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all hover:scale-110"
+              className="fixed z-40 transition-all rounded-full shadow-2xl bottom-6 right-6 h-14 w-14 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 hover:scale-110"
               title="Open AI Assistant"
             >
-              <Sparkles className="h-6 w-6" />
+              <Sparkles className="w-6 h-6" />
             </Button>
           )}
         </>

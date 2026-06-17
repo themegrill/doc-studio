@@ -177,9 +177,9 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
         <Breadcrumb items={breadcrumbs} />
       )}
       {/* Title */}
-      <div className="flex justify-between items-start mb-6 pb-4 border-b">
+      <div className="flex items-start justify-between pb-4 mb-6 border-b">
         <div className="flex-1 mr-4">
-          <h1 className="text-3xl font-medium mb-2">{cleanTitle}</h1>
+          <h1 className="mb-2 text-3xl font-medium">{cleanTitle}</h1>
           {badges.map((badge, i) => (
             <Badge key={i} variant={badge.variant}>
               {badge.text}
