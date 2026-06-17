@@ -441,6 +441,13 @@ button[class*="search"] {
     color: #ffffff;
 }
 
+.max-w-\[1000px\],
+.max-w-4xl {
+  max-width: 840px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
 /* Navbar in responsive and mobile design fix */
 @media screen and (max-width: 992px) {
     .tg-docs-navbar {

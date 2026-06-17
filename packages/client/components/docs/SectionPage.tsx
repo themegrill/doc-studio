@@ -35,18 +35,18 @@ export default function SectionPage({ sectionTitle, hideTitle, childDocs }: Sect
 		hideTitle && <hr className="mb-8" />
       )}
       {docs.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed rounded-lg">
-          <FolderOpen className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No documents yet</h3>
+        <div className="py-12 text-center border-2 border-dashed rounded-lg">
+          <FolderOpen className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">No documents yet</h3>
           <p className="text-gray-500">No documentation has been published in this section yet.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {docs.map((doc) => (
             <Link key={doc.id} href={`/${doc.slug}`} className="h-full">
-              <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer flex flex-col">
+              <Card className="flex flex-col h-full transition-shadow cursor-pointer hover:shadow-lg">
                 <CardHeader className="flex-1">
-                  <CardTitle className="line-clamp-2 leading-snug">
+                  <CardTitle className="leading-snug line-clamp-2">
                     {doc.title}
                   </CardTitle>
                   {doc.description && (
