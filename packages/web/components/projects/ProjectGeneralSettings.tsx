@@ -429,6 +429,52 @@ export function ProjectGeneralSettings({
             )}
           </div>
 
+          {/* Nav links */}
+          <div className="pt-2 border-t space-y-3">
+            <div>
+              <Label htmlFor="nav-website">Website URL</Label>
+              {isEditing ? (
+                <Input
+                  id="nav-website"
+                  value={metadata.nav_website ?? ""}
+                  onChange={(e) => setMetadata({ ...metadata, nav_website: e.target.value })}
+                  placeholder="https://example.com"
+                  className="mt-1"
+                />
+              ) : (
+                <p className="mt-1 text-sm text-gray-900">{metadata.nav_website || <span className="text-gray-400">Not set</span>}</p>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="nav-changelog">Changelog URL</Label>
+              {isEditing ? (
+                <Input
+                  id="nav-changelog"
+                  value={metadata.nav_changelog ?? ""}
+                  onChange={(e) => setMetadata({ ...metadata, nav_changelog: e.target.value })}
+                  placeholder="https://example.com/changelog"
+                  className="mt-1"
+                />
+              ) : (
+                <p className="mt-1 text-sm text-gray-900">{metadata.nav_changelog || <span className="text-gray-400">Not set</span>}</p>
+              )}
+            </div>
+            <div>
+              <Label htmlFor="nav-cta">Get {formData.name} URL</Label>
+              {isEditing ? (
+                <Input
+                  id="nav-cta"
+                  value={metadata.nav_cta ?? ""}
+                  onChange={(e) => setMetadata({ ...metadata, nav_cta: e.target.value })}
+                  placeholder="https://example.com/pricing"
+                  className="mt-1"
+                />
+              ) : (
+                <p className="mt-1 text-sm text-gray-900">{metadata.nav_cta || <span className="text-gray-400">Not set</span>}</p>
+              )}
+            </div>
+          </div>
+
           {isEditing && (
             <div className="flex gap-2 pt-2">
               <Button onClick={handleSave} disabled={isSaving}>

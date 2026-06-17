@@ -36,7 +36,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        <DocsLayoutClient navigation={navigation} logo={project?.metadata?.logo || undefined}>
+        <DocsLayoutClient
+          navigation={navigation}
+          logo={project?.metadata?.logo || undefined}
+          projectName={project?.name}
+          navWebsite={project?.metadata?.nav_website}
+          navChangelog={project?.metadata?.nav_changelog}
+          navCta={project?.metadata?.nav_cta}
+        >
           {children}
         </DocsLayoutClient>
         <Toaster />
