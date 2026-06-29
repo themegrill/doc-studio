@@ -248,6 +248,77 @@ main nav span:last-child {
   border: 1px solid #e2e8f0;
 }
 
+/* ─── DOCSTUDIO-18: copyable code snippets (dark theme + header bar) ─── */
+.bn-block-content[data-content-type="codeBlock"] {
+  display: flex;
+  flex-direction: column;
+  background: #1e293b !important;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+/* Reset the inline-code pill look for code *inside* a code block */
+.bn-block-content[data-content-type="codeBlock"] pre,
+.bn-block-content[data-content-type="codeBlock"] code {
+  background: transparent !important;
+  border: none !important;
+  color: #e2e8f0 !important;
+  border-radius: 0;
+}
+
+.bn-block-content[data-content-type="codeBlock"] pre {
+  margin: 0;
+  padding: 0.875rem 1rem;
+  overflow-x: auto;
+}
+
+.doc-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
+  background: #0f172a;
+  border-bottom: 1px solid #334155;
+  user-select: none;
+}
+
+.doc-code-lang {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.doc-code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  background: transparent;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.doc-code-copy:hover {
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #475569;
+}
+
+.doc-code-copy.copied {
+  color: #4ade80;
+  border-color: #4ade80;
+}
+
 .bn-inline-content a,
 .bn-block-content a {
   color: var(--color-text-accent) !important;
