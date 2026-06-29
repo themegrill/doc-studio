@@ -42,6 +42,8 @@ TitleWithBadges.displayName = "TitleWithBadges";
 import {
   DndContext,
   closestCorners,
+  pointerWithin,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -130,47 +132,49 @@ export default function SidebarWithDnd({
     }
   }, [pathname, routes, projectSlug]);
 
-  // When dragging a doc, dnd-kit applies CSS transforms to other docs in the source
-  // section to fill the gap. Those transforms shift doc bounding rects into the header
-  // area of adjacent sections, causing them to beat the actual section header in
-  // closestCorners detection. Fix: check section headers first with a direct rect-hit
-  // test — if the cursor is inside a section header, return it immediately before any
-  // doc can compete. Fall back to cursor-point closestCorners for within-section sorting.
-  const SECTION_HEADER_HEIGHT = 48;
+  // Multi-container collision detection (dnd-kit "multiple containers" pattern).
+  // The key requirement: while dragging a doc, a sibling DOC under the pointer must
+  // always win over the large section *container* rect that encloses it — otherwise
+  // within-section sorting resolves to the container (or, via transform-shifted rects,
+  // an adjacent section) and the topic either does nothing or jumps to the wrong
+  // category. Section containers are only chosen when the pointer is genuinely over a
+  // header / empty section body (enabling intentional cross-section + empty drops).
   const collisionDetection = useCallback(
     (args: Parameters<typeof closestCorners>[0]) => {
       const activeId = args.active.id as string;
+      // Section drags, or keyboard sensor (no pointer), keep default behavior.
       if (!activeId.startsWith("doc-") || !args.pointerCoordinates) {
         return closestCorners(args);
       }
 
+      // Precise containment first; fall back to rect intersection.
+      const pointerHits = pointerWithin(args);
+      const intersections =
+        pointerHits.length > 0 ? pointerHits : rectIntersection(args);
+
+      // Prefer a sibling doc under the pointer over any section container.
+      const docHit = intersections.find(
+        (c) => String(c.id).startsWith("doc-") && c.id !== activeId,
+      );
+      if (docHit) return [docHit];
+
+      // No doc under the pointer → over a section header / empty section body.
+      const sectionHit = intersections.find((c) =>
+        String(c.id).startsWith("section-"),
+      );
+      if (sectionHit) return [sectionHit];
+
+      // Pointer in a gap → nearest sibling DOC only (never a section container),
+      // using a 1px cursor rect so sorting tracks the actual pointer position.
       const { x, y } = args.pointerCoordinates;
-
-      for (const container of args.droppableContainers) {
-        if (!(container.id as string).startsWith("section-")) continue;
-        const rect = args.droppableRects.get(container.id);
-        if (!rect) continue;
-        if (
-          y >= rect.top &&
-          y <= rect.top + SECTION_HEADER_HEIGHT &&
-          x >= rect.left &&
-          x <= rect.right
-        ) {
-          // Return this section as the sole collision using closestCorners
-          // restricted to just this container so the return type stays correct.
-          return closestCorners({
-            ...args,
-            droppableContainers: args.droppableContainers.filter(
-              (c) => c.id === container.id,
-            ),
-          });
-        }
-      }
-
-      // Cursor is not in any section header — use a cursor-point rect so
-      // within-section doc sorting is based on actual pointer position.
       const cursorRect: ClientRect = { left: x, right: x + 1, top: y, bottom: y + 1, width: 1, height: 1 };
-      return closestCorners({ ...args, collisionRect: cursorRect });
+      return closestCorners({
+        ...args,
+        collisionRect: cursorRect,
+        droppableContainers: args.droppableContainers.filter(
+          (c) => String(c.id).startsWith("doc-") && c.id !== activeId,
+        ),
+      });
     },
     [],
   );
@@ -219,147 +223,97 @@ export default function SidebarWithDnd({
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    const lastDragOverSectionId = dragOverSectionIdRef.current;
+    // The drag-over ref/state is only a visual highlight signal — clear it here.
+    // Correctness is derived entirely from the active/over sortable data below.
     dragOverSectionIdRef.current = null;
     setDragOverSectionId(null);
 
+    if (!over) return;
     const activeId = active.id as string;
-
-    // If a doc was being dragged and a section was highlighted, use that section as the drop target
-    if (activeId.startsWith("doc-") && lastDragOverSectionId !== null) {
-      const activeDocId = activeId.replace("doc-", "");
-      const targetSectionIndex = routes.findIndex(
-        (r) => String(r.id || r.path) === lastDragOverSectionId,
-      );
-
-      let activeSectionIndex = -1;
-      let activeDocIndex = -1;
-      routes.forEach((route, sIdx) => {
-        route.children?.forEach((child, dIdx) => {
-          if (child.path === activeDocId) {
-            activeSectionIndex = sIdx;
-            activeDocIndex = dIdx;
-          }
-        });
-      });
-
-      if (activeSectionIndex !== -1 && targetSectionIndex !== -1 && activeSectionIndex !== targetSectionIndex) {
-        const newRoutes = [...routes];
-        const activeSection = { ...newRoutes[activeSectionIndex], children: [...(newRoutes[activeSectionIndex].children ?? [])] };
-        const targetSection = { ...newRoutes[targetSectionIndex], children: [...(newRoutes[targetSectionIndex].children ?? [])] };
-
-        const [movedDoc] = activeSection.children.splice(activeDocIndex, 1);
-        targetSection.children.push(movedDoc);
-
-        activeSection.children = activeSection.children.map((child, index) => ({ ...child, orderIndex: index }));
-        targetSection.children = targetSection.children.map((child, index) => ({ ...child, orderIndex: index }));
-
-        newRoutes[activeSectionIndex] = activeSection;
-        newRoutes[targetSectionIndex] = targetSection;
-
-        setRoutes(newRoutes);
-        await updateNavigationOrder(newRoutes);
-      }
-      return;
-    }
-
-    if (!over || active.id === over.id) {
-      return;
-    }
-
     const overId = over.id as string;
 
-    // Check if we're moving a section or a document
+    const withOrderIndex = (child: NavRoute, index: number) => ({ ...child, orderIndex: index });
+
+    // ── Section reorder ──
     if (activeId.startsWith("section-") && overId.startsWith("section-")) {
-      // Moving sections
-      const oldIndex = routes.findIndex(
-        (r) => `section-${r.id || r.path}` === activeId,
-      );
+      if (activeId === overId) return;
+      const oldIndex = routes.findIndex((r) => `section-${r.id || r.path}` === activeId);
       const newIndex = routes.findIndex((r) => `section-${r.id || r.path}` === overId);
-
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newRoutes = arrayMove(routes, oldIndex, newIndex).map(
-          (route, index) => ({
-            ...route,
-            orderIndex: index,
-          }),
-        );
-        setRoutes(newRoutes);
-
-        // Persist to backend
-        await updateNavigationOrder(newRoutes);
-      }
-    } else if (activeId.startsWith("doc-") && overId.startsWith("doc-")) {
-      // Moving documents within the same section or between sections
-      const activeDocId = activeId.replace("doc-", "");
-      const overDocId = overId.replace("doc-", "");
-
-      // Find which sections contain these documents
-      let activeSectionIndex = -1;
-      let activeDocIndex = -1;
-      let overSectionIndex = -1;
-      let overDocIndex = -1;
-
-      routes.forEach((route, sIdx) => {
-        route.children?.forEach((child, dIdx) => {
-          if (child.path === activeDocId) {
-            activeSectionIndex = sIdx;
-            activeDocIndex = dIdx;
-          }
-          if (child.path === overDocId) {
-            overSectionIndex = sIdx;
-            overDocIndex = dIdx;
-          }
-        });
-      });
-
-      if (activeSectionIndex !== -1 && overSectionIndex !== -1) {
-        const newRoutes = [...routes];
-
-        // Moving within the same section
-        if (activeSectionIndex === overSectionIndex) {
-          const section = newRoutes[activeSectionIndex];
-          if (section.children) {
-            const newChildren = arrayMove(
-              section.children,
-              activeDocIndex,
-              overDocIndex,
-            ).map((child, index) => ({
-              ...child,
-              orderIndex: index,
-            }));
-            newRoutes[activeSectionIndex] = {
-              ...section,
-              children: newChildren,
-            };
-          }
-        } else {
-          // Moving between sections
-          const activeSection = newRoutes[activeSectionIndex];
-          const overSection = newRoutes[overSectionIndex];
-
-          if (activeSection.children && overSection.children) {
-            const [movedDoc] = activeSection.children.splice(activeDocIndex, 1);
-            overSection.children.splice(overDocIndex, 0, movedDoc);
-
-            // Update order indices
-            activeSection.children = activeSection.children.map(
-              (child, index) => ({
-                ...child,
-                orderIndex: index,
-              }),
-            );
-            overSection.children = overSection.children.map((child, index) => ({
-              ...child,
-              orderIndex: index,
-            }));
-          }
-        }
-
-        setRoutes(newRoutes);
-        await updateNavigationOrder(newRoutes);
-      }
+      if (oldIndex === -1 || newIndex === -1) return;
+      const newRoutes = arrayMove(routes, oldIndex, newIndex).map(withOrderIndex);
+      setRoutes(newRoutes);
+      await updateNavigationOrder(newRoutes);
+      return;
     }
+
+    // ── Doc move / reorder ──
+    if (!activeId.startsWith("doc-")) return;
+
+    // Source section comes from dnd-kit's authoritative sortable.containerId.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sourceContainerId = (active.data.current as any)?.sortable?.containerId;
+    const sourceSectionIndex = routes.findIndex(
+      (r) => String(r.id || r.path) === String(sourceContainerId),
+    );
+
+    // Target section: from the over doc's container, or the section header id.
+    let targetContainerId: string | undefined;
+    if (overId.startsWith("doc-")) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      targetContainerId = (over.data.current as any)?.sortable?.containerId;
+    } else if (overId.startsWith("section-")) {
+      targetContainerId = overId.slice("section-".length);
+    } else {
+      return;
+    }
+    const targetSectionIndex = routes.findIndex(
+      (r) => String(r.id || r.path) === String(targetContainerId),
+    );
+    if (sourceSectionIndex === -1 || targetSectionIndex === -1) return;
+
+    const activeDocPath = activeId.slice("doc-".length);
+    const sourceChildren = routes[sourceSectionIndex].children ?? [];
+    const activeDocIndex = sourceChildren.findIndex((c) => c.path === activeDocPath);
+    if (activeDocIndex === -1) return;
+
+    // ── Same-section reorder ──
+    if (sourceSectionIndex === targetSectionIndex) {
+      // Dropped on the section header / container, not a sibling doc → no reorder.
+      if (!overId.startsWith("doc-")) return;
+      const overDocPath = overId.slice("doc-".length);
+      const overDocIndex = sourceChildren.findIndex((c) => c.path === overDocPath);
+      if (overDocIndex === -1 || overDocIndex === activeDocIndex) return;
+
+      const newChildren = arrayMove(sourceChildren, activeDocIndex, overDocIndex).map(withOrderIndex);
+      const newRoutes = routes.map((r, i) =>
+        i === sourceSectionIndex ? { ...r, children: newChildren } : r,
+      );
+      setRoutes(newRoutes);
+      await updateNavigationOrder(newRoutes);
+      return;
+    }
+
+    // ── Cross-section move ──
+    const targetChildren = routes[targetSectionIndex].children ?? [];
+    let insertIndex = targetChildren.length;
+    if (overId.startsWith("doc-")) {
+      const overDocPath = overId.slice("doc-".length);
+      const idx = targetChildren.findIndex((c) => c.path === overDocPath);
+      if (idx !== -1) insertIndex = idx;
+    }
+
+    const newSourceChildren = [...sourceChildren];
+    const [movedDoc] = newSourceChildren.splice(activeDocIndex, 1);
+    const newTargetChildren = [...targetChildren];
+    newTargetChildren.splice(insertIndex, 0, movedDoc);
+
+    const newRoutes = routes.map((r, i) => {
+      if (i === sourceSectionIndex) return { ...r, children: newSourceChildren.map(withOrderIndex) };
+      if (i === targetSectionIndex) return { ...r, children: newTargetChildren.map(withOrderIndex) };
+      return r;
+    });
+    setRoutes(newRoutes);
+    await updateNavigationOrder(newRoutes);
   };
 
   const updateNavigationOrder = async (newRoutes: NavRoute[]) => {
@@ -384,6 +338,13 @@ export default function SidebarWithDnd({
       );
 
       if (response.ok) {
+        // The server may rewrite slugs/paths when a topic moves to a new section
+        // (DOCSTUDIO-21). Apply the authoritative structure it returns so sidebar
+        // links reflect the new paths immediately.
+        const data = await response.json().catch(() => null);
+        if (data?.structure?.routes) {
+          setRoutes(data.structure.routes);
+        }
         router.refresh();
       } else {
         console.error("Failed to update navigation order");
