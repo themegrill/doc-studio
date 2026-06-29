@@ -4,11 +4,12 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Settings, BookOpen, Globe, Upload, ArrowLeftRight, Puzzle } from "lucide-react";
+import { Users, Settings, BookOpen, Globe, Upload, ArrowLeftRight, Puzzle, Database } from "lucide-react";
 import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
 import { DeploySettings } from "./DeploySettings";
 import { RedirectsSettings } from "./RedirectsSettings";
 import { IntegrationsSettings } from "./IntegrationsSettings";
+import { SampleDataSettings } from "./SampleDataSettings";
 
 interface DeployState {
   domain: string;
@@ -46,7 +47,7 @@ interface ProjectSettingsTabsProps {
   projectIntegrations: Record<string, any>;
 }
 
-type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy" | "redirects" | "integrations";
+type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy" | "redirects" | "integrations" | "sample-data";
 
 export function ProjectSettingsTabs({
   projectSlug,
@@ -64,6 +65,9 @@ export function ProjectSettingsTabs({
   projectIntegrations,
 }: ProjectSettingsTabsProps) {
   const [activeTab, setActiveTab] = useState<TabType>("general");
+
+  // The Sample Data tool is for local/dev testing only — never show it in production.
+  const showSampleData = process.env.NODE_ENV !== "production";
 
   const tabs = [
     {
@@ -101,7 +105,12 @@ export function ProjectSettingsTabs({
       label: "Integrations",
       icon: Puzzle,
     },
-  ];
+    {
+      id: "sample-data" as const,
+      label: "Sample Data",
+      icon: Database,
+    },
+  ].filter((tab) => tab.id !== "sample-data" || showSampleData);
 
   return (
     <div className="bg-white rounded-lg border">
@@ -257,6 +266,19 @@ export function ProjectSettingsTabs({
               projectSlug={projectSlug}
               initialIntegrations={projectIntegrations}
             />
+          </div>
+        )}
+
+        {showSampleData && activeTab === "sample-data" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">Sample Data</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Load realistic sample data into this project to test every feature, then clear it when you&apos;re done.
+              </p>
+            </div>
+
+            <SampleDataSettings projectSlug={projectSlug} />
           </div>
         )}
       </div>
