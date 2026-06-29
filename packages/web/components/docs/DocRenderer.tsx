@@ -1776,6 +1776,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           theme="light"
           formattingToolbar={false}
           linkToolbar={false}
+          slashMenu={false}
           onChange={handleEditorChange}
         >
           {/* Add the AI Command menu to the editor */}
