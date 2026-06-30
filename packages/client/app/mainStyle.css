@@ -1,11 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@100..900&display=swap');
 
 :root {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Work Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-heading: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-text-primary:   #1a1a2e;   
-  --color-text-secondary: #4b5563;   
+  --color-text-primary:   #1a1a2e;
+  --color-text-secondary: #4b5563;
   --color-text-muted:     #6b7280;   
   --color-text-accent:    #2563eb;   
 
@@ -519,6 +520,33 @@ button[class*="search"] {
 
 [data-radix-popper-content-wrapper] > div > p {
     color: #ffffff;
+}
+
+.max-w-\[1000px\],
+.max-w-4xl {
+  max-width: 840px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.bn-block-outer:has(pre > code) {
+  margin: 40px 0;
+}
+
+.bn-block-content[data-content-type="heading"] a > strong {
+  color: #1d4ed8 !important;
+}
+
+.bn-block-content[data-content-type="heading"][data-level="2"] {
+  margin-top: var(--space-8) !important;
+}
+
+.bn-block-content[data-content-type=heading][data-level="3"] {
+  margin-top: var(--space-6) !important;
+}
+
+[data-content-type="divider"] hr {
+  border-top-color: #e2e8f0 !important;
 }
 
 /* Navbar in responsive and mobile design fix */
