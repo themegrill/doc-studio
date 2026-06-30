@@ -525,3 +525,87 @@ button[class*="search"] {
         justify-content: space-between;
     }
 }
+
+/* Custom quote block styles for doc notices */
+.bn-block-content[data-content-type="quote"] blockquote {
+  position: relative;
+  margin: 1.5rem 0 !important;
+  padding: 1rem 1.25rem !important;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #cbd5e1 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type] div {
+  display: inline;
+}
+
+/* Information / Info */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"] {
+  background-color: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  border-left: 4px solid #3b82f6 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"]::before {
+  content: "Information: ";
+  font-weight: 700;
+  color: #1d4ed8;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Note */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"] {
+  background-color: #f0f7ff !important;
+  border: 1px solid #dbeafe !important;
+  border-left: 4px solid #2563eb !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"]::before {
+  content: "Note: ";
+  font-weight: 700;
+  color: #1d4ed8;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Warning */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"] {
+  background-color: #fff1f2 !important;
+  border: 1px solid #ffe4e6 !important;
+  border-left: 4px solid #e11d48 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"]::before {
+  content: "Warning: ";
+  font-weight: 700;
+  color: #be123c;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Tips */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"] {
+  background-color: #fffbeb !important;
+  border: 1px solid #fef3c7 !important;
+  border-left: 4px solid #d97706 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
+  content: "Tip: ";
+  font-weight: 700;
+  color: #b45309;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Important */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"] {
+  background-color: #fff5f5 !important;
+  border: 1px solid #fed7d7 !important;
+  border-left: 4px solid #e53e3e !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"]::before {
+  content: "Important: ";
+  font-weight: 700;
+  color: #c53030;
+  display: inline;
+  font-size: 0.95rem;
+}

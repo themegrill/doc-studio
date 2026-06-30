@@ -15,15 +15,17 @@ import Breadcrumb, { type BreadcrumbItem } from "@/components/docs/Breadcrumb";
 import { VideoEmbedBlock } from "@/components/docs/VideoEmbedBlock";
 import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
 import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
+import { QuoteBlock } from "@/components/docs/QuoteBlock";
 import { DocContextProvider } from "@/contexts/DocContext";
 
-const { video: _builtinVideo, image: _builtinImage, ...baseBlockSpecs } = defaultBlockSpecs;
+const { video: _builtinVideo, image: _builtinImage, quote: _builtinQuote, ...baseBlockSpecs } = defaultBlockSpecs;
 const editorSchema = BlockNoteSchema.create({
   blockSpecs: {
     ...baseBlockSpecs,
     image: ImageBlockWithAlt(),
     videoEmbed: VideoEmbedBlock(),
     linkCard: LinkCardBlock(),
+    quote: QuoteBlock(),
   },
 });
 

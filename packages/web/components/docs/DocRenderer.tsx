@@ -37,6 +37,8 @@ import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
 import { DocLinkToolbar } from "@/components/docs/DocLinkToolbar";
 import { DocCreateLinkButton } from "@/components/docs/DocCreateLinkButton";
 import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
+import { QuoteBlock } from "@/components/docs/QuoteBlock";
+import { QuoteTypeDropdown } from "@/components/docs/QuoteTypeDropdown";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
 import { useEditing } from "@/contexts/EditingContext";
@@ -72,13 +74,14 @@ type InlineContentItem = { type: "text"; text: string; styles: Record<string, bo
 // The built-in `video` block is excluded so BlockNote's FilePanelExtension
 // never fires — all video content goes through the custom videoEmbed block.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { video: _builtinVideo, image: _builtinImage, ...baseBlockSpecs } = defaultBlockSpecs;
+const { video: _builtinVideo, image: _builtinImage, quote: _builtinQuote, ...baseBlockSpecs } = defaultBlockSpecs;
 const editorSchema = BlockNoteSchema.create({
   blockSpecs: {
     ...baseBlockSpecs,
     image: ImageBlockWithAlt(),
     videoEmbed: VideoEmbedBlock(),
     linkCard: LinkCardBlock(),
+    quote: QuoteBlock(),
   },
 });
 
@@ -91,6 +94,7 @@ const FormattingToolbarWithAI = memo(function FormattingToolbarWithAI() {
       formattingToolbar={() => (
         <FormattingToolbar>
           {getFormattingToolbarItems().filter((item) => item.key !== "createLinkButton")}
+          <QuoteTypeDropdown />
           <DocCreateLinkButton />
           <AIToolbarButton />
         </FormattingToolbar>
