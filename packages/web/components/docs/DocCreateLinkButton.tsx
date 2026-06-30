@@ -171,10 +171,14 @@ export const DocCreateLinkButton: FC = () => {
     if (!href || href === DOC_PREFIX) return;
 
     const range = savedRangeRef.current;
-    if (!range) return;
+    const tiptap = editor?._tiptapEditor;
+    if (!range || !tiptap?.view) {
+      setOpen(false);
+      resetForm();
+      return;
+    }
 
     const { from, to } = range;
-    const tiptap = editor._tiptapEditor;
 
     // Bypass TipTap's command runner (which has a `!view.editable` guard that
     // silently returns false) and call view.dispatch directly.  view.dispatch IS
@@ -183,9 +187,13 @@ export const DocCreateLinkButton: FC = () => {
     // transaction also avoids setLink's isAllowedUri check that rejects "doc:".
     const linkMarkType = tiptap.schema.marks.link;
     if (!linkMarkType) return;
-    tiptap.view.dispatch(
-      tiptap.state.tr.addMark(from, to, linkMarkType.create({ href })),
-    );
+    try {
+      tiptap.view.dispatch(
+        tiptap.state.tr.addMark(from, to, linkMarkType.create({ href })),
+      );
+    } catch (e) {
+      console.error("[link] create failed", e);
+    }
 
     setOpen(false);
     resetForm();

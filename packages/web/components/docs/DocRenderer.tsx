@@ -24,6 +24,7 @@ import {
   Sparkles,
   Loader2,
   Video,
+  Crown,
 } from "lucide-react";
 import {
   VideoBlockEditorProps,
@@ -272,6 +273,12 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   const parsedTitle = useMemo(() => {
     return parseTitleWithBadges(editorState.title);
   }, [editorState.title]);
+
+  // "Pro" tag (DOCSTUDIO-24): badges are encoded in the title as HTML. We keep
+  // editorState.title as the raw source of truth and drive the input from the
+  // clean title, toggling this span on/off.
+  const PRO_SPAN = '<span class="premium-feature">Pro</span>';
+  const isPro = parsedTitle.badges.some((b) => b.variant === "pro");
 
   // Use refs to store latest values without causing re-renders
   const editorStateRef = useRef(editorState);
@@ -878,7 +885,15 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     const isEmpty =
       last.type === "paragraph" &&
       (!Array.isArray(last.content) ||
-        last.content.every((item: unknown) => !(item as { text?: string })?.text?.trim()));
+        // A paragraph is only "empty" when every item is blank text. Link inline
+        // content ({ type: "link", content: [...] }) has no top-level `.text`, so
+        // without this guard a paragraph that is entirely a link would be treated
+        // as empty and stripped on save — wiping the content (DOCSTUDIO-22).
+        last.content.every(
+          (item: unknown) =>
+            (item as { type?: string })?.type !== "link" &&
+            !(item as { text?: string })?.text?.trim(),
+        ));
     if (isEmpty) output.pop();
     else break;
   }
@@ -989,7 +1004,23 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         throw error;
       }
     },
-  });
+    // DOCSTUDIO-22: BlockNote's link extension opens links in a new tab on click
+    // (even while editing), making links impossible to edit. A direct editorProps
+    // handleClick is checked by ProseMirror BEFORE any plugin, so claiming anchor
+    // clicks here (in editable mode) stops the link-open handler from running.
+    // Text selection still happens on mousedown, so the cursor lands in the link
+    // and the link toolbar still appears — a click now edits the link.
+    _tiptapOptions: {
+      editorProps: {
+        handleClick(view, _pos, event) {
+          if (!view.editable) return false;
+          const target = event.target as HTMLElement | null;
+          return !!target?.closest?.("a");
+        },
+      },
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
 
   // Update editor ref when editor is created
   useEffect(() => {
@@ -1041,6 +1072,22 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       setOpenVideoModalRef(null);
     };
   }, []);
+
+  // DOCSTUDIO-22: BlockNote's link hover toolbar only activates once the editor
+  // has focus. On entering edit mode the editor is unfocused, so hovering a link
+  // shows nothing until the user clicks into the editor. Focus the editor when
+  // edit mode starts so link hover works immediately.
+  useEffect(() => {
+    if (!editorState.isEditing) return;
+    const t = setTimeout(() => {
+      try {
+        editor.focus();
+      } catch {
+        /* editor not mounted yet */
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [editor, editorState.isEditing]);
 
   // Compute document context for AI chat
   const documentContext = useMemo(
@@ -1113,7 +1160,11 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       }
 
       const data = await response.json();
-      setEditorState((prev) => ({ ...prev, title: data.title }));
+      // Preserve the Pro tag (encoded in the title) across AI regeneration.
+      setEditorState((prev) => ({
+        ...prev,
+        title: isPro ? `${data.title} ${PRO_SPAN}` : data.title,
+      }));
       setTitleAIState({ isGenerating: false, error: "" });
     } catch (error) {
       console.error("Error generating title:", error);
@@ -1589,11 +1640,12 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
               <div className="relative group">
                 <Input
                   type="text"
-                  value={editorState.title}
+                  value={parsedTitle.cleanTitle}
                   onChange={(e) => {
+                    const clean = e.target.value;
                     setEditorState((prev) => ({
                       ...prev,
-                      title: e.target.value,
+                      title: isPro ? `${clean} ${PRO_SPAN}` : clean,
                     }));
                     editingContext.setIsDirty(true);
                   }}
@@ -1631,6 +1683,30 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
               </div>
               {titleAIState.error && (
                 <p className="text-sm text-red-600">{titleAIState.error}</p>
+              )}
+              {!isSectionOverview && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditorState((prev) => ({
+                      ...prev,
+                      title: isPro
+                        ? parsedTitle.cleanTitle
+                        : `${parsedTitle.cleanTitle} ${PRO_SPAN}`,
+                    }));
+                    editingContext.setIsDirty(true);
+                  }}
+                  aria-pressed={isPro}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                    isPro
+                      ? "bg-green-500 text-white border-transparent"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="Mark this topic as a premium (Pro) feature"
+                >
+                  <Crown size={14} />
+                  {isPro ? "Marked as Pro" : "Mark as Pro"}
+                </button>
               )}
               <div className="relative group">
                 <Input

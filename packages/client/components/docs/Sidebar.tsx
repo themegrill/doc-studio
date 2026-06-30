@@ -5,10 +5,33 @@ import { usePathname } from "next/navigation";
 import { Navigation, NavRoute } from "@/lib/db/ContentManager";
 import { ChevronRight, Book } from "lucide-react";
 import { useState, useMemo, memo } from "react";
+import { parseTitleWithBadges } from "@/lib/parse-title-badges";
+import { Badge } from "@/components/ui/badge-pro";
 
 interface SidebarProps {
   navigation: Navigation;
 }
+
+/** Renders a title with any encoded badges (e.g. the "Pro" tag) instead of raw HTML. */
+const TitleWithBadges = memo(function TitleWithBadges({
+  title,
+  className,
+}: {
+  title: string;
+  className?: string;
+}) {
+  const { cleanTitle, badges } = useMemo(() => parseTitleWithBadges(title), [title]);
+  return (
+    <span className={`inline-flex items-center min-w-0 ${className ?? ""}`}>
+      <span className="truncate">{cleanTitle}</span>
+      {badges.map((badge, i) => (
+        <Badge key={i} variant={badge.variant} className="ml-1.5 text-[10px] px-1.5 py-0 shrink-0">
+          {badge.text}
+        </Badge>
+      ))}
+    </span>
+  );
+});
 
 export default function Sidebar({ navigation }: SidebarProps) {
   const pathname = usePathname();
@@ -70,7 +93,7 @@ const NavItem = memo(function NavItem({
               : "text-gray-700 hover:bg-gray-100"
           }`}
         >
-          <span className="flex-1 truncate">{route.title}</span>
+          <TitleWithBadges title={route.title} className="flex-1" />
           <ChevronRight
             size={15}
             className={`shrink-0 text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
@@ -108,7 +131,7 @@ const NavItem = memo(function NavItem({
       {isLeafActive && (
         <span className="w-1 h-1 rounded-full bg-blue-600 shrink-0" />
       )}
-      <span className={isLeafActive ? "" : "pl-3"}>{route.title}</span>
+      <TitleWithBadges title={route.title} className={isLeafActive ? "" : "pl-3"} />
     </Link>
   );
 });
