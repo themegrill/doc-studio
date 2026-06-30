@@ -259,12 +259,14 @@ main nav span:last-child {
   margin: 1rem 0;
 }
 
-/* Reset the inline-code pill look for code *inside* a code block */
+/* Reset the inline-code pill look for code *inside* a code block.
+   NOTE: `color` is intentionally NOT !important so Shiki's per-token inline
+   colors win; this is only a fallback for untokenized text. */
 .bn-block-content[data-content-type="codeBlock"] pre,
 .bn-block-content[data-content-type="codeBlock"] code {
   background: transparent !important;
   border: none !important;
-  color: #e2e8f0 !important;
+  color: #e2e8f0;
   border-radius: 0;
 }
 
@@ -317,6 +319,46 @@ main nav span:last-child {
 .doc-code-copy.copied {
   color: #4ade80;
   border-color: #4ade80;
+}
+
+/* In read-only views our injected .doc-code-header (language label + Copy) is the
+   language indicator, so hide BlockNote's own <select> there to avoid a duplicate
+   overlapping label. It still shows (styled below) in the editor, where no header
+   is injected. */
+.bn-block-content[data-content-type="codeBlock"]:has(.doc-code-header) select {
+  display: none !important;
+}
+
+/* Code-block language picker (editor only). BlockNote renders a bare native
+   <select> floating at the top-left; style it as a dark pill that matches the
+   code block, and make room so it doesn't overlap the code. */
+.bn-editor [data-content-type="codeBlock"] select {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #475569 !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+  font-size: 0.72rem !important;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: none;
+  z-index: 2;
+}
+.bn-editor [data-content-type="codeBlock"] select:hover {
+  background: #3f4f63 !important;
+  border-color: #64748b !important;
+}
+.bn-editor [data-content-type="codeBlock"] select option {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  text-transform: none;
+  font-weight: 400;
+}
+/* Give the code a little headroom so the floating picker doesn't sit on it. */
+.bn-block-content[data-content-type="codeBlock"]:has(select) pre {
+  padding-top: 2.75rem;
 }
 
 .bn-inline-content a,

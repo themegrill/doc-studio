@@ -65,12 +65,14 @@ interface SidebarProps {
   navigation: Navigation;
   isAuthenticated?: boolean;
   projectSlug?: string | null;
+  projectMetadata?: Record<string, any>;
 }
 
 export default function SidebarWithDnd({
   navigation,
   isAuthenticated,
   projectSlug,
+  projectMetadata = {},
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -418,6 +420,47 @@ export default function SidebarWithDnd({
           </nav>
 
         </DndContext>
+
+        {/* Mobile Navigation Links */}
+        {(projectMetadata?.websiteLink || projectMetadata?.pricingLink || projectMetadata?.changelogLink) && (
+          <div className="mt-auto pt-6 border-t border-gray-200 space-y-2 lg:hidden">
+            <h5 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Links
+            </h5>
+            <div className="space-y-1">
+              {projectMetadata.changelogLink && (
+                <a
+                  href={projectMetadata.changelogLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                >
+                  Changelog
+                </a>
+              )}
+              {projectMetadata.websiteLink && (
+                <a
+                  href={projectMetadata.websiteLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                >
+                  Website
+                </a>
+              )}
+              {projectMetadata.pricingLink && (
+                <a
+                  href={projectMetadata.pricingLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center px-3 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                >
+                  Pricing
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </aside>
     </TooltipProvider>
   );

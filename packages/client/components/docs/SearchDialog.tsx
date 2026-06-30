@@ -127,11 +127,11 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
       {/* Search Trigger Button */}
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition-colors"
+        className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
       >
         <Search size={16} />
         <span className="flex-1 text-left">Search documentation...</span>
-        <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-gray-500 bg-gray-100 border border-gray-200 rounded">
+        <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded">
           <span className="text-xs">{isMac ? "⌘" : "Ctrl"}</span>K
         </kbd>
       </button>

@@ -65,6 +65,32 @@ export function ProjectGeneralSettings({
       return;
     }
 
+    const urlPattern = /^https?:\/\/.+/;
+    if (metadata.websiteLink && !urlPattern.test(metadata.websiteLink)) {
+      toast({
+        title: "Error",
+        description: "Website Link must be a valid URL starting with http:// or https://",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (metadata.pricingLink && !urlPattern.test(metadata.pricingLink)) {
+      toast({
+        title: "Error",
+        description: "Pricing Link must be a valid URL starting with http:// or https://",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (metadata.changelogLink && !urlPattern.test(metadata.changelogLink)) {
+      toast({
+        title: "Error",
+        description: "Changelog Link must be a valid URL starting with http:// or https://",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -425,6 +451,78 @@ export function ProjectGeneralSettings({
             ) : (
               <p className="mt-1 text-sm text-gray-900">
                 {projectDescription || <span className="text-gray-400">No description</span>}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="websiteLink">Website Link</Label>
+            {isEditing ? (
+              <Input
+                id="websiteLink"
+                type="url"
+                value={metadata.websiteLink || ""}
+                onChange={(e) => setMetadata({ ...metadata, websiteLink: e.target.value })}
+                placeholder="https://example.com"
+                className="mt-1"
+              />
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {metadata.websiteLink ? (
+                  <a href={metadata.websiteLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    {metadata.websiteLink}
+                  </a>
+                ) : (
+                  <span className="text-gray-400">Not configured</span>
+                )}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="pricingLink">Pricing Link</Label>
+            {isEditing ? (
+              <Input
+                id="pricingLink"
+                type="url"
+                value={metadata.pricingLink || ""}
+                onChange={(e) => setMetadata({ ...metadata, pricingLink: e.target.value })}
+                placeholder="https://example.com/pricing"
+                className="mt-1"
+              />
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {metadata.pricingLink ? (
+                  <a href={metadata.pricingLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    {metadata.pricingLink}
+                  </a>
+                ) : (
+                  <span className="text-gray-400">Not configured</span>
+                )}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="changelogLink">Changelog Link</Label>
+            {isEditing ? (
+              <Input
+                id="changelogLink"
+                type="url"
+                value={metadata.changelogLink || ""}
+                onChange={(e) => setMetadata({ ...metadata, changelogLink: e.target.value })}
+                placeholder="https://example.com/changelog"
+                className="mt-1"
+              />
+            ) : (
+              <p className="mt-1 text-sm text-gray-900">
+                {metadata.changelogLink ? (
+                  <a href={metadata.changelogLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    {metadata.changelogLink}
+                  </a>
+                ) : (
+                  <span className="text-gray-400">Not configured</span>
+                )}
               </p>
             )}
           </div>

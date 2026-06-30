@@ -11,8 +11,10 @@ import {
   getDefaultReactSlashMenuItems,
   getFormattingToolbarItems,
   LinkToolbarController,
+  createReactInlineContentSpec,
+  useBlockNoteEditor,
 } from "@blocknote/react";
-import { defaultBlockSpecs, BlockNoteSchema } from "@blocknote/core";
+import { defaultBlockSpecs, BlockNoteSchema, defaultInlineContentSpecs } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -45,6 +47,7 @@ import { useEditing } from "@/contexts/EditingContext";
 import { DocContextProvider } from "@/contexts/DocContext";
 import ChatPanel from "@/components/chat/ChatPanel";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
+import { codeBlockSpec } from "@/lib/code-block";
 import { Badge } from "@/components/ui/badge-pro";
 import SeoPanel from "@/components/docs/SeoPanel";
 import type { SeoData } from "@/lib/db/ContentManager";
@@ -67,6 +70,21 @@ const MemoAIMenuController = memo(AIMenuController);
 
 type InlineContentItem = { type: "text"; text: string; styles: Record<string, boolean> };
 
+export const ProBadge = createReactInlineContentSpec(
+  {
+    type: "proBadge",
+    propSchema: {},
+    content: "none",
+  },
+  {
+    render: () => (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-green-500 text-white select-none ml-1 align-middle">
+        Pro
+      </span>
+    ),
+  }
+);
+
 // Schema is built once at module load, not inside DocRenderer, for two reasons:
 // 1. Avoids reconstructing TipTap Node objects on every render cycle.
 // 2. Isolates factory/schema errors from React's render cycle so a bad spec
@@ -82,8 +100,40 @@ const editorSchema = BlockNoteSchema.create({
     videoEmbed: VideoEmbedBlock(),
     linkCard: LinkCardBlock(),
     quote: QuoteBlock(),
+    // Syntax-highlighted code block (Shiki) — replaces the default plain spec.
+    codeBlock: codeBlockSpec,
+  },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    proBadge: ProBadge,
   },
 });
+
+function ProBadgeToolbarButton() {
+  const editor = useBlockNoteEditor();
+
+  const insertProBadge = () => {
+    const selection = editor.prosemirrorState.selection;
+    const { to } = selection;
+    editor._tiptapEditor.commands.setTextSelection(to);
+    editor.insertInlineContent([{ type: "proBadge" }]);
+  };
+
+  return (
+    <button
+      type="button"
+      className="bn-button flex items-center gap-1 text-[11px] font-bold text-green-600 hover:text-green-700 transition-colors"
+      title="Insert Pro badge"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        insertProBadge();
+      }}
+    >
+      <Crown size={12} className="text-green-600" />
+      <span>Pro</span>
+    </button>
+  );
+}
 
 // memo + module-level: prevents remount AND re-render when DocRenderer re-renders.
 // Without memo, every DocRenderer render would re-render these, potentially causing
@@ -96,6 +146,7 @@ const FormattingToolbarWithAI = memo(function FormattingToolbarWithAI() {
           {getFormattingToolbarItems().filter((item) => item.key !== "createLinkButton")}
           <QuoteTypeDropdown />
           <DocCreateLinkButton />
+          <ProBadgeToolbarButton />
           <AIToolbarButton />
         </FormattingToolbar>
       )}

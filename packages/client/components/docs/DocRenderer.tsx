@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BlockNoteView } from "@blocknote/mantine";
-import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { useCreateBlockNote, createReactInlineContentSpec } from "@blocknote/react";
+import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -17,8 +17,26 @@ import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
 import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
 import { QuoteBlock } from "@/components/docs/QuoteBlock";
 import { DocContextProvider } from "@/contexts/DocContext";
+import { useTheme } from "@/components/ThemeProvider";
+import { codeBlockSpec } from "@/lib/code-block";
 
 const { video: _builtinVideo, image: _builtinImage, quote: _builtinQuote, ...baseBlockSpecs } = defaultBlockSpecs;
+
+export const ProBadge = createReactInlineContentSpec(
+  {
+    type: "proBadge",
+    propSchema: {},
+    content: "none",
+  },
+  {
+    render: () => (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-green-500 text-white select-none ml-1 align-middle">
+        Pro
+      </span>
+    ),
+  }
+);
+
 const editorSchema = BlockNoteSchema.create({
   blockSpecs: {
     ...baseBlockSpecs,
@@ -26,6 +44,12 @@ const editorSchema = BlockNoteSchema.create({
     videoEmbed: VideoEmbedBlock(),
     linkCard: LinkCardBlock(),
     quote: QuoteBlock(),
+    // Syntax-highlighted code block (Shiki) — replaces the default plain spec.
+    codeBlock: codeBlockSpec,
+  },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    proBadge: ProBadge,
   },
 });
 
@@ -39,6 +63,7 @@ interface Props {
 export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs }: Props) {
   const router = useRouter();
   const titleBtnRef = useRef<HTMLButtonElement>(null);
+  const { resolvedTheme } = useTheme();
 
   const { cleanTitle, badges } = useMemo(
     () => parseTitleWithBadges(doc.title),
@@ -314,7 +339,7 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
             </Badge>
           ))}
         {doc.description && (
-          <p className="text-gray-600">{doc.description}</p>
+          <p className="text-gray-600 dark:text-gray-400">{doc.description}</p>
         )}
         </div>
       </div>
@@ -330,6 +355,8 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
         .bn-editor a[href]:hover {
           color: #1d4ed8;
         }
+        .dark .bn-editor a[href] { color: #60a5fa; }
+        .dark .bn-editor a[href]:hover { color: #93c5fd; }
         .bn-editor h1, .bn-editor h2, .bn-editor h3, .bn-editor h4 {
           display: inline;
         }
@@ -364,7 +391,7 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
           opacity: 1;
         }
       `}</style>
-      <BlockNoteView editor={editor} editable={false} theme="light" />
+      <BlockNoteView editor={editor} editable={false} theme={resolvedTheme} />
     </div>
     </DocContextProvider>
   );
