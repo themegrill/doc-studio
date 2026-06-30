@@ -9,6 +9,7 @@
   },
   "author": "ThemeGrill",
   "license": "MIT",
+  "packageManager": "pnpm@10.27.0",
   "scripts": {
     "dev": "cd packages/web && pnpm dev",
     "build": "cd packages/web && pnpm build",
