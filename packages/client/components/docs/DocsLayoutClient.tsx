@@ -8,16 +8,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface DocsLayoutClientProps {
   children: React.ReactNode;
   navigation: Navigation;
   logo?: string;
+  projectMetadata?: Record<string, any>;
 }
 
 const FALLBACK_LOGO = "https://themegrill.com/wp-content/uploads/2021/08/tg-logo-black.png";
 
-export default function DocsLayoutClient({ children, navigation, logo }: DocsLayoutClientProps) {
+export default function DocsLayoutClient({
+  children,
+  navigation,
+  logo,
+  projectMetadata = {},
+}: DocsLayoutClientProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -31,13 +38,13 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
   return (
     <div className="flex flex-col h-screen">
       {/* Top bar */}
-      <div className="border-b bg-white px-4 md:px-8 py-3 flex-shrink-0">
+      <div className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4 md:px-8 py-3 flex-shrink-0">
         <div className="grid grid-cols-3 items-center gap-4">
-          {/* Left: hamburger + logo + version */}
+          {/* Left: Logo */}
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-md transition-colors"
+              className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-200 rounded-md transition-colors"
               aria-label="Toggle menu"
             >
               <Menu size={20} />
@@ -51,9 +58,6 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
                 className="object-contain max-h-10"
               />
             </Link>
-            <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              v{navigation.version}
-            </span>
           </div>
 
           {/* Center: search */}
@@ -63,8 +67,44 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
             </div>
           </div>
 
-          {/* Right: empty — no auth/edit controls */}
-          <div />
+          {/* Right: Navigation Links + theme toggle */}
+          <div className="flex items-center justify-end gap-2">
+            {(projectMetadata?.websiteLink || projectMetadata?.pricingLink || projectMetadata?.changelogLink) && (
+              <nav className="hidden lg:flex items-center gap-6 mr-2">
+                {projectMetadata?.changelogLink && (
+                  <a
+                    href={projectMetadata.changelogLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    Changelog
+                  </a>
+                )}
+                {projectMetadata?.websiteLink && (
+                  <a
+                    href={projectMetadata.websiteLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    Website
+                  </a>
+                )}
+                {projectMetadata?.pricingLink && (
+                  <a
+                    href={projectMetadata.pricingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    Pricing
+                  </a>
+                )}
+              </nav>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
       </div>
 
@@ -89,16 +129,16 @@ export default function DocsLayoutClient({ children, navigation, logo }: DocsLay
           <div className="h-full lg:hidden absolute top-4 right-4">
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="p-2 hover:bg-gray-200 rounded-md transition-colors"
+              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 dark:text-gray-200 rounded-md transition-colors"
               aria-label="Close menu"
             >
               <X size={20} />
             </button>
           </div>
-          <Sidebar navigation={navigation} />
+          <Sidebar navigation={navigation} projectMetadata={projectMetadata} />
         </div>
 
-        <main className="flex-1 p-4 md:p-8 bg-white overflow-y-auto">
+        <main className="flex-1 p-4 md:p-8 bg-white dark:bg-gray-950 overflow-y-auto">
           {children}
         </main>
 

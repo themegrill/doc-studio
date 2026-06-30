@@ -120,15 +120,27 @@ export const DocLinkToolbar: FC<LinkToolbarProps> = ({
     // Bypass setLink (which has isAllowedUri validation that rejects "doc:" hrefs).
     // view.dispatch is TipTap's dispatchTransaction override, so onUpdate fires
     // and BlockNote's editor.document is updated for persistence.
-    const tiptap = editor._tiptapEditor;
+    const tiptap = editor?._tiptapEditor;
+    if (!tiptap?.view || !range) {
+      // Range can be stale/undefined or the editor view momentarily unavailable —
+      // fail safe instead of throwing.
+      setEditing(false);
+      setToolbarPositionFrozen?.(false);
+      setToolbarOpen?.(false);
+      return;
+    }
     const linkMarkType = tiptap.schema.marks.link;
     if (!linkMarkType) return;
     const { from, to } = range;
-    tiptap.view.dispatch(
-      tiptap.state.tr
-        .removeMark(from, to, linkMarkType)
-        .addMark(from, to, linkMarkType.create({ href })),
-    );
+    try {
+      tiptap.view.dispatch(
+        tiptap.state.tr
+          .removeMark(from, to, linkMarkType)
+          .addMark(from, to, linkMarkType.create({ href })),
+      );
+    } catch (e) {
+      console.error("[link] apply failed", e);
+    }
     setEditing(false);
     setToolbarPositionFrozen?.(false);
     setToolbarOpen?.(false);

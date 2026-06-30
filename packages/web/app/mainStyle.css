@@ -1,11 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sora:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@100..900&display=swap');
 
 :root {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Work Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-heading: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-text-primary:   #1a1a2e;   
-  --color-text-secondary: #4b5563;   
+  --color-text-primary:   #1a1a2e;
+  --color-text-secondary: #4b5563;
   --color-text-muted:     #6b7280;   
   --color-text-accent:    #2563eb;   
 
@@ -64,12 +65,12 @@ main {
   background: var(--color-surface);
 }
 
-.flex.justify-between.items-start {
+/* .flex.justify-between.items-start {
   margin-bottom: var(--space-10) !important;
   padding-bottom: var(--space-8) !important;
   border-bottom: 2px solid var(--color-border) !important;
   align-items: flex-start !important;
-}
+} */
 
 h1.text-3xl,
 main h1 {
@@ -246,6 +247,119 @@ main nav span:last-child {
   padding: 0.1em 0.4em;
   border-radius: 4px;
   border: 1px solid #e2e8f0;
+}
+
+/* ─── DOCSTUDIO-18: copyable code snippets (dark theme + header bar) ─── */
+.bn-block-content[data-content-type="codeBlock"] {
+  display: flex;
+  flex-direction: column;
+  background: #1e293b !important;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+/* Reset the inline-code pill look for code *inside* a code block.
+   NOTE: `color` is intentionally NOT !important so Shiki's per-token inline
+   colors win; this is only a fallback for untokenized text. */
+.bn-block-content[data-content-type="codeBlock"] pre,
+.bn-block-content[data-content-type="codeBlock"] code {
+  background: transparent !important;
+  border: none !important;
+  color: #e2e8f0;
+  border-radius: 0;
+}
+
+.bn-block-content[data-content-type="codeBlock"] pre {
+  margin: 0;
+  padding: 0.875rem 1rem;
+  overflow-x: auto;
+}
+
+.doc-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.5rem 0.4rem 0.9rem;
+  background: #0f172a;
+  border-bottom: 1px solid #334155;
+  user-select: none;
+}
+
+.doc-code-lang {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.doc-code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #cbd5e1;
+  background: transparent;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.doc-code-copy:hover {
+  background: #1e293b;
+  color: #f8fafc;
+  border-color: #475569;
+}
+
+.doc-code-copy.copied {
+  color: #4ade80;
+  border-color: #4ade80;
+}
+
+/* In read-only views our injected .doc-code-header (language label + Copy) is the
+   language indicator, so hide BlockNote's own <select> there to avoid a duplicate
+   overlapping label. It still shows (styled below) in the editor, where no header
+   is injected. */
+.bn-block-content[data-content-type="codeBlock"]:has(.doc-code-header) select {
+  display: none !important;
+}
+
+/* Code-block language picker (editor only). BlockNote renders a bare native
+   <select> floating at the top-left; style it as a dark pill that matches the
+   code block, and make room so it doesn't overlap the code. */
+.bn-editor [data-content-type="codeBlock"] select {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #475569 !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+  font-size: 0.72rem !important;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: none;
+  z-index: 2;
+}
+.bn-editor [data-content-type="codeBlock"] select:hover {
+  background: #3f4f63 !important;
+  border-color: #64748b !important;
+}
+.bn-editor [data-content-type="codeBlock"] select option {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  text-transform: none;
+  font-weight: 400;
+}
+/* Give the code a little headroom so the floating picker doesn't sit on it. */
+.bn-block-content[data-content-type="codeBlock"]:has(select) pre {
+  padding-top: 2.75rem;
 }
 
 .bn-inline-content a,
@@ -441,6 +555,32 @@ button[class*="search"] {
     color: #ffffff;
 }
 
+.max-w-\[1000px\],
+.max-w-4xl {
+  max-width: 840px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.bn-block-outer:has(pre > code) {
+  margin: 40px 0;
+}
+
+.bn-block-content[data-content-type="heading"] a > strong {
+  color: #1d4ed8 !important;
+}
+
+.bn-block-content[data-content-type="heading"][data-level="2"] {
+  margin-top: var(--space-8) !important;
+}
+
+.bn-block-content[data-content-type=heading][data-level="3"] {
+  margin-top: var(--space-6) !important;
+}
+
+[data-content-type="divider"] hr {
+  border-top-color: #e2e8f0 !important;
+}
 
 /* Navbar in responsive and mobile design fix */
 @media screen and (max-width: 992px) {
@@ -453,4 +593,88 @@ button[class*="search"] {
         display: flex;
         justify-content: space-between;
     }
+}
+
+/* Custom quote block styles for doc notices */
+.bn-block-content[data-content-type="quote"] blockquote {
+  position: relative;
+  margin: 1.5rem 0 !important;
+  padding: 1rem 1.25rem !important;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #cbd5e1 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type] div {
+  display: inline;
+}
+
+/* Information / Info */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"] {
+  background-color: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  border-left: 4px solid #3b82f6 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"]::before {
+  content: "Information: ";
+  font-weight: 700;
+  color: #1d4ed8;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Note */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"] {
+  background-color: #f0f7ff !important;
+  border: 1px solid #dbeafe !important;
+  border-left: 4px solid #2563eb !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"]::before {
+  content: "Note: ";
+  font-weight: 700;
+  color: #1d4ed8;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Warning */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"] {
+  background-color: #fff1f2 !important;
+  border: 1px solid #ffe4e6 !important;
+  border-left: 4px solid #e11d48 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"]::before {
+  content: "Warning: ";
+  font-weight: 700;
+  color: #be123c;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Tips */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"] {
+  background-color: #fffbeb !important;
+  border: 1px solid #fef3c7 !important;
+  border-left: 4px solid #d97706 !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
+  content: "Tip: ";
+  font-weight: 700;
+  color: #b45309;
+  display: inline;
+  font-size: 0.95rem;
+}
+
+/* Important */
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"] {
+  background-color: #fff5f5 !important;
+  border: 1px solid #fed7d7 !important;
+  border-left: 4px solid #e53e3e !important;
+}
+.bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"]::before {
+  content: "Important: ";
+  font-weight: 700;
+  color: #c53030;
+  display: inline;
+  font-size: 0.95rem;
 }

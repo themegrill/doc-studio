@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { BlockNoteView } from "@blocknote/mantine";
-import { useCreateBlockNote } from "@blocknote/react";
-import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
+import { useCreateBlockNote, createReactInlineContentSpec } from "@blocknote/react";
+import { BlockNoteSchema, defaultBlockSpecs, defaultInlineContentSpecs } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -15,15 +15,41 @@ import Breadcrumb, { type BreadcrumbItem } from "@/components/docs/Breadcrumb";
 import { VideoEmbedBlock } from "@/components/docs/VideoEmbedBlock";
 import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
 import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
+import { QuoteBlock } from "@/components/docs/QuoteBlock";
 import { DocContextProvider } from "@/contexts/DocContext";
+import { useTheme } from "@/components/ThemeProvider";
+import { codeBlockSpec } from "@/lib/code-block";
 
-const { video: _builtinVideo, image: _builtinImage, ...baseBlockSpecs } = defaultBlockSpecs;
+const { video: _builtinVideo, image: _builtinImage, quote: _builtinQuote, ...baseBlockSpecs } = defaultBlockSpecs;
+
+export const ProBadge = createReactInlineContentSpec(
+  {
+    type: "proBadge",
+    propSchema: {},
+    content: "none",
+  },
+  {
+    render: () => (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-green-500 text-white select-none ml-1 align-middle">
+        Pro
+      </span>
+    ),
+  }
+);
+
 const editorSchema = BlockNoteSchema.create({
   blockSpecs: {
     ...baseBlockSpecs,
     image: ImageBlockWithAlt(),
     videoEmbed: VideoEmbedBlock(),
     linkCard: LinkCardBlock(),
+    quote: QuoteBlock(),
+    // Syntax-highlighted code block (Shiki) — replaces the default plain spec.
+    codeBlock: codeBlockSpec,
+  },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    proBadge: ProBadge,
   },
 });
 
@@ -37,6 +63,7 @@ interface Props {
 export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs }: Props) {
   const router = useRouter();
   const titleBtnRef = useRef<HTMLButtonElement>(null);
+  const { resolvedTheme } = useTheme();
 
   const { cleanTitle, badges } = useMemo(
     () => parseTitleWithBadges(doc.title),
@@ -123,6 +150,77 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
 
     return () => timers.forEach(clearTimeout);
   }, [doc.slug]);
+
+  // Enhance read-only code blocks with a header bar (language label) and a
+  // copy-to-clipboard button. BlockNote renders the built-in codeBlock as
+  // <div data-content-type="codeBlock"><pre><code>…</code></pre></div>; we inject
+  // the header and wire the button via the DOM, mirroring the heading-anchor pattern.
+  useEffect(() => {
+    // Map block id -> language from the stored blocks (recursively).
+    const langById = new Map<string, string>();
+    const walk = (blocks: any[]) => {
+      blocks.forEach((b) => {
+        if (b?.id && b?.type === "codeBlock") {
+          langById.set(b.id, b.props?.language || "text");
+        }
+        if (b?.children?.length) walk(b.children);
+      });
+    };
+    if (doc.blocks?.length) walk(doc.blocks as any[]);
+
+    const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+    const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+
+    const enhanceCodeBlocks = () => {
+      const blocks = document.querySelectorAll<HTMLElement>(
+        '.bn-editor [data-content-type="codeBlock"]'
+      );
+      blocks.forEach((block) => {
+        if (block.dataset.codeEnhanced) return;
+        const pre = block.querySelector("pre");
+        if (!pre) return;
+        block.dataset.codeEnhanced = "true";
+
+        const wrapper = block.closest<HTMLElement>("[data-id]");
+        const lang = (wrapper && langById.get(wrapper.dataset.id || "")) || "text";
+
+        const header = document.createElement("div");
+        header.className = "doc-code-header";
+
+        const label = document.createElement("span");
+        label.className = "doc-code-lang";
+        label.textContent = lang;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "doc-code-copy";
+        btn.setAttribute("aria-label", "Copy code");
+        const setLabel = (copied: boolean) => {
+          btn.innerHTML = `${copied ? checkIcon : copyIcon}<span>${copied ? "Copied!" : "Copy"}</span>`;
+        };
+        setLabel(false);
+
+        btn.addEventListener("click", () => {
+          navigator.clipboard.writeText(pre.textContent ?? "").then(() => {
+            btn.classList.add("copied");
+            setLabel(true);
+            setTimeout(() => {
+              btn.classList.remove("copied");
+              setLabel(false);
+            }, 2000);
+          });
+        });
+
+        header.appendChild(label);
+        header.appendChild(btn);
+        block.insertBefore(header, block.firstChild);
+      });
+    };
+
+    const delays = [100, 300, 600, 1000];
+    const timers = delays.map((d) => setTimeout(enhanceCodeBlocks, d));
+    return () => timers.forEach(clearTimeout);
+  }, [doc.slug, doc.blocks]);
 
   // In ProseMirror read-only mode (contenteditable=false), the browser does not
   // follow <a> hrefs on a plain click — ProseMirror intercepts the event.
@@ -241,7 +339,7 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
             </Badge>
           ))}
         {doc.description && (
-          <p className="text-gray-600">{doc.description}</p>
+          <p className="text-gray-600 dark:text-gray-400">{doc.description}</p>
         )}
         </div>
       </div>
@@ -257,6 +355,8 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
         .bn-editor a[href]:hover {
           color: #1d4ed8;
         }
+        .dark .bn-editor a[href] { color: #60a5fa; }
+        .dark .bn-editor a[href]:hover { color: #93c5fd; }
         .bn-editor h1, .bn-editor h2, .bn-editor h3, .bn-editor h4 {
           display: inline;
         }
@@ -291,7 +391,7 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
           opacity: 1;
         }
       `}</style>
-      <BlockNoteView editor={editor} editable={false} theme="light" />
+      <BlockNoteView editor={editor} editable={false} theme={resolvedTheme} />
     </div>
     </DocContextProvider>
   );

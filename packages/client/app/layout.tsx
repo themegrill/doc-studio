@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
 import { CrispChat } from "@/components/CrispChat";
 import { getNavigation, getProject, getIntegrations } from "@/lib/api";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export async function generateMetadata(): Promise<Metadata> {
   const project = await getProject();
@@ -34,15 +35,29 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (!navigation) notFound();
 
   return (
-    <html lang="en">
-      <body>
-        <DocsLayoutClient navigation={navigation} logo={project?.metadata?.logo || undefined}>
-          {children}
-        </DocsLayoutClient>
-        <Toaster />
-        {integrations.crispWebsiteId && (
-          <CrispChat websiteId={integrations.crispWebsiteId} />
-        )}
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Apply the saved/system theme before paint to avoid a light flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('docstudio-theme');var d=t==='dark'||((!t||t==='system')&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.add(d?'dark':'light');}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body suppressHydrationWarning>
+        <ThemeProvider>
+          <DocsLayoutClient
+            navigation={navigation}
+            logo={project?.metadata?.logo || undefined}
+            projectMetadata={project?.metadata || undefined}
+          >
+            {children}
+          </DocsLayoutClient>
+          <Toaster />
+          {integrations.crispWebsiteId && (
+            <CrispChat websiteId={integrations.crispWebsiteId} />
+          )}
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -9,7 +9,7 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  pro: "bg-gradient-to-r from-amber-500 to-orange-500 text-white",
+  pro: "bg-green-500 text-white",
   new: "bg-gradient-to-r from-blue-500 to-cyan-500 text-white",
   beta: "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
   deprecated: "bg-gray-400 text-white",

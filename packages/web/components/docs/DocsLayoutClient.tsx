@@ -191,7 +191,7 @@ function DocsLayoutContent({
       {/* Top bar - Full width */}
       <div className="flex-shrink-0 px-4 py-3 bg-white border-b md:px-8 tg-docs-navbar">
         <div className="grid items-center grid-cols-3 gap-4 tg-docs-navbar-elements">
-          {/* Left: Logo and Version */}
+          {/* Left: Logo */}
           <div className="flex items-center gap-4">
             {/* Hamburger Menu - Mobile/Tablet */}
             <button
@@ -211,9 +211,6 @@ function DocsLayoutContent({
                 className="object-contain max-h-10"
               />
             </Link>
-            <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              v{navigation.version}
-            </span>
           </div>
 
           {/* Center: Search */}
@@ -225,6 +222,41 @@ function DocsLayoutContent({
 
           {/* Right: Settings, Edit Controls & User Menu */}
           <div className="flex items-center justify-end gap-2">
+            {/* Desktop Navigation Links */}
+            {(projectMetadata?.websiteLink || projectMetadata?.pricingLink || projectMetadata?.changelogLink) && (
+              <nav className="hidden lg:flex items-center gap-5 mr-4 border-r pr-4 border-gray-200">
+                {projectMetadata?.changelogLink && (
+                  <a
+                    href={projectMetadata.changelogLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    Changelog
+                  </a>
+                )}
+                {projectMetadata?.websiteLink && (
+                  <a
+                    href={projectMetadata.websiteLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    Website
+                  </a>
+                )}
+                {projectMetadata?.pricingLink && (
+                  <a
+                    href={projectMetadata.pricingLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    Pricing
+                  </a>
+                )}
+              </nav>
+            )}
             {session?.user && projectSlug && (userProjectRole === "owner" || userProjectRole === "admin") && (
               <Link href={`/projects/${projectSlug}/settings`}>
                 <Button
@@ -275,6 +307,7 @@ function DocsLayoutContent({
             navigation={navigation}
             isAuthenticated={!!session?.user}
             projectSlug={projectSlug}
+            projectMetadata={projectMetadata}
           />
         </div>
 

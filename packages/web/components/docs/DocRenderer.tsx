@@ -11,8 +11,10 @@ import {
   getDefaultReactSlashMenuItems,
   getFormattingToolbarItems,
   LinkToolbarController,
+  createReactInlineContentSpec,
+  useBlockNoteEditor,
 } from "@blocknote/react";
-import { defaultBlockSpecs, BlockNoteSchema } from "@blocknote/core";
+import { defaultBlockSpecs, BlockNoteSchema, defaultInlineContentSpecs } from "@blocknote/core";
 import { en as blockNoteLocale } from "@blocknote/core/locales";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
@@ -24,6 +26,7 @@ import {
   Sparkles,
   Loader2,
   Video,
+  Crown,
 } from "lucide-react";
 import {
   VideoBlockEditorProps,
@@ -36,12 +39,15 @@ import { LinkCardBlock } from "@/components/docs/LinkCardBlock";
 import { DocLinkToolbar } from "@/components/docs/DocLinkToolbar";
 import { DocCreateLinkButton } from "@/components/docs/DocCreateLinkButton";
 import { ImageBlockWithAlt } from "@/components/docs/ImageBlockWithAlt";
+import { QuoteBlock } from "@/components/docs/QuoteBlock";
+import { QuoteTypeDropdown } from "@/components/docs/QuoteTypeDropdown";
 import { useSession } from "next-auth/react";
 import DeleteDocumentButton from "@/components/docs/DeleteDocumentButton";
 import { useEditing } from "@/contexts/EditingContext";
 import { DocContextProvider } from "@/contexts/DocContext";
 import ChatPanel from "@/components/chat/ChatPanel";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
+import { codeBlockSpec } from "@/lib/code-block";
 import { Badge } from "@/components/ui/badge-pro";
 import SeoPanel from "@/components/docs/SeoPanel";
 import type { SeoData } from "@/lib/db/ContentManager";
@@ -64,6 +70,21 @@ const MemoAIMenuController = memo(AIMenuController);
 
 type InlineContentItem = { type: "text"; text: string; styles: Record<string, boolean> };
 
+export const ProBadge = createReactInlineContentSpec(
+  {
+    type: "proBadge",
+    propSchema: {},
+    content: "none",
+  },
+  {
+    render: () => (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-green-500 text-white select-none ml-1 align-middle">
+        Pro
+      </span>
+    ),
+  }
+);
+
 // Schema is built once at module load, not inside DocRenderer, for two reasons:
 // 1. Avoids reconstructing TipTap Node objects on every render cycle.
 // 2. Isolates factory/schema errors from React's render cycle so a bad spec
@@ -71,15 +92,48 @@ type InlineContentItem = { type: "text"; text: string; styles: Record<string, bo
 // The built-in `video` block is excluded so BlockNote's FilePanelExtension
 // never fires — all video content goes through the custom videoEmbed block.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { video: _builtinVideo, image: _builtinImage, ...baseBlockSpecs } = defaultBlockSpecs;
+const { video: _builtinVideo, image: _builtinImage, quote: _builtinQuote, ...baseBlockSpecs } = defaultBlockSpecs;
 const editorSchema = BlockNoteSchema.create({
   blockSpecs: {
     ...baseBlockSpecs,
     image: ImageBlockWithAlt(),
     videoEmbed: VideoEmbedBlock(),
     linkCard: LinkCardBlock(),
+    quote: QuoteBlock(),
+    // Syntax-highlighted code block (Shiki) — replaces the default plain spec.
+    codeBlock: codeBlockSpec,
+  },
+  inlineContentSpecs: {
+    ...defaultInlineContentSpecs,
+    proBadge: ProBadge,
   },
 });
+
+function ProBadgeToolbarButton() {
+  const editor = useBlockNoteEditor();
+
+  const insertProBadge = () => {
+    const selection = editor.prosemirrorState.selection;
+    const { to } = selection;
+    editor._tiptapEditor.commands.setTextSelection(to);
+    editor.insertInlineContent([{ type: "proBadge" }]);
+  };
+
+  return (
+    <button
+      type="button"
+      className="bn-button flex items-center gap-1 text-[11px] font-bold text-green-600 hover:text-green-700 transition-colors"
+      title="Insert Pro badge"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        insertProBadge();
+      }}
+    >
+      <Crown size={12} className="text-green-600" />
+      <span>Pro</span>
+    </button>
+  );
+}
 
 // memo + module-level: prevents remount AND re-render when DocRenderer re-renders.
 // Without memo, every DocRenderer render would re-render these, potentially causing
@@ -90,7 +144,9 @@ const FormattingToolbarWithAI = memo(function FormattingToolbarWithAI() {
       formattingToolbar={() => (
         <FormattingToolbar>
           {getFormattingToolbarItems().filter((item) => item.key !== "createLinkButton")}
+          <QuoteTypeDropdown />
           <DocCreateLinkButton />
+          <ProBadgeToolbarButton />
           <AIToolbarButton />
         </FormattingToolbar>
       )}
@@ -272,6 +328,12 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   const parsedTitle = useMemo(() => {
     return parseTitleWithBadges(editorState.title);
   }, [editorState.title]);
+
+  // "Pro" tag (DOCSTUDIO-24): badges are encoded in the title as HTML. We keep
+  // editorState.title as the raw source of truth and drive the input from the
+  // clean title, toggling this span on/off.
+  const PRO_SPAN = '<span class="premium-feature">Pro</span>';
+  const isPro = parsedTitle.badges.some((b) => b.variant === "pro");
 
   // Use refs to store latest values without causing re-renders
   const editorStateRef = useRef(editorState);
@@ -618,6 +680,77 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     };
   }, [editorState.isEditing, doc.blocks, projectSlug, router]);
 
+  // Enhance read-only code blocks with a header bar (language label) and a
+  // copy-to-clipboard button. Only runs in view mode so BlockNote's native
+  // code-block editing UI is left untouched. Mirrors the heading-anchor pattern.
+  useEffect(() => {
+    if (editorState.isEditing) return;
+
+    const langById = new Map<string, string>();
+    const walk = (blocks: any[]) => {
+      blocks.forEach((b) => {
+        if (b?.id && b?.type === "codeBlock") {
+          langById.set(b.id, b.props?.language || "text");
+        }
+        if (b?.children?.length) walk(b.children);
+      });
+    };
+    if (doc.blocks?.length) walk(doc.blocks as any[]);
+
+    const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+    const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+
+    const enhanceCodeBlocks = () => {
+      const blocks = document.querySelectorAll<HTMLElement>(
+        '.bn-editor [data-content-type="codeBlock"]'
+      );
+      blocks.forEach((block) => {
+        if (block.dataset.codeEnhanced) return;
+        const pre = block.querySelector("pre");
+        if (!pre) return;
+        block.dataset.codeEnhanced = "true";
+
+        const wrapper = block.closest<HTMLElement>("[data-id]");
+        const lang = (wrapper && langById.get(wrapper.dataset.id || "")) || "text";
+
+        const header = document.createElement("div");
+        header.className = "doc-code-header";
+
+        const label = document.createElement("span");
+        label.className = "doc-code-lang";
+        label.textContent = lang;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "doc-code-copy";
+        btn.setAttribute("aria-label", "Copy code");
+        const setLabel = (copied: boolean) => {
+          btn.innerHTML = `${copied ? checkIcon : copyIcon}<span>${copied ? "Copied!" : "Copy"}</span>`;
+        };
+        setLabel(false);
+
+        btn.addEventListener("click", () => {
+          navigator.clipboard.writeText(pre.textContent ?? "").then(() => {
+            btn.classList.add("copied");
+            setLabel(true);
+            setTimeout(() => {
+              btn.classList.remove("copied");
+              setLabel(false);
+            }, 2000);
+          });
+        });
+
+        header.appendChild(label);
+        header.appendChild(btn);
+        block.insertBefore(header, block.firstChild);
+      });
+    };
+
+    const delays = [100, 300, 600, 1000];
+    const timers = delays.map((d) => setTimeout(enhanceCodeBlocks, d));
+    return () => timers.forEach(clearTimeout);
+  }, [editorState.isEditing, doc.slug, doc.blocks]);
+
   // Walk an HTML DOM node and emit BlockNote inline content items.
   // Inherits `styles` from parent tags (<strong> → bold, <em> → italic, etc.)
   function walkHtmlNode(node: Node, styles: Record<string, boolean>, out: InlineContentItem[]) {
@@ -807,7 +940,15 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     const isEmpty =
       last.type === "paragraph" &&
       (!Array.isArray(last.content) ||
-        last.content.every((item: unknown) => !(item as { text?: string })?.text?.trim()));
+        // A paragraph is only "empty" when every item is blank text. Link inline
+        // content ({ type: "link", content: [...] }) has no top-level `.text`, so
+        // without this guard a paragraph that is entirely a link would be treated
+        // as empty and stripped on save — wiping the content (DOCSTUDIO-22).
+        last.content.every(
+          (item: unknown) =>
+            (item as { type?: string })?.type !== "link" &&
+            !(item as { text?: string })?.text?.trim(),
+        ));
     if (isEmpty) output.pop();
     else break;
   }
@@ -918,7 +1059,23 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         throw error;
       }
     },
-  });
+    // DOCSTUDIO-22: BlockNote's link extension opens links in a new tab on click
+    // (even while editing), making links impossible to edit. A direct editorProps
+    // handleClick is checked by ProseMirror BEFORE any plugin, so claiming anchor
+    // clicks here (in editable mode) stops the link-open handler from running.
+    // Text selection still happens on mousedown, so the cursor lands in the link
+    // and the link toolbar still appears — a click now edits the link.
+    _tiptapOptions: {
+      editorProps: {
+        handleClick(view, _pos, event) {
+          if (!view.editable) return false;
+          const target = event.target as HTMLElement | null;
+          return !!target?.closest?.("a");
+        },
+      },
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
 
   // Update editor ref when editor is created
   useEffect(() => {
@@ -970,6 +1127,22 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       setOpenVideoModalRef(null);
     };
   }, []);
+
+  // DOCSTUDIO-22: BlockNote's link hover toolbar only activates once the editor
+  // has focus. On entering edit mode the editor is unfocused, so hovering a link
+  // shows nothing until the user clicks into the editor. Focus the editor when
+  // edit mode starts so link hover works immediately.
+  useEffect(() => {
+    if (!editorState.isEditing) return;
+    const t = setTimeout(() => {
+      try {
+        editor.focus();
+      } catch {
+        /* editor not mounted yet */
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [editor, editorState.isEditing]);
 
   // Compute document context for AI chat
   const documentContext = useMemo(
@@ -1042,7 +1215,11 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       }
 
       const data = await response.json();
-      setEditorState((prev) => ({ ...prev, title: data.title }));
+      // Preserve the Pro tag (encoded in the title) across AI regeneration.
+      setEditorState((prev) => ({
+        ...prev,
+        title: isPro ? `${data.title} ${PRO_SPAN}` : data.title,
+      }));
       setTitleAIState({ isGenerating: false, error: "" });
     } catch (error) {
       console.error("Error generating title:", error);
@@ -1518,11 +1695,12 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
               <div className="relative group">
                 <Input
                   type="text"
-                  value={editorState.title}
+                  value={parsedTitle.cleanTitle}
                   onChange={(e) => {
+                    const clean = e.target.value;
                     setEditorState((prev) => ({
                       ...prev,
-                      title: e.target.value,
+                      title: isPro ? `${clean} ${PRO_SPAN}` : clean,
                     }));
                     editingContext.setIsDirty(true);
                   }}
@@ -1560,6 +1738,30 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
               </div>
               {titleAIState.error && (
                 <p className="text-sm text-red-600">{titleAIState.error}</p>
+              )}
+              {!isSectionOverview && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditorState((prev) => ({
+                      ...prev,
+                      title: isPro
+                        ? parsedTitle.cleanTitle
+                        : `${parsedTitle.cleanTitle} ${PRO_SPAN}`,
+                    }));
+                    editingContext.setIsDirty(true);
+                  }}
+                  aria-pressed={isPro}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors ${
+                    isPro
+                      ? "bg-green-500 text-white border-transparent"
+                      : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                  }`}
+                  title="Mark this topic as a premium (Pro) feature"
+                >
+                  <Crown size={14} />
+                  {isPro ? "Marked as Pro" : "Mark as Pro"}
+                </button>
               )}
               <div className="relative group">
                 <Input
@@ -1705,6 +1907,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           theme="light"
           formattingToolbar={false}
           linkToolbar={false}
+          slashMenu={false}
           onChange={handleEditorChange}
         >
           {/* Add the AI Command menu to the editor */}
