@@ -172,7 +172,7 @@ export async function POST(
 
       await sql`
         UPDATE projects
-        SET redirects = ${sql.json(merged)}, updated_at = NOW()
+        SET redirects = ${sql.json(merged as any)}, updated_at = NOW()
         WHERE id = ${project.id}
       `;
     }

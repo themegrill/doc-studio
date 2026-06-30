@@ -116,7 +116,7 @@ function ProBadgeToolbarButton() {
     const selection = editor.prosemirrorState.selection;
     const { to } = selection;
     editor._tiptapEditor.commands.setTextSelection(to);
-    editor.insertInlineContent([{ type: "proBadge" }]);
+    editor.insertInlineContent([{ type: "proBadge" } as any]);
   };
 
   return (
@@ -1065,17 +1065,17 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     // clicks here (in editable mode) stops the link-open handler from running.
     // Text selection still happens on mousedown, so the cursor lands in the link
     // and the link toolbar still appears — a click now edits the link.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     _tiptapOptions: {
       editorProps: {
-        handleClick(view, _pos, event) {
+        handleClick(view: any, _pos: any, event: any) {
           if (!view.editable) return false;
           const target = event.target as HTMLElement | null;
           return !!target?.closest?.("a");
         },
       },
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any);
+    } as any,
+  });
 
   // Update editor ref when editor is created
   useEffect(() => {
@@ -1588,7 +1588,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           const match = fullText.match(imageRegex);
           if (match) {
             const [, caption, url] = match;
-            editor.updateBlock(block, { type: "image", props: { url, caption } });
+            editor.updateBlock(block, { type: "image", props: { url, caption } as any });
           }
         }
       } finally {

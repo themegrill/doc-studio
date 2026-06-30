@@ -103,6 +103,9 @@ export default function DocsLayoutClient({
                 )}
               </nav>
             )}
+            {(projectMetadata?.websiteLink || projectMetadata?.pricingLink || projectMetadata?.changelogLink) && (
+              <div className="hidden lg:block h-5 w-[1px] bg-gray-200 dark:bg-gray-800 mx-2" />
+            )}
             <ThemeToggle />
           </div>
         </div>

@@ -236,7 +236,7 @@ export async function POST(
     for (const kb of kbEntries) {
       const res = await sql`
         INSERT INTO project_knowledge_bases (project_id, type, content, metadata)
-        VALUES (${projectId}, ${kb.type}, ${sql.json(kb.content as object)}, ${sql.json(kb.metadata)})
+        VALUES (${projectId}, ${kb.type}, ${sql.json(kb.content as any)}, ${sql.json(kb.metadata as any)})
         ON CONFLICT (project_id, type) DO NOTHING
         RETURNING id
       `;
@@ -274,7 +274,7 @@ export async function POST(
       byFrom.set(r.from, r.to);
     }
     const mergedRedirects = Array.from(byFrom.entries()).map(([from, to]) => ({ from, to }));
-    await sql`UPDATE projects SET redirects = ${sql.json(mergedRedirects)}, updated_at = NOW() WHERE id = ${projectId}`;
+    await sql`UPDATE projects SET redirects = ${sql.json(mergedRedirects as any)}, updated_at = NOW() WHERE id = ${projectId}`;
 
     // ── 5. AI usage logs (idempotent: clear sample rows first) ────────────
     await sql`DELETE FROM ai_usage_logs WHERE project_id = ${projectId} AND metadata->>'_sample' = 'true'`;
@@ -352,7 +352,7 @@ export async function DELETE(
       const sampleFrom = new Set(SAMPLE_REDIRECTS.map((r) => r.from));
       const kept = proj.redirects.filter((r: { from: string }) => !sampleFrom.has(r.from));
       removed.redirects = proj.redirects.length - kept.length;
-      await sql`UPDATE projects SET redirects = ${sql.json(kept)}, updated_at = NOW() WHERE id = ${projectId}`;
+      await sql`UPDATE projects SET redirects = ${sql.json(kept as any)}, updated_at = NOW() WHERE id = ${projectId}`;
     }
 
     return Response.json({ success: true, removed });
