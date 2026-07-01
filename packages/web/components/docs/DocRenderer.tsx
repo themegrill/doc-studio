@@ -392,6 +392,11 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     localStorage.setItem("chatOpen", String(chatOpen));
   }, [chatOpen]);
 
+  // Close chat when exiting edit mode
+  useEffect(() => {
+    if (!editorState.isEditing) setChatOpen(false);
+  }, [editorState.isEditing]);
+
   // Hide selection menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1933,17 +1938,17 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         </div>
       )}
 
-      {/* AI Chat Assistant - Available in both edit and view mode */}
-      {isAuthenticated && isFeatureEnabled("chat") && (
+      {/* AI Chat Assistant - only available in edit mode */}
+      {isAuthenticated && isFeatureEnabled("chat") && editorState.isEditing && (
         <>
-          {chatOpen ? (
+          {/* Keep ChatPanel mounted so conversation is preserved when toggling open/closed */}
+          <div className={chatOpen ? "" : "hidden"}>
             <ChatPanel
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               editor={editor as any}
               documentContext={documentContext}
               onClose={() => setChatOpen(false)}
               onRequestEdit={() => {
-                // Enable edit mode when AI needs to modify content
                 setEditorState((prev) => ({
                   ...prev,
                   isEditing: true,
@@ -1956,7 +1961,8 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                 }));
               }}
             />
-          ) : (
+          </div>
+          {!chatOpen && (
             <Button
               onClick={() => setChatOpen(true)}
               className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-40 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all hover:scale-110"

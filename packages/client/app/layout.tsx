@@ -2,14 +2,16 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./mainStyle.css";
 import { Toaster } from "@/components/ui/toaster";
-import { notFound } from "next/navigation";
 import DocsLayoutClient from "@/components/docs/DocsLayoutClient";
 import { CrispChat } from "@/components/CrispChat";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
+import { MicrosoftClarity } from "@/components/MicrosoftClarity";
+import { CustomCode } from "@/components/CustomCode";
 import { getNavigation, getProject, getIntegrations } from "@/lib/api";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const project = await getProject();
+  const [project, integrations] = await Promise.all([getProject(), getIntegrations()]);
   const favicon = project?.metadata?.favicon;
 
   return {
@@ -22,6 +24,9 @@ export async function generateMetadata(): Promise<Metadata> {
         apple: favicon,
       },
     }),
+    ...(integrations.googleSiteVerification && {
+      verification: { google: integrations.googleSiteVerification },
+    }),
   };
 }
 
@@ -32,7 +37,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     getIntegrations(),
   ]);
 
-  if (!navigation) notFound();
+  if (!navigation) {
+    return (
+      <html lang="en">
+        <body style={{ fontFamily: "sans-serif", padding: "2rem", textAlign: "center" }}>
+          <h1>Documentation unavailable</h1>
+          <p>Could not load the navigation. Please check that the API server is running.</p>
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -56,6 +70,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Toaster />
           {integrations.crispWebsiteId && (
             <CrispChat websiteId={integrations.crispWebsiteId} />
+          )}
+          {integrations.ga4MeasurementId && (
+            <GoogleAnalytics measurementId={integrations.ga4MeasurementId} />
+          )}
+          {integrations.microsoftClarityId && (
+            <MicrosoftClarity projectId={integrations.microsoftClarityId} />
+          )}
+          {integrations.customHeadCode && (
+            <CustomCode code={integrations.customHeadCode} target="head" />
+          )}
+          {integrations.customBodyCode && (
+            <CustomCode code={integrations.customBodyCode} target="body" />
           )}
         </ThemeProvider>
       </body>

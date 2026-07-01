@@ -69,6 +69,11 @@ export default function SectionPage({
     localStorage.setItem('chatOpen', String(chatOpen));
   }, [chatOpen]);
 
+  // Close chat when exiting edit mode
+  useEffect(() => {
+    if (!isEditing) setChatOpen(false);
+  }, [isEditing]);
+
   // Document context for AI chat
   const documentContext = {
     title: sectionTitle,
@@ -189,15 +194,17 @@ export default function SectionPage({
         )}
       </div>
 
-      {/* AI Chat Assistant */}
-      {isAuthenticated && (
+      {/* AI Chat Assistant - only available in edit mode */}
+      {isAuthenticated && isEditing && (
         <>
-          {chatOpen ? (
+          {/* Keep ChatPanel mounted so conversation is preserved when toggling open/closed */}
+          <div className={chatOpen ? "" : "hidden"}>
             <ChatPanel
               documentContext={documentContext}
               onClose={() => setChatOpen(false)}
             />
-          ) : (
+          </div>
+          {!chatOpen && (
             <Button
               onClick={() => setChatOpen(true)}
               className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-40 bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all hover:scale-110"

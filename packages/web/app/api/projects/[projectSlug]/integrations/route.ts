@@ -75,6 +75,48 @@ export async function PUT(
     }
   }
 
+  // Validate GA4 Measurement ID — format G-XXXXXXXXXX if provided
+  const ga4Id = integrations.ga4MeasurementId?.trim();
+  if (ga4Id && !/^G-[A-Z0-9]+$/i.test(ga4Id)) {
+    return Response.json(
+      { error: "Invalid GA4 Measurement ID — must look like G-XXXXXXXXXX." },
+      { status: 422 }
+    );
+  }
+
+  // Validate Microsoft Clarity project ID — alphanumeric if provided
+  const clarityId = integrations.microsoftClarityId?.trim();
+  if (clarityId && !/^[a-z0-9]+$/i.test(clarityId)) {
+    return Response.json(
+      { error: "Invalid Microsoft Clarity project ID — must be alphanumeric." },
+      { status: 422 }
+    );
+  }
+
+  // Guard custom code size — trusted admin input, but cap to avoid runaway payloads (~20 KB each).
+  const MAX_CODE_LENGTH = 20_000;
+  for (const [field, label] of [
+    ["customHeadCode", "Header code"],
+    ["customBodyCode", "Footer code"],
+  ] as const) {
+    const value = integrations[field];
+    if (typeof value === "string" && value.length > MAX_CODE_LENGTH) {
+      return Response.json(
+        { error: `${label} is too large — keep it under ${MAX_CODE_LENGTH / 1000} KB.` },
+        { status: 422 }
+      );
+    }
+  }
+
+  // Normalize Google Search Console verification — accept a bare token or a full
+  // <meta name="google-site-verification" content="…"> paste (extract the content value).
+  let gscToken = integrations.googleSiteVerification?.trim();
+  if (gscToken) {
+    const metaMatch = gscToken.match(/content=["']([^"']+)["']/i);
+    if (metaMatch) gscToken = metaMatch[1];
+    integrations.googleSiteVerification = gscToken;
+  }
+
   // Merge integrations into existing settings to avoid clobbering deploy config etc.
   await sql`
     UPDATE projects

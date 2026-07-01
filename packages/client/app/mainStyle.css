@@ -726,3 +726,9 @@ button[class*="search"] {
 .dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
   color: #fcd34d;
 }
+
+/* Logo SVG: shapes without an inline color adapt to the theme (dark text in light mode,
+   white in dark mode); shapes with an inline style="fill:…" keep their brand color. */
+.logo-svg :is(path, circle, rect, polygon, ellipse):not([style]) {
+  fill: currentColor;
+}

@@ -77,7 +77,16 @@ export async function getNavigation(): Promise<Navigation | null> {
   }
 }
 
-export async function getIntegrations(): Promise<{ crispWebsiteId?: string }> {
+export interface Integrations {
+  crispWebsiteId?: string;
+  ga4MeasurementId?: string;
+  googleSiteVerification?: string;
+  microsoftClarityId?: string;
+  customHeadCode?: string;
+  customBodyCode?: string;
+}
+
+export async function getIntegrations(): Promise<Integrations> {
   try {
     const res = await fetch(
       `${API_BASE_URL}/api/projects/${PROJECT_SLUG}/integrations`,

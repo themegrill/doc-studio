@@ -457,7 +457,7 @@ export async function crawlPageBatch(
             validateStatus: (s) => s >= 200 && s < 400,
             responseType: "text",
           });
-          const contentType = response.headers["content-type"];
+          const contentType = String(response.headers["content-type"] ?? "");
           if (!isHtmlResponse(contentType) || typeof response.data !== "string") return;
 
           const html = response.data;

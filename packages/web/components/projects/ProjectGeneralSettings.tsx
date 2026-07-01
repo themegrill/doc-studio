@@ -467,7 +467,7 @@ export function ProjectGeneralSettings({
                 className="mt-1"
               />
             ) : (
-              <p className="mt-1 text-sm text-gray-900">
+              <p className="mt-1 text-sm text-gray-900 break-all">
                 {metadata.websiteLink ? (
                   <a href={metadata.websiteLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                     {metadata.websiteLink}
@@ -491,7 +491,7 @@ export function ProjectGeneralSettings({
                 className="mt-1"
               />
             ) : (
-              <p className="mt-1 text-sm text-gray-900">
+              <p className="mt-1 text-sm text-gray-900 break-all">
                 {metadata.pricingLink ? (
                   <a href={metadata.pricingLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                     {metadata.pricingLink}
@@ -515,7 +515,7 @@ export function ProjectGeneralSettings({
                 className="mt-1"
               />
             ) : (
-              <p className="mt-1 text-sm text-gray-900">
+              <p className="mt-1 text-sm text-gray-900 break-all">
                 {metadata.changelogLink ? (
                   <a href={metadata.changelogLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                     {metadata.changelogLink}

@@ -4,8 +4,8 @@ import { Navigation } from "@/lib/db/ContentManager";
 import Sidebar from "@/components/docs/Sidebar";
 import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
-import Image from "next/image";
 import Link from "next/link";
+import LogoImage from "@/components/LogoImage";
 import { Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -50,7 +50,7 @@ export default function DocsLayoutClient({
               <Menu size={20} />
             </button>
             <Link href="/">
-              <Image
+              <LogoImage
                 src={logo ?? FALLBACK_LOGO}
                 alt="Logo"
                 width={150}
