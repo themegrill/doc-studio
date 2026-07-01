@@ -65,12 +65,12 @@ main {
   background: var(--color-surface);
 }
 
-.flex.justify-between.items-start {
+/* .flex.justify-between.items-start {
   margin-bottom: var(--space-10) !important;
   padding-bottom: var(--space-8) !important;
   border-bottom: 2px solid var(--color-border) !important;
   align-items: flex-start !important;
-}
+} */
 
 h1.text-3xl,
 main h1 {
@@ -260,9 +260,9 @@ main nav span:last-child {
   margin: 1rem 0;
 }
 
-/* Reset the inline-code pill look for code *inside* a code block */
-/* `color` is intentionally NOT !important so Shiki's per-token inline colors win;
-   this is only a fallback for untokenized text. */
+/* Reset the inline-code pill look for code *inside* a code block.
+   NOTE: `color` is intentionally NOT !important so Shiki's per-token inline
+   colors win; this is only a fallback for untokenized text. */
 .bn-block-content[data-content-type="codeBlock"] pre,
 .bn-block-content[data-content-type="codeBlock"] code {
   background: transparent !important;
@@ -275,13 +275,6 @@ main nav span:last-child {
   margin: 0;
   padding: 0.875rem 1rem;
   overflow-x: auto;
-}
-
-/* The published docs are read-only and show our injected header (language label +
-   Copy). Configuring supportedLanguages makes BlockNote also render its own
-   language <select> here — hide it so it doesn't duplicate the label. */
-.bn-block-content[data-content-type="codeBlock"] select {
-  display: none !important;
 }
 
 .doc-code-header {
@@ -327,6 +320,46 @@ main nav span:last-child {
 .doc-code-copy.copied {
   color: #4ade80;
   border-color: #4ade80;
+}
+
+/* In read-only views our injected .doc-code-header (language label + Copy) is the
+   language indicator, so hide BlockNote's own <select> there to avoid a duplicate
+   overlapping label. It still shows (styled below) in the editor, where no header
+   is injected. */
+.bn-block-content[data-content-type="codeBlock"]:has(.doc-code-header) select {
+  display: none !important;
+}
+
+/* Code-block language picker (editor only). BlockNote renders a bare native
+   <select> floating at the top-left; style it as a dark pill that matches the
+   code block, and make room so it doesn't overlap the code. */
+.bn-editor [data-content-type="codeBlock"] select {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #475569 !important;
+  border-radius: 6px !important;
+  padding: 3px 8px !important;
+  font-size: 0.72rem !important;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  outline: none;
+  z-index: 2;
+}
+.bn-editor [data-content-type="codeBlock"] select:hover {
+  background: #3f4f63 !important;
+  border-color: #64748b !important;
+}
+.bn-editor [data-content-type="codeBlock"] select option {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+  text-transform: none;
+  font-weight: 400;
+}
+/* Give the code a little headroom so the floating picker doesn't sit on it. */
+.bn-block-content[data-content-type="codeBlock"]:has(select) pre {
+  padding-top: 2.75rem;
 }
 
 .bn-inline-content a,
@@ -565,7 +598,7 @@ button[class*="search"] {
 /* Custom quote block styles for doc notices */
 .bn-block-content[data-content-type="quote"] blockquote {
   position: relative;
-  margin: 1.5rem 0 !important;
+  margin: 1rem 0 !important;
   padding: 1rem 1.25rem !important;
   border-radius: 6px;
   background-color: #f8fafc;
@@ -592,42 +625,42 @@ button[class*="search"] {
 
 /* Note */
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"] {
-  background-color: #f0f7ff !important;
-  border: 1px solid #dbeafe !important;
-  border-left: 4px solid #2563eb !important;
+  border-color: #eae4fe !important;
+  border-left-color: #A78BFA !important;
+  background: #F5F3FF !important;
 }
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"]::before {
   content: "Note: ";
   font-weight: 700;
-  color: #1d4ed8;
+  color: #7C3AED;
   display: inline;
   font-size: 0.95rem;
 }
 
 /* Warning */
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"] {
-  background-color: #fff1f2 !important;
+  background-color: #fffbeb !important;
   border: 1px solid #ffe4e6 !important;
-  border-left: 4px solid #e11d48 !important;
+  border-left: 4px solid #F59E0B !important;
 }
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"]::before {
   content: "Warning: ";
   font-weight: 700;
-  color: #be123c;
+  color: #D97706;
   display: inline;
   font-size: 0.95rem;
 }
 
 /* Tips */
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"] {
-  background-color: #fffbeb !important;
-  border: 1px solid #fef3c7 !important;
-  border-left: 4px solid #d97706 !important;
+  background: #f0fff3 !important;
+  border-color: #cffbd6 !important;
+  border-left-color: #2ac956 !important;
 }
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
   content: "Tip: ";
   font-weight: 700;
-  color: #b45309;
+  color: #19b143;
   display: inline;
   font-size: 0.95rem;
 }
@@ -644,91 +677,4 @@ button[class*="search"] {
   color: #c53030;
   display: inline;
   font-size: 0.95rem;
-}
-
-/* ───────────────────────────────────────────────────────────────────────────
-   DARK MODE
-   ThemeProvider toggles `.dark` on <html>. We flip the custom color variables
-   (which most content rules already consume) and add targeted overrides for the
-   spots that hardcode light colors (inline code, callout/quote boxes, links).
-   ─────────────────────────────────────────────────────────────────────────── */
-.dark {
-  --color-text-primary:   #f1f5f9;
-  --color-text-secondary: #cbd5e1;
-  --color-text-muted:     #94a3b8;
-  --color-text-accent:    #60a5fa;
-
-  --color-heading-h1:     #f8fafc;
-  --color-heading-h2:     #e2e8f0;
-  --color-heading-h3:     #cbd5e1;
-  --color-heading-h4:     #94a3b8;
-
-  --color-surface:        #030712;
-  --color-sidebar-bg:     #111827;
-  --color-border:         #1f2937;
-  --color-border-light:   #1f2937;
-
-  --color-desc-bg:        #111827;
-  --color-desc-border:    #1f2937;
-  --color-desc-text:      #cbd5e1;
-}
-
-/* Base text color for the content area in dark mode */
-.dark body {
-  color: var(--color-text-secondary);
-}
-
-/* BlockNote's dark theme gives the editor its own (#1f1f1f) background, which
-   shows as a card against the page. Make it transparent so content sits flat on
-   the page (the code block keeps its own background). */
-.dark .bn-container,
-.dark .bn-editor,
-.dark .bn-editor .ProseMirror {
-  background: transparent !important;
-}
-
-/* Inline code pills (the dark code-block inner code keeps its own !important rule) */
-.dark .bn-inline-content code,
-.dark .bn-block-content code {
-  background: #1e293b;
-  color: #e2e8f0;
-  border-color: #334155;
-}
-
-/* Callout / quote boxes */
-.dark .bn-block-content[data-content-type="quote"] blockquote {
-  background-color: #111827;
-  border-color: #1f2937;
-  border-left-color: #475569 !important;
-}
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"],
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"] {
-  background-color: #0b1f3a !important;
-  border-color: #1e3a8a !important;
-}
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"]::before,
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"]::before {
-  color: #93c5fd;
-}
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"],
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"] {
-  background-color: #2a0e12 !important;
-  border-color: #7f1d1d !important;
-}
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"]::before,
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"]::before {
-  color: #fca5a5;
-}
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"] {
-  background-color: #2a210a !important;
-  border-color: #854d0e !important;
-}
-.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
-  color: #fcd34d;
-}
-
-/* Logo SVG: shapes without an inline color adapt to the theme (dark text in light mode,
-   white in dark mode); shapes with an inline style="fill:…" keep their brand color. */
-.logo-svg :is(path, circle, rect, polygon, ellipse):not([style]) {
-  fill: currentColor;
 }
