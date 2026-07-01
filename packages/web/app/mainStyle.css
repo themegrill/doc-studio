@@ -598,7 +598,7 @@ button[class*="search"] {
 /* Custom quote block styles for doc notices */
 .bn-block-content[data-content-type="quote"] blockquote {
   position: relative;
-  margin: 1.5rem 0 !important;
+  margin: 1rem 0 !important;
   padding: 1rem 1.25rem !important;
   border-radius: 6px;
   background-color: #f8fafc;
@@ -625,42 +625,42 @@ button[class*="search"] {
 
 /* Note */
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"] {
-  background-color: #f0f7ff !important;
-  border: 1px solid #dbeafe !important;
-  border-left: 4px solid #2563eb !important;
+  border-color: #eae4fe !important;
+  border-left-color: #A78BFA !important;
+  background: #F5F3FF !important;
 }
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"]::before {
   content: "Note: ";
   font-weight: 700;
-  color: #1d4ed8;
+  color: #7C3AED;
   display: inline;
   font-size: 0.95rem;
 }
 
 /* Warning */
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"] {
-  background-color: #fff1f2 !important;
+  background-color: #fffbeb !important;
   border: 1px solid #ffe4e6 !important;
-  border-left: 4px solid #e11d48 !important;
+  border-left: 4px solid #F59E0B !important;
 }
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"]::before {
   content: "Warning: ";
   font-weight: 700;
-  color: #be123c;
+  color: #D97706;
   display: inline;
   font-size: 0.95rem;
 }
 
 /* Tips */
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"] {
-  background-color: #fffbeb !important;
-  border: 1px solid #fef3c7 !important;
-  border-left: 4px solid #d97706 !important;
+  background: #f0fff3 !important;
+  border-color: #cffbd6 !important;
+  border-left-color: #2ac956 !important;
 }
 .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
   content: "Tip: ";
   font-weight: 700;
-  color: #b45309;
+  color: #19b143;
   display: inline;
   font-size: 0.95rem;
 }
