@@ -1,14 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Search, FileText, Loader2 } from "lucide-react";
+import { FileText, Loader2, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface SearchResult {
   id: string;
@@ -30,7 +26,10 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const isMac = useMemo(() => typeof navigator !== "undefined" && /mac/i.test(navigator.platform), []);
+  const isMac = useMemo(
+    () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
+    [],
+  );
 
   // Keyboard shortcut to open search (Cmd+K / Ctrl+K)
   useEffect(() => {
@@ -55,34 +54,37 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
   }, [open]);
 
   // Search function
-  const performSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
-      setResults([]);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        q: searchQuery,
-        ...(projectSlug && { projectSlug }),
-      });
-
-      const response = await fetch(`/api/search?${params}`);
-      const data = await response.json();
-
-      if (response.ok) {
-        setResults(data.results || []);
-      } else {
+  const performSearch = useCallback(
+    async (searchQuery: string) => {
+      if (!searchQuery.trim()) {
         setResults([]);
+        return;
       }
-    } catch (error) {
-      console.error("Search error:", error);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectSlug]);
+
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          q: searchQuery,
+          ...(projectSlug && { projectSlug }),
+        });
+
+        const response = await fetch(`/api/search?${params}`);
+        const data = await response.json();
+
+        if (response.ok) {
+          setResults(data.results || []);
+        } else {
+          setResults([]);
+        }
+      } catch (error) {
+        console.error("Search error:", error);
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [projectSlug],
+  );
 
   // Debounced search
   useEffect(() => {
@@ -94,10 +96,13 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
   }, [query, performSearch]);
 
   // Handle result selection — client app routes are always /${slug}
-  const handleSelect = useCallback((result: SearchResult) => {
-    router.push(`/${result.slug}`);
-    setOpen(false);
-  }, [router]);
+  const handleSelect = useCallback(
+    (result: SearchResult) => {
+      router.push(`/${result.slug}`);
+      setOpen(false);
+    },
+    [router],
+  );
 
   // Keyboard navigation
   useEffect(() => {
@@ -130,7 +135,7 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
         className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
       >
         <Search size={16} />
-        <span className="flex-1 text-left">Search documentation...</span>
+        <span className="flex-1 text-left">Quick Search</span>
         <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded">
           <span className="text-xs">{isMac ? "⌘" : "Ctrl"}</span>K
         </kbd>
@@ -144,7 +149,7 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
           <div className="flex items-center border-b px-4 py-3">
             <Search size={18} className="text-gray-400 mr-2" />
             <Input
-              placeholder="Search documentation..."
+              placeholder="Quick Search"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -153,7 +158,9 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
               className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-base"
               autoFocus
             />
-            {loading && <Loader2 size={18} className="text-gray-400 animate-spin ml-2" />}
+            {loading && (
+              <Loader2 size={18} className="text-gray-400 animate-spin ml-2" />
+            )}
           </div>
 
           {/* Results */}
@@ -177,7 +184,10 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
                         : "hover:bg-gray-50"
                     }`}
                   >
-                    <FileText size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                    <FileText
+                      size={16}
+                      className="text-gray-400 mt-0.5 flex-shrink-0"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm text-gray-900 truncate">
                         {result.title}
@@ -200,7 +210,7 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
 
             {!query && (
               <div className="px-4 py-8 text-center text-sm text-gray-500">
-                Type to search documentation...
+                Type to Quick Search
               </div>
             )}
           </div>
@@ -210,17 +220,25 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
             <div className="border-t px-4 py-2 flex items-center justify-between text-xs text-gray-500">
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">↑</kbd>
-                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">↓</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">
+                    ↑
+                  </kbd>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">
+                    ↓
+                  </kbd>
                   to navigate
                 </span>
                 <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">↵</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">
+                    ↵
+                  </kbd>
                   to select
                 </span>
               </div>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">ESC</kbd>
+                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded">
+                  ESC
+                </kbd>
                 to close
               </span>
             </div>

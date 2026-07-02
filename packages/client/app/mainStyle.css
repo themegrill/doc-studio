@@ -726,6 +726,14 @@ button[class*="search"] {
 .dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
   color: #fcd34d;
 }
+/* Callout body text: the global `p` / `.bn-inline-content` rule hardcodes a dark
+   slate (#374151) that is unreadable on the dark callout background. Lift it to a
+   light color in dark mode. Links keep their own color rules; `strong` stays bright. */
+.dark .bn-block-content[data-content-type="quote"] blockquote,
+.dark .bn-block-content[data-content-type="quote"] blockquote p,
+.dark .bn-block-content[data-content-type="quote"] blockquote .bn-inline-content {
+  color: #e2e8f0 !important;
+}
 
 /* Logo SVG: shapes without an inline color adapt to the theme (dark text in light mode,
    white in dark mode); shapes with an inline style="fill:…" keep their brand color. */

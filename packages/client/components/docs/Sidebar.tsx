@@ -23,8 +23,8 @@ const TitleWithBadges = memo(function TitleWithBadges({
 }) {
   const { cleanTitle, badges } = useMemo(() => parseTitleWithBadges(title), [title]);
   return (
-    <span className={`inline-flex items-center min-w-0 ${className ?? ""}`}>
-      <span className="truncate">{cleanTitle}</span>
+    <span className={`flex items-center flex-wrap gap-y-0.5 min-w-0 ${className ?? ""}`}>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{cleanTitle}</span>
       {badges.map((badge, i) => (
         <Badge key={i} variant={badge.variant} className="ml-1.5 text-[10px] px-1.5 py-0 shrink-0">
           {badge.text}
