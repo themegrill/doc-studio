@@ -390,6 +390,37 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
         .doc-anchor-btn.copied {
           opacity: 1;
         }
+        /* Tooltip: "Copy" on hover, "Copied!" after click (uses the .copied class
+           that the click handlers already toggle for 2s). */
+        .doc-anchor-btn::after {
+          content: "Copy";
+          position: absolute;
+          bottom: calc(100% + 6px);
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 3px 8px;
+          border-radius: 5px;
+          background: #1f2937;
+          color: #f9fafb;
+          font-size: 11px;
+          font-weight: 500;
+          line-height: 1.2;
+          white-space: nowrap;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.12s ease;
+          z-index: 20;
+        }
+        .dark .doc-anchor-btn::after {
+          background: #374151;
+        }
+        .doc-anchor-btn:hover::after {
+          opacity: 1;
+        }
+        .doc-anchor-btn.copied::after {
+          content: "Copied!";
+          opacity: 1;
+        }
       `}</style>
       <BlockNoteView editor={editor} editable={false} theme={resolvedTheme} />
     </div>

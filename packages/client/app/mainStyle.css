@@ -678,3 +678,118 @@ button[class*="search"] {
   display: inline;
   font-size: 0.95rem;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   DARK MODE
+   ThemeProvider toggles `.dark` on <html>. We flip the custom color variables
+   (which most content rules already consume) and add targeted overrides for the
+   spots that hardcode light colors (inline code, callout/quote boxes, links).
+   ─────────────────────────────────────────────────────────────────────────── */
+.dark {
+  --color-text-primary:   #f1f5f9;
+  --color-text-secondary: #cbd5e1;
+  --color-text-muted:     #94a3b8;
+  --color-text-accent:    #60a5fa;
+
+  --color-heading-h1:     #f8fafc;
+  --color-heading-h2:     #e2e8f0;
+  --color-heading-h3:     #cbd5e1;
+  --color-heading-h4:     #94a3b8;
+
+  --color-surface:        #030712;
+  --color-sidebar-bg:     #111827;
+  --color-border:         #1f2937;
+  --color-border-light:   #1f2937;
+
+  --color-desc-bg:        #111827;
+  --color-desc-border:    #1f2937;
+  --color-desc-text:      #cbd5e1;
+}
+
+/* Base text color for the content area in dark mode */
+.dark body {
+  color: var(--color-text-secondary);
+}
+
+/* BlockNote's dark theme gives the editor its own (#1f1f1f) background, which
+   shows as a card against the page. Make it transparent so content sits flat on
+   the page (the code block keeps its own background). */
+.dark .bn-container,
+.dark .bn-editor,
+.dark .bn-editor .ProseMirror {
+  background: transparent !important;
+}
+
+/* Inline code pills (the dark code-block inner code keeps its own !important rule) */
+.dark .bn-inline-content code,
+.dark .bn-block-content code {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
+/* Callout / quote boxes — dark backgrounds keyed to each type's accent color. */
+.dark .bn-block-content[data-content-type="quote"] blockquote {
+  background-color: #111827 !important;
+  border-color: #1f2937 !important;
+  border-left-color: #475569 !important;
+}
+/* Information (blue) */
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"] {
+  background-color: #0b1f3a !important;
+  border-color: #1e3a8a !important;
+  border-left-color: #3b82f6 !important;
+}
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="information"]::before {
+  color: #93c5fd;
+}
+/* Note (purple) */
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"] {
+  background-color: #1c1533 !important;
+  border-color: #4c1d95 !important;
+  border-left-color: #a78bfa !important;
+}
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="note"]::before {
+  color: #c4b5fd;
+}
+/* Warning (amber) */
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"] {
+  background-color: #2a210a !important;
+  border-color: #854d0e !important;
+  border-left-color: #f59e0b !important;
+}
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="warning"]::before {
+  color: #fcd34d;
+}
+/* Tips (green) */
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"] {
+  background-color: #0c2a18 !important;
+  border-color: #14532d !important;
+  border-left-color: #2ac956 !important;
+}
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="tips"]::before {
+  color: #86efac;
+}
+/* Important (red) */
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"] {
+  background-color: #2a0e12 !important;
+  border-color: #7f1d1d !important;
+  border-left-color: #e53e3e !important;
+}
+.dark .bn-block-content[data-content-type="quote"] blockquote[data-quote-type="important"]::before {
+  color: #fca5a5;
+}
+/* Callout body text: the global `p` / `.bn-inline-content` rule hardcodes a dark
+   slate (#374151) that is unreadable on the dark callout background. Lift it to a
+   light color in dark mode. Links keep their own color rules; `strong` stays bright. */
+.dark .bn-block-content[data-content-type="quote"] blockquote,
+.dark .bn-block-content[data-content-type="quote"] blockquote p,
+.dark .bn-block-content[data-content-type="quote"] blockquote .bn-inline-content {
+  color: #e2e8f0 !important;
+}
+
+/* Logo SVG: shapes without an inline color adapt to the theme (dark text in light mode,
+   white in dark mode); shapes with an inline style="fill:…" keep their brand color. */
+.logo-svg :is(path, circle, rect, polygon, ellipse):not([style]) {
+  fill: currentColor;
+}
