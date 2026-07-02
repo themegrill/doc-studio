@@ -1,11 +1,11 @@
+import { getAIConfig } from "@/lib/ai-config";
+import Anthropic from "@anthropic-ai/sdk";
 import axios from "axios";
+import type { Cheerio, CheerioAPI } from "cheerio";
 import * as cheerio from "cheerio";
+import type { Element } from "domhandler";
 import pLimit from "p-limit";
 import { URL } from "url";
-import Anthropic from "@anthropic-ai/sdk";
-import type { Cheerio, CheerioAPI } from "cheerio";
-import type { Element } from "domhandler";
-import { getAIConfig } from "@/lib/ai-config";
 
 const config = await getAIConfig();
 
@@ -20,7 +20,13 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_QUEUE_MULTIPLIER = 3;
 const MIN_PAGE_TEXT_LENGTH = 120;
 
-export type PageType = "documentation" | "faq" | "feature" | "pricing" | "blog" | "general";
+export type PageType =
+  | "documentation"
+  | "faq"
+  | "feature"
+  | "pricing"
+  | "blog"
+  | "general";
 
 export interface KnowledgeBaseSection {
   heading: string;
@@ -73,19 +79,53 @@ export interface CrawlBatchResult {
 }
 
 const SKIP_EXTENSIONS = [
-  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico",
-  ".avif", ".pdf", ".zip", ".rar", ".7z", ".tar", ".gz", ".mp4",
-  ".webm", ".mov", ".avi", ".mp3", ".wav", ".doc", ".docx", ".xls",
-  ".xlsx", ".ppt", ".pptx", ".xml", ".json", ".csv", ".txt",
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".svg",
+  ".bmp",
+  ".ico",
+  ".avif",
+  ".pdf",
+  ".zip",
+  ".rar",
+  ".7z",
+  ".tar",
+  ".gz",
+  ".mp4",
+  ".webm",
+  ".mov",
+  ".avi",
+  ".mp3",
+  ".wav",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".xml",
+  ".json",
+  ".csv",
+  ".txt",
 ] as const;
 
 const SKIP_PATH_PATTERNS = [
-  "/wp-json/", "/wp-admin/", "/wp-content/", "/feed", "/cart", "/checkout", "/account",
+  "/wp-json/",
+  "/wp-admin/",
+  "/wp-content/",
+  "/feed",
+  "/cart",
+  "/checkout",
+  "/account",
 ] as const;
 
 const refineBatchTool = {
   name: "extract_kb_signals",
-  description: "Extract concise documentation signals from crawled website pages.",
+  description:
+    "Extract concise documentation signals from crawled website pages.",
   input_schema: {
     type: "object",
     properties: {
@@ -97,7 +137,12 @@ const refineBatchTool = {
           whatItDoes: { type: "string" },
           targetUsers: { type: "array", items: { type: "string" } },
         },
-        required: ["productName", "oneSentenceSummary", "whatItDoes", "targetUsers"],
+        required: [
+          "productName",
+          "oneSentenceSummary",
+          "whatItDoes",
+          "targetUsers",
+        ],
         additionalProperties: false,
       },
       features: {
@@ -117,7 +162,10 @@ const refineBatchTool = {
         type: "array",
         items: {
           type: "object",
-          properties: { title: { type: "string" }, description: { type: "string" } },
+          properties: {
+            title: { type: "string" },
+            description: { type: "string" },
+          },
           required: ["title", "description"],
           additionalProperties: false,
         },
@@ -136,7 +184,13 @@ const refineBatchTool = {
       },
       openQuestions: { type: "array", items: { type: "string" } },
     },
-    required: ["productSummary", "features", "useCases", "howTos", "openQuestions"],
+    required: [
+      "productSummary",
+      "features",
+      "useCases",
+      "howTos",
+      "openQuestions",
+    ],
     additionalProperties: false,
   },
   strict: true,
@@ -160,10 +214,19 @@ export function normalizeUrl(rawUrl: string): string | null {
   try {
     const url = new URL(rawUrl);
     url.hash = "";
-    for (const p of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "fbclid", "gclid"]) {
+    for (const p of [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "fbclid",
+      "gclid",
+    ]) {
       url.searchParams.delete(p);
     }
-    if (url.pathname.length > 1) url.pathname = url.pathname.replace(/\/+$/, "");
+    if (url.pathname.length > 1)
+      url.pathname = url.pathname.replace(/\/+$/, "");
     return url.toString();
   } catch {
     return null;
@@ -175,14 +238,20 @@ export function getDomain(url: string): string {
 }
 
 function isSameDomain(url: string, baseDomain: string): boolean {
-  try { return getDomain(url) === baseDomain; } catch { return false; }
+  try {
+    return getDomain(url) === baseDomain;
+  } catch {
+    return false;
+  }
 }
 
 function hasSkippableExtension(url: string): boolean {
   try {
     const pathname = new URL(url).pathname.toLowerCase();
     return SKIP_EXTENSIONS.some((ext) => pathname.endsWith(ext));
-  } catch { return true; }
+  } catch {
+    return true;
+  }
 }
 
 function shouldSkipUrl(url: string): boolean {
@@ -193,7 +262,9 @@ function shouldSkipUrl(url: string): boolean {
     if (hasSkippableExtension(url)) return true;
     if (SKIP_PATH_PATTERNS.some((p) => lowerPath.includes(p))) return true;
     return false;
-  } catch { return true; }
+  } catch {
+    return true;
+  }
 }
 
 function isHtmlResponse(contentType: string | undefined): boolean {
@@ -201,13 +272,17 @@ function isHtmlResponse(contentType: string | undefined): boolean {
 }
 
 function cleanText(text: string): string {
-  return text.replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim();
+  return text
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isJunkLine(line: string): boolean {
   if (line.length < 2) return true;
   if (/^(skip to content|scroll to top)$/i.test(line)) return true;
-  if (/^(get started|join waitlist|email|message|learn more)$/i.test(line)) return true;
+  if (/^(get started|join waitlist|email|message|learn more)$/i.test(line))
+    return true;
   if (/^\d+$/.test(line)) return true;
   if (/^(∞|100%|2 min|0)$/i.test(line)) return true;
   if (/^[#>*\-\s]+$/.test(line)) return true;
@@ -229,19 +304,58 @@ function dedupeLines(lines: string[]): string[] {
 }
 
 function removeBoilerplate($: CheerioAPI): void {
-  $([
-    "script", "style", "noscript", "iframe", "svg", "canvas", "img", "picture",
-    "source", "video", "audio", "form", "input", "textarea", "button", "select",
-    "label", "nav", "footer", "header", "aside",
-    ".menu", ".nav", ".navbar", ".footer", ".header", ".sidebar", ".popup",
-    ".modal", ".cookie", ".breadcrumbs", ".social", ".share", ".newsletter",
-    ".subscribe", ".comment", ".comments", ".related", ".recommended",
-    ".cta", ".hero-form", "#comments",
-  ].join(",")).remove();
+  $(
+    [
+      "script",
+      "style",
+      "noscript",
+      "iframe",
+      "svg",
+      "canvas",
+      "img",
+      "picture",
+      "source",
+      "video",
+      "audio",
+      "form",
+      "input",
+      "textarea",
+      "button",
+      "select",
+      "label",
+      "nav",
+      "footer",
+      "header",
+      "aside",
+      ".menu",
+      ".nav",
+      ".navbar",
+      ".footer",
+      ".header",
+      ".sidebar",
+      ".popup",
+      ".modal",
+      ".cookie",
+      ".breadcrumbs",
+      ".social",
+      ".share",
+      ".newsletter",
+      ".subscribe",
+      ".comment",
+      ".comments",
+      ".related",
+      ".recommended",
+      ".cta",
+      ".hero-form",
+      "#comments",
+    ].join(","),
+  ).remove();
 }
 
 function isElement(node: unknown): node is Element {
-  return isRecord(node) && typeof (node as unknown as Element).tagName === "string";
+  return (
+    isRecord(node) && typeof (node as unknown as Element).tagName === "string"
+  );
 }
 
 function scoreNode($: CheerioAPI, el: Element): number {
@@ -252,35 +366,60 @@ function scoreNode($: CheerioAPI, el: Element): number {
   score += node.find("p").length * 80;
   score += node.find("li").length * 40;
   score += node.find("h1,h2,h3,h4").length * 30;
-  const classId = `${node.attr("class") ?? ""} ${node.attr("id") ?? ""}`.toLowerCase();
-  if (/content|article|post|entry|main|doc|page|section/.test(classId)) score += 300;
-  if (/footer|header|nav|menu|sidebar|popup|modal|comment|share|related/.test(classId)) score -= 500;
+  const classId =
+    `${node.attr("class") ?? ""} ${node.attr("id") ?? ""}`.toLowerCase();
+  if (/content|article|post|entry|main|doc|page|section/.test(classId))
+    score += 300;
+  if (
+    /footer|header|nav|menu|sidebar|popup|modal|comment|share|related/.test(
+      classId,
+    )
+  )
+    score -= 500;
   return score;
 }
 
 function pickMainContent($: CheerioAPI): Cheerio<Element> {
-  const candidates = ["main", "article", "[role='main']", ".content", ".entry-content",
-    ".post-content", ".page-content", ".site-main", "section"];
+  const candidates = [
+    "main",
+    "article",
+    "[role='main']",
+    ".content",
+    ".entry-content",
+    ".post-content",
+    ".page-content",
+    ".site-main",
+    "section",
+  ];
   let best: Element | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const selector of candidates) {
     $(selector).each((_, el) => {
       if (!isElement(el)) return;
       const score = scoreNode($, el);
-      if (score > bestScore) { bestScore = score; best = el; }
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
     });
   }
   if (best === null) {
     $("div").each((_, el) => {
       if (!isElement(el)) return;
       const score = scoreNode($, el);
-      if (score > bestScore) { bestScore = score; best = el; }
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
     });
   }
   return best ? $(best) : $("body");
 }
 
-function extractSections(root: Cheerio<Element>, $: CheerioAPI): KnowledgeBaseSection[] {
+function extractSections(
+  root: Cheerio<Element>,
+  $: CheerioAPI,
+): KnowledgeBaseSection[] {
   const sections: Array<{ heading: string; content: string[] }> = [];
   let current: { heading: string; content: string[] } | null = null;
   root.children().each((_, el) => {
@@ -295,17 +434,28 @@ function extractSections(root: Cheerio<Element>, $: CheerioAPI): KnowledgeBaseSe
     }
     const text = cleanText(node.text());
     if (!text || isJunkLine(text)) return;
-    if (current === null) { current = { heading: "Overview", content: [] }; sections.push(current); }
+    if (current === null) {
+      current = { heading: "Overview", content: [] };
+      sections.push(current);
+    }
     current.content.push(text);
   });
   return sections
-    .map((s) => ({ heading: s.heading, content: dedupeLines(s.content).join("\n") }))
+    .map((s) => ({
+      heading: s.heading,
+      content: dedupeLines(s.content).join("\n"),
+    }))
     .filter((s) => s.content.length > 0);
 }
 
-function classifyPage(url: string, title: string, headings: string[]): PageType {
+function classifyPage(
+  url: string,
+  title: string,
+  headings: string[],
+): PageType {
   const blob = `${url} ${title} ${headings.join(" ")}`.toLowerCase();
-  if (/docs|documentation|help|knowledge-base/.test(blob)) return "documentation";
+  if (/docs|documentation|help|knowledge-base/.test(blob))
+    return "documentation";
   if (/faq/.test(blob)) return "faq";
   if (/feature|features/.test(blob)) return "feature";
   if (/pricing|price/.test(blob)) return "pricing";
@@ -315,7 +465,8 @@ function classifyPage(url: string, title: string, headings: string[]): PageType 
 
 export function chunkArray<T>(items: readonly T[], size: number): T[][] {
   const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    chunks.push(items.slice(i, i + size));
   return chunks;
 }
 
@@ -325,19 +476,35 @@ export function stripLargeFields(page: KnowledgeBaseItem): KnowledgeBaseItem {
     title: page.title,
     pageType: page.pageType,
     headings: page.headings.slice(0, 20),
-    sections: page.sections.slice(0, 20).map((s) => ({ heading: s.heading, content: s.content.slice(0, 4000) })),
+    sections: page.sections
+      .slice(0, 20)
+      .map((s) => ({ heading: s.heading, content: s.content.slice(0, 4000) })),
     cleanText: page.cleanText.slice(0, 8000),
   };
 }
 
-function extractLinks($: CheerioAPI, currentUrl: string, baseDomain: string): string[] {
+function extractLinks(
+  $: CheerioAPI,
+  currentUrl: string,
+  baseDomain: string,
+): string[] {
   const discovered: string[] = [];
   $("a[href]").each((_, el) => {
     const href = ($(el).attr("href") ?? "").trim();
-    if (!href || href.startsWith("#") || href.startsWith("mailto:") ||
-        href.startsWith("tel:") || href.startsWith("javascript:")) return;
+    if (
+      !href ||
+      href.startsWith("#") ||
+      href.startsWith("mailto:") ||
+      href.startsWith("tel:") ||
+      href.startsWith("javascript:")
+    )
+      return;
     let absolute: string;
-    try { absolute = new URL(href, currentUrl).href; } catch { return; }
+    try {
+      absolute = new URL(href, currentUrl).href;
+    } catch {
+      return;
+    }
     const normalized = normalizeUrl(absolute);
     if (normalized === null) return;
     if (!isSameDomain(normalized, baseDomain)) return;
@@ -350,7 +517,12 @@ function extractLinks($: CheerioAPI, currentUrl: string, baseDomain: string): st
 // ── Type guards ───────────────────────────────────────────────────────────────
 
 function isFeature(v: unknown): v is Feature {
-  return isRecord(v) && isString(v.name) && isString(v.description) && isStringArray(v.evidence);
+  return (
+    isRecord(v) &&
+    isString(v.name) &&
+    isString(v.description) &&
+    isStringArray(v.evidence)
+  );
 }
 
 function isUseCase(v: unknown): v is UseCase {
@@ -362,16 +534,27 @@ function isHowTo(v: unknown): v is HowTo {
 }
 
 function isProductSummary(v: unknown): v is ProductSummary {
-  return isRecord(v) && isString(v.productName) && isString(v.oneSentenceSummary) &&
-    isString(v.whatItDoes) && isStringArray(v.targetUsers);
+  return (
+    isRecord(v) &&
+    isString(v.productName) &&
+    isString(v.oneSentenceSummary) &&
+    isString(v.whatItDoes) &&
+    isStringArray(v.targetUsers)
+  );
 }
 
 function isRefinedKnowledgeBatch(v: unknown): v is RefinedKnowledgeBatch {
-  return isRecord(v) && isProductSummary(v.productSummary) &&
-    Array.isArray(v.features) && v.features.every(isFeature) &&
-    Array.isArray(v.useCases) && v.useCases.every(isUseCase) &&
-    Array.isArray(v.howTos) && v.howTos.every(isHowTo) &&
-    isStringArray(v.openQuestions);
+  return (
+    isRecord(v) &&
+    isProductSummary(v.productSummary) &&
+    Array.isArray(v.features) &&
+    v.features.every(isFeature) &&
+    Array.isArray(v.useCases) &&
+    v.useCases.every(isUseCase) &&
+    Array.isArray(v.howTos) &&
+    v.howTos.every(isHowTo) &&
+    isStringArray(v.openQuestions)
+  );
 }
 
 function getToolInput(response: unknown, toolName: string): unknown {
@@ -380,7 +563,7 @@ function getToolInput(response: unknown, toolName: string): unknown {
   }
   const block = (response.content as unknown[]).find(
     (b): b is { type: "tool_use"; name: string; input: unknown } =>
-      isRecord(b) && b.type === "tool_use" && b.name === toolName
+      isRecord(b) && b.type === "tool_use" && b.name === toolName,
   );
   if (!block) throw new Error(`Claude did not call required tool: ${toolName}`);
   return block.input;
@@ -397,31 +580,42 @@ function sanitizeRefinedBatch(v: unknown): unknown {
   const ps = isRecord(v.productSummary) ? v.productSummary : {};
   const productSummary: ProductSummary = {
     productName: isString(ps.productName) ? ps.productName : "",
-    oneSentenceSummary: isString(ps.oneSentenceSummary) ? ps.oneSentenceSummary : "",
+    oneSentenceSummary: isString(ps.oneSentenceSummary)
+      ? ps.oneSentenceSummary
+      : "",
     whatItDoes: isString(ps.whatItDoes) ? ps.whatItDoes : "",
     targetUsers: toStringArray(ps.targetUsers),
   };
 
   const features: Feature[] = Array.isArray(v.features)
-    ? v.features.filter(isRecord).map((f) => ({
-        name: isString(f.name) ? f.name : "",
-        description: isString(f.description) ? f.description : "",
-        evidence: toStringArray(f.evidence),
-      })).filter((f) => f.name)
+    ? v.features
+        .filter(isRecord)
+        .map((f) => ({
+          name: isString(f.name) ? f.name : "",
+          description: isString(f.description) ? f.description : "",
+          evidence: toStringArray(f.evidence),
+        }))
+        .filter((f) => f.name)
     : [];
 
   const useCases: UseCase[] = Array.isArray(v.useCases)
-    ? v.useCases.filter(isRecord).map((u) => ({
-        title: isString(u.title) ? u.title : "",
-        description: isString(u.description) ? u.description : "",
-      })).filter((u) => u.title)
+    ? v.useCases
+        .filter(isRecord)
+        .map((u) => ({
+          title: isString(u.title) ? u.title : "",
+          description: isString(u.description) ? u.description : "",
+        }))
+        .filter((u) => u.title)
     : [];
 
   const howTos: HowTo[] = Array.isArray(v.howTos)
-    ? v.howTos.filter(isRecord).map((h) => ({
-        title: isString(h.title) ? h.title : "",
-        steps: toStringArray(h.steps),
-      })).filter((h) => h.title)
+    ? v.howTos
+        .filter(isRecord)
+        .map((h) => ({
+          title: isString(h.title) ? h.title : "",
+          steps: toStringArray(h.steps),
+        }))
+        .filter((h) => h.title)
     : [];
 
   return {
@@ -453,12 +647,15 @@ export async function crawlPageBatch(
           const response = await axios.get<string>(url, {
             timeout: REQUEST_TIMEOUT_MS,
             maxRedirects: 5,
-            headers: { "User-Agent": "Mozilla/5.0 (compatible; KB-Crawler/3.0)" },
+            headers: {
+              "User-Agent": "Mozilla/5.0 (compatible; KB-Crawler/3.0)",
+            },
             validateStatus: (s) => s >= 200 && s < 400,
             responseType: "text",
           });
           const contentType = String(response.headers["content-type"] ?? "");
-          if (!isHtmlResponse(contentType) || typeof response.data !== "string") return;
+          if (!isHtmlResponse(contentType) || typeof response.data !== "string")
+            return;
 
           const html = response.data;
           const link$ = cheerio.load(html);
@@ -473,20 +670,35 @@ export async function crawlPageBatch(
           removeBoilerplate(local$);
           const root = local$("#root");
 
-          const headings = dedupeLines(root.find("h1,h2,h3").map((_, el) => local$(el).text()).get());
+          const headings = dedupeLines(
+            root
+              .find("h1,h2,h3")
+              .map((_, el) => local$(el).text())
+              .get(),
+          );
           const sections = extractSections(root, local$);
           const cleanBody = dedupeLines(
-            root.text().split("\n").map((line) => cleanText(line))
+            root
+              .text()
+              .split("\n")
+              .map((line) => cleanText(line)),
           ).join("\n");
 
           if (cleanBody.length >= MIN_PAGE_TEXT_LENGTH) {
-            crawled.push({ url, title, pageType: classifyPage(url, title, headings), headings, cleanText: cleanBody, sections });
+            crawled.push({
+              url,
+              title,
+              pageType: classifyPage(url, title, headings),
+              headings,
+              cleanText: cleanBody,
+              sections,
+            });
           }
         } catch {
           // Silently skip failed pages
         }
-      })
-    )
+      }),
+    ),
   );
 
   return { crawled, discoveredLinks: [...new Set(allLinks)] };
@@ -504,14 +716,21 @@ export async function refineBatch(
     model: "claude-sonnet-4-6",
     max_tokens: 8000,
     temperature: 0,
-    tools: [{
-      ...refineBatchTool,
-      input_schema: { ...refineBatchTool.input_schema, required: [...refineBatchTool.input_schema.required] },
-    }],
+    tools: [
+      {
+        ...refineBatchTool,
+        input_schema: {
+          ...refineBatchTool.input_schema,
+          required: [...refineBatchTool.input_schema.required],
+        },
+      },
+    ],
     tool_choice: { type: "tool", name: "extract_kb_signals" },
-    messages: [{
-      role: "user",
-      content: `Refine these crawled website pages into a documentation-ready knowledge base batch.
+    messages: [
+      {
+        role: "user",
+        content:
+          `Refine these crawled website pages into a documentation-ready knowledge base batch.
 
 The website being documented is: ${startDomain}
 
@@ -526,7 +745,8 @@ Rules:
 
 Input pages:
 ${JSON.stringify(pages)}`.trim(),
-    }],
+      },
+    ],
   });
   const toolInput = getToolInput(response, "extract_kb_signals");
   if (!isRefinedKnowledgeBatch(toolInput)) {
@@ -547,9 +767,12 @@ ${JSON.stringify(pages)}`.trim(),
  * - Deduplicates features, useCases, howTos, and openQuestions by their key field.
  * - Picks the most complete productSummary.
  */
-export function mergeRefinedBatches(batches: RefinedKnowledgeBatch[]): RefinedKnowledgeBatch[] {
+export function mergeRefinedBatches(
+  batches: RefinedKnowledgeBatch[],
+): RefinedKnowledgeBatch[] {
   const nonEmpty = batches.filter(
-    (b) => b.features.length > 0 || b.useCases.length > 0 || b.howTos.length > 0
+    (b) =>
+      b.features.length > 0 || b.useCases.length > 0 || b.howTos.length > 0,
   );
 
   if (nonEmpty.length === 0) return batches; // Nothing to merge — return original as fallback
@@ -557,41 +780,56 @@ export function mergeRefinedBatches(batches: RefinedKnowledgeBatch[]): RefinedKn
   // Pick the productSummary with the most content
   const bestSummary = nonEmpty.reduce((best, batch) => {
     const score = (s: ProductSummary) =>
-      s.productName.length + s.oneSentenceSummary.length + s.whatItDoes.length + s.targetUsers.length;
-    return score(batch.productSummary) > score(best.productSummary) ? batch : best;
+      s.productName.length +
+      s.oneSentenceSummary.length +
+      s.whatItDoes.length +
+      s.targetUsers.length;
+    return score(batch.productSummary) > score(best.productSummary)
+      ? batch
+      : best;
   }).productSummary;
 
   const seenFeatures = new Set<string>();
-  const features = nonEmpty.flatMap((b) => b.features).filter((f) => {
-    const key = f.name.toLowerCase().trim();
-    if (seenFeatures.has(key)) return false;
-    seenFeatures.add(key);
-    return true;
-  });
+  const features = nonEmpty
+    .flatMap((b) => b.features)
+    .filter((f) => {
+      const key = f.name.toLowerCase().trim();
+      if (seenFeatures.has(key)) return false;
+      seenFeatures.add(key);
+      return true;
+    });
 
   const seenUseCases = new Set<string>();
-  const useCases = nonEmpty.flatMap((b) => b.useCases).filter((u) => {
-    const key = u.title.toLowerCase().trim();
-    if (seenUseCases.has(key)) return false;
-    seenUseCases.add(key);
-    return true;
-  });
+  const useCases = nonEmpty
+    .flatMap((b) => b.useCases)
+    .filter((u) => {
+      const key = u.title.toLowerCase().trim();
+      if (seenUseCases.has(key)) return false;
+      seenUseCases.add(key);
+      return true;
+    });
 
   const seenHowTos = new Set<string>();
-  const howTos = nonEmpty.flatMap((b) => b.howTos).filter((h) => {
-    const key = h.title.toLowerCase().trim();
-    if (seenHowTos.has(key)) return false;
-    seenHowTos.add(key);
-    return true;
-  });
+  const howTos = nonEmpty
+    .flatMap((b) => b.howTos)
+    .filter((h) => {
+      const key = h.title.toLowerCase().trim();
+      if (seenHowTos.has(key)) return false;
+      seenHowTos.add(key);
+      return true;
+    });
 
   const seenQuestions = new Set<string>();
-  const openQuestions = nonEmpty.flatMap((b) => b.openQuestions).filter((q) => {
-    const key = q.toLowerCase().trim();
-    if (seenQuestions.has(key)) return false;
-    seenQuestions.add(key);
-    return true;
-  });
+  const openQuestions = nonEmpty
+    .flatMap((b) => b.openQuestions)
+    .filter((q) => {
+      const key = q.toLowerCase().trim();
+      if (seenQuestions.has(key)) return false;
+      seenQuestions.add(key);
+      return true;
+    });
 
-  return [{ productSummary: bestSummary, features, useCases, howTos, openQuestions }];
+  return [
+    { productSummary: bestSummary, features, useCases, howTos, openQuestions },
+  ];
 }

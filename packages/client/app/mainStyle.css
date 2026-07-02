@@ -7,20 +7,20 @@
 
   --color-text-primary:   #1a1a2e;
   --color-text-secondary: #4b5563;
-  --color-text-muted:     #6b7280;   
-  --color-text-accent:    #2563eb;   
+  --color-text-muted:     #6b7280;
+  --color-text-accent:    #2563eb;
 
-  --color-heading-h1:     #0f172a;   
-  --color-heading-h2:     #1e293b;   
-  --color-heading-h3:     #334155;   
-  --color-heading-h4:     #475569;   
+  --color-heading-h1:     #0f172a;
+  --color-heading-h2:     #1e293b;
+  --color-heading-h3:     #334155;
+  --color-heading-h4:     #475569;
 
   --color-surface:        #ffffff;
   --color-sidebar-bg:     #f8fafc;
   --color-border:         #e2e8f0;
   --color-border-light:   #f1f5f9;
 
-  --color-desc-bg:        #f8fafc;   
+  --color-desc-bg:        #f8fafc;
   --color-desc-border:    #e2e8f0;
   --color-desc-text:      #475569;
 
@@ -75,7 +75,7 @@ main {
 h1.text-3xl,
 main h1 {
   font-family: var(--font-heading) !important;
-  font-size: 2rem !important;       
+  font-size: 2rem !important;
   font-weight: 700 !important;
   line-height: 1.2 !important;
   letter-spacing: -0.025em !important;
@@ -106,7 +106,7 @@ main nav {
 main nav span,
 main nav a {
   font-family: var(--font-sans) !important;
-  font-size: 0.8125rem !important;  
+  font-size: 0.8125rem !important;
   color: var(--color-text-muted) !important;
   font-weight: 400;
 }
@@ -155,7 +155,7 @@ main nav span:last-child {
 .bn-block-content h2,
 .bn-inline-content:has(> h2) h2 {
   font-family: var(--font-heading) !important;
-  font-size: 1.5rem !important;     
+  font-size: 1.5rem !important;
   font-weight: 700 !important;
   letter-spacing: -0.02em !important;
   color: var(--color-heading-h2) !important;
@@ -183,7 +183,7 @@ main nav span:last-child {
 .bn-block-content h3,
 .bn-inline-content:has(> h3) h3 {
   font-family: var(--font-heading) !important;
-  font-size: 1.125rem !important;   
+  font-size: 1.125rem !important;
   font-weight: 600 !important;
   letter-spacing: -0.01em !important;
   color: var(--color-heading-h3) !important;
@@ -200,7 +200,7 @@ main nav span:last-child {
 .bn-block-content[data-content-type="heading"][data-level="4"] h4,
 .bn-block-content h4 {
   font-family: var(--font-heading) !important;
-  font-size: 1rem !important;       
+  font-size: 1rem !important;
   font-weight: 600 !important;
   color: var(--color-heading-h4) !important;
   text-transform: uppercase;
@@ -405,7 +405,7 @@ aside.w-96 {
 
 aside.w-96 h4 {
   font-family: var(--font-heading) !important;
-  font-size: 0.6875rem !important;  
+  font-size: 0.6875rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.1em !important;
   color: var(--color-text-muted) !important;
@@ -430,7 +430,7 @@ aside.w-96 nav > div > a:hover {
 
 aside.w-96 nav a:not(.font-medium):not(.bg-blue-100) {
   font-family: var(--font-sans) !important;
-  font-size: 0.8125rem !important;  
+  font-size: 0.8125rem !important;
   font-weight: 400 !important;
   color: var(--color-text-muted) !important;
   border-radius: 6px !important;
@@ -467,7 +467,7 @@ aside.w-64 .flex.items-center.gap-2 {
 
 aside.w-64 .flex.items-center.gap-2 * {
   font-family: var(--font-heading) !important;
-  font-size: 0.6875rem !important;  
+  font-size: 0.6875rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.1em !important;
   color: var(--color-text-muted) !important;
@@ -476,7 +476,7 @@ aside.w-64 .flex.items-center.gap-2 * {
 
 aside.w-64 nav button {
   font-family: var(--font-sans) !important;
-  font-size: 0.8125rem !important;  
+  font-size: 0.8125rem !important;
   font-weight: 400 !important;
   line-height: 1.5 !important;
   color: var(--color-text-muted) !important;
