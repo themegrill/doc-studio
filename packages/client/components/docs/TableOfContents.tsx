@@ -121,10 +121,10 @@ export default function TableOfContents() {
   if (!headings.length) return null;
 
   return (
-    <aside className="w-64 border-l bg-gray-50 p-6 overflow-y-auto hidden xl:block">
+    <aside className="w-64 border-l border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 p-6 overflow-y-auto hidden xl:block">
       <div className="flex items-center gap-2 mb-4">
-        <List size={16} className="text-gray-600" />
-        <h4 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">
+        <List size={16} className="text-gray-600 dark:text-gray-400" />
+        <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider">
           On This Docs
         </h4>
       </div>
@@ -133,8 +133,8 @@ export default function TableOfContents() {
           <button
             key={`${h.id}-${i}`}
             onClick={() => scrollTo(h)}
-            className={`block w-full text-left text-sm py-1.5 px-2 rounded transition-colors hover:text-gray-900 hover:bg-gray-100
-              ${activeIndex === i ? "text-blue-600 bg-blue-50 font-medium" : "text-gray-600"}
+            className={`block w-full text-left text-sm py-1.5 px-2 rounded transition-colors hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800
+              ${activeIndex === i ? "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium" : "text-gray-600 dark:text-gray-400"}
               ${h.level === 1 ? "pl-2" : ""}
               ${h.level === 2 ? "pl-4" : ""}
               ${h.level === 3 ? "pl-6" : ""}
