@@ -788,6 +788,20 @@ button[class*="search"] {
   color: #e2e8f0 !important;
 }
 
+/* Divider lines in dark mode */
+.dark [data-content-type="divider"] hr {
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* File & media blocks in dark mode */
+.dark .bn-file-block-content-wrapper {
+  border: 0 !important;
+}
+
+.dark .bn-visual-media-wrapper {
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
 /* Logo SVG: shapes without an inline color adapt to the theme (dark text in light mode,
    white in dark mode); shapes with an inline style="fill:…" keep their brand color. */
 .logo-svg :is(path, circle, rect, polygon, ellipse):not([style]) {

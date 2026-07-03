@@ -341,6 +341,16 @@ export default function DocRenderer({ doc, slug: _slug, projectSlug, breadcrumbs
         {doc.description && (
           <p className="text-gray-600 dark:text-gray-400">{doc.description}</p>
         )}
+        {doc.updatedAt && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            Last updated on{" "}
+            {new Date(doc.updatedAt).toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+          </p>
+        )}
         </div>
       </div>
 
