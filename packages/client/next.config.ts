@@ -4,7 +4,6 @@ const apiBaseUrl = process.env.API_BASE_URL || "http://localhost:3000";
 const projectSlug = process.env.PROJECT_SLUG || "default";
 
 const nextConfig: NextConfig = {
-  skipTrailingSlashRedirect: false,
   // Bake these into the build so every server component gets the right values
   // regardless of how Vercel injects runtime env vars.
   env: {
