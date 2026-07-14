@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input";
 import { FileText, Loader2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { parseTitleWithBadges } from "@/lib/parse-title-badges";
+import { Badge } from "@/components/ui/badge-pro";
 
 interface SearchResult {
   id: string;
@@ -173,7 +175,9 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
 
             {results.length > 0 && (
               <div className="py-2">
-                {results.map((result, index) => (
+                {results.map((result, index) => {
+                  const { cleanTitle, badges } = parseTitleWithBadges(result.title);
+                  return (
                   <button
                     key={result.id}
                     onClick={() => handleSelect(result)}
@@ -189,8 +193,13 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
                       className="text-gray-400 mt-0.5 flex-shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-gray-900 truncate">
-                        {result.title}
+                      <div className="font-medium text-sm text-gray-900 flex items-center gap-1.5 min-w-0">
+                        <span className="truncate">{cleanTitle}</span>
+                        {badges.map((badge, i) => (
+                          <Badge key={i} variant={badge.variant} className="text-[10px] px-1.5 py-0 shrink-0">
+                            {badge.text}
+                          </Badge>
+                        ))}
                       </div>
                       {result.section && (
                         <div className="text-xs text-gray-500 mt-0.5">
@@ -204,7 +213,8 @@ export default function SearchDialog({ projectSlug }: SearchDialogProps) {
                       )}
                     </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             )}
 
