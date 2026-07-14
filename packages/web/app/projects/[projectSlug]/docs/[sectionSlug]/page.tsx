@@ -102,6 +102,7 @@ export default async function SectionPage({
             FROM documents
             WHERE project_id = ${project.id}
               AND slug = ANY(${sql.array(validChildSlugs)})
+              AND deleted_at IS NULL
             ORDER BY order_index ASC, created_at ASC
           `
         : sql`
@@ -110,6 +111,7 @@ export default async function SectionPage({
             WHERE project_id = ${project.id}
               AND slug = ANY(${sql.array(validChildSlugs)})
               AND published = true
+              AND deleted_at IS NULL
             ORDER BY order_index ASC, created_at ASC
           `
       : Promise.resolve([]),

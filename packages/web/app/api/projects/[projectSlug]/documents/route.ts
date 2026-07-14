@@ -86,15 +86,20 @@ export async function POST(
   // Create the document slug (section/document)
   const fullSlug = `${sectionSlug}/${slug}`;
 
-  // Check if document already exists
+  // Check if document already exists (including one sitting in the trash,
+  // which still occupies the slug via the UNIQUE (project_id, slug) constraint)
   const [existing] = await sql`
-    SELECT id FROM documents
+    SELECT id, deleted_at FROM documents
     WHERE project_id = ${project.id} AND slug = ${fullSlug}
   `;
 
   if (existing) {
     return Response.json(
-      { error: "Document with this slug already exists" },
+      {
+        error: existing.deleted_at
+          ? "A document with this slug exists in the trash. Restore or permanently delete it first."
+          : "Document with this slug already exists",
+      },
       { status: 409 }
     );
   }

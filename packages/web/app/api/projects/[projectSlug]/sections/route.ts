@@ -59,10 +59,28 @@ export async function POST(
     routes: [],
   };
 
+  const path = `/docs/${slug}`;
+
+  // Reject duplicate slugs: a matching navigation route or an existing
+  // document with this slug both point to the same URL and cause glitches.
+  const pathTaken = (structure.routes ?? []).some(
+    (route: { path?: string }) => route.path === path
+  );
+  const [existingDoc] = await sql`
+    SELECT id FROM documents WHERE project_id = ${project.id} AND slug = ${slug}
+  `;
+
+  if (pathTaken || existingDoc) {
+    return Response.json(
+      { error: "A page with this URL slug already exists. Use a unique slug." },
+      { status: 409 }
+    );
+  }
+
   // Add new section
   const newSection = {
     title,
-    path: `/docs/${slug}`,
+    path,
     children: [],
   };
 
@@ -119,7 +137,6 @@ export async function POST(
         true,
         ${session.user.id}
       )
-      ON CONFLICT (project_id, slug) DO NOTHING
     `;
   }
 

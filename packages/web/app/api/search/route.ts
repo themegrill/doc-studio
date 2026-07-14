@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
       FROM documents d
       WHERE d.project_id = ${project.id}
         AND d.published = true
+        AND d.deleted_at IS NULL
         AND (
           d.title ILIKE ${searchTerm}
           OR d.description ILIKE ${searchTerm}

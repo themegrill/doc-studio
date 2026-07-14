@@ -53,31 +53,40 @@ export default async function ProjectDocsLayout({
   const cm = ContentManager.create();
   const navigation = await cm.getNavigation(project.id);
 
-  // For unauthenticated users, filter draft documents out of the navigation
-  // so they don't appear in the sidebar
-  let filteredNavigation = navigation;
+  // Build the set of slugs to hide from the sidebar. Trashed documents keep
+  // their navigation entry (so they can be restored) but must never appear in
+  // the sidebar for anyone. Draft documents are additionally hidden from
+  // unauthenticated visitors.
+  const hiddenSlugs = new Set<string>();
+
+  const trashedDocs = await sql`
+    SELECT slug FROM documents
+    WHERE project_id = ${project.id} AND deleted_at IS NOT NULL
+  `;
+  (trashedDocs as unknown as { slug: string }[]).forEach((d) => hiddenSlugs.add(d.slug));
+
   if (!session?.user) {
     const draftDocs = await sql`
       SELECT slug FROM documents
-      WHERE project_id = ${project.id} AND published = false
+      WHERE project_id = ${project.id} AND published = false AND deleted_at IS NULL
     `;
+    (draftDocs as unknown as { slug: string }[]).forEach((d) => hiddenSlugs.add(d.slug));
+  }
 
-    if (draftDocs.length > 0) {
-      const draftSlugs = new Set((draftDocs as unknown as { slug: string }[]).map((d) => d.slug));
+  let filteredNavigation = navigation;
+  if (hiddenSlugs.size > 0) {
+    const filterRoutes = (routes: NavRoute[]): NavRoute[] =>
+      routes
+        .filter((route) => {
+          const slug = route.slug || route.path?.replace(/^\/docs\//, "");
+          return !slug || !hiddenSlugs.has(slug);
+        })
+        .map((route) => ({
+          ...route,
+          children: route.children ? filterRoutes(route.children) : undefined,
+        }));
 
-      const filterRoutes = (routes: NavRoute[]): NavRoute[] =>
-        routes
-          .filter((route) => {
-            const slug = route.slug || route.path?.replace(/^\/docs\//, "");
-            return !slug || !draftSlugs.has(slug);
-          })
-          .map((route) => ({
-            ...route,
-            children: route.children ? filterRoutes(route.children) : undefined,
-          }));
-
-      filteredNavigation = { ...navigation, routes: filterRoutes(navigation.routes) };
-    }
+    filteredNavigation = { ...navigation, routes: filterRoutes(navigation.routes) };
   }
 
   return (

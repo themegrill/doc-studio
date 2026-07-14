@@ -98,7 +98,7 @@ export default function DeleteDocumentButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {isSectionOverview ? "Section" : "Document"}</DialogTitle>
+            <DialogTitle>{isSectionOverview ? "Delete Section" : "Move Document to Trash"}</DialogTitle>
             <DialogDescription>
               {isSectionOverview ? (
                 <>
@@ -106,7 +106,7 @@ export default function DeleteDocumentButton({
                 </>
               ) : (
                 <>
-                  Are you sure you want to delete &quot;{documentTitle}&quot;? This action cannot be undone.
+                  &quot;{documentTitle}&quot; will be moved to the Trash. You can restore it or permanently delete it later from the Trash.
                 </>
               )}
             </DialogDescription>
@@ -133,12 +133,12 @@ export default function DeleteDocumentButton({
               {loading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Deleting...
+                  {isSectionOverview ? "Deleting..." : "Moving..."}
                 </>
               ) : (
                 <>
                   <Trash2 size={16} />
-                  {isSectionOverview ? "Delete Section" : "Delete"}
+                  {isSectionOverview ? "Delete Section" : "Move to Trash"}
                 </>
               )}
             </Button>

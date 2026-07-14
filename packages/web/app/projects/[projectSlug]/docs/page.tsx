@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db/postgres";
 import { notFound } from "next/navigation";
 import { ContentManager } from "@/lib/db/ContentManager";
+import { auth } from "@/lib/auth";
 import Link from "next/link";
 import {
   Card,
@@ -8,7 +9,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { FolderOpen, FileText } from "lucide-react";
+import { FolderOpen, FileText, Trash2 } from "lucide-react";
 
 interface NavigationSection {
   id?: string;
@@ -27,6 +28,7 @@ export default async function ProjectDocsIndexPage({
   params: Promise<{ projectSlug: string }>;
 }) {
   const { projectSlug } = await params;
+  const session = await auth();
 
   // Get project from slug
   const sql = getDb();
@@ -74,12 +76,23 @@ export default async function ProjectDocsIndexPage({
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-medium mb-2">
-          {project.name} Documentation
-        </h1>
-        {project.description && (
-          <p className="text-gray-600 mt-2">{project.description}</p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-medium mb-2">
+            {project.name} Documentation
+          </h1>
+          {project.description && (
+            <p className="text-gray-600 mt-2">{project.description}</p>
+          )}
+        </div>
+        {session?.user && (
+          <Link
+            href={`/projects/${projectSlug}/docs/trash`}
+            className="shrink-0 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900"
+          >
+            <Trash2 size={16} />
+            Trash
+          </Link>
         )}
       </div>
       <hr className="mb-8" />

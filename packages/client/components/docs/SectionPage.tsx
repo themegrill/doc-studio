@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { FolderOpen } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { parseTitleWithBadges } from "@/lib/parse-title-badges";
+import { Badge } from "@/components/ui/badge-pro";
 
 type ChildDoc = {
   id: string;
@@ -42,12 +44,19 @@ export default function SectionPage({ sectionTitle, hideTitle, childDocs }: Sect
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {docs.map((doc) => (
+          {docs.map((doc) => {
+            const { cleanTitle, badges } = parseTitleWithBadges(doc.title);
+            return (
             <Link key={doc.id} href={`/${doc.slug}`} className="h-full">
               <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer flex flex-col">
                 <CardHeader className="flex-1">
                   <CardTitle className="line-clamp-2 leading-snug">
-                    {doc.title}
+                    {cleanTitle}
+                    {badges.map((badge, i) => (
+                      <Badge key={i} variant={badge.variant} className="text-[10px] px-1.5 py-0 shrink-0">
+                        {badge.text}
+                      </Badge>
+                    ))}
                   </CardTitle>
                   {doc.description && (
                     <CardDescription className="mt-2 line-clamp-2">
@@ -57,7 +66,8 @@ export default function SectionPage({ sectionTitle, hideTitle, childDocs }: Sect
                 </CardHeader>
               </Card>
             </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

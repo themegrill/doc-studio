@@ -68,7 +68,8 @@ export class ContentManager {
     try {
       const [doc] = await this.sql`
         SELECT * FROM documents
-        WHERE project_id = ${projectId} AND slug = ${slug} AND published = true
+        WHERE project_id = ${projectId} AND slug = ${slug}
+          AND published = true AND deleted_at IS NULL
         LIMIT 1
       `;
 
@@ -101,6 +102,7 @@ export class ContentManager {
       const [doc] = await this.sql`
         SELECT * FROM documents
         WHERE project_id = ${projectId} AND slug = ${slug}
+          AND deleted_at IS NULL
         LIMIT 1
       `;
 
@@ -120,7 +122,7 @@ export class ContentManager {
         seo: (doc.seo as SeoData) || {},
       };
     } catch (error) {
-      console.error("Error fetching document:", error);
+      console.error("Error fetching admin document:", error);
       return null;
     }
   }
@@ -298,6 +300,11 @@ export class ContentManager {
     }
   }
 
+  /**
+   * Soft delete: move a document to the trash. The row and its navigation
+   * entry are kept so the document can be restored. Visibility is driven by
+   * the `deleted_at IS NULL` filter applied across read queries.
+   */
   async deleteDoc(projectId: string, slug: string): Promise<boolean> {
     try {
       // Get current user from NextAuth
@@ -308,7 +315,60 @@ export class ContentManager {
         return false;
       }
 
-      // Delete the document from database
+      await this.sql`
+        UPDATE documents
+        SET deleted_at = NOW(), deleted_by = ${session.user.id}
+        WHERE project_id = ${projectId} AND slug = ${slug}
+          AND deleted_at IS NULL
+      `;
+
+      return true;
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      return false;
+    }
+  }
+
+  /** Restore a trashed document (its navigation entry was preserved). */
+  async restoreDoc(projectId: string, slug: string): Promise<boolean> {
+    try {
+      const session = await auth();
+
+      if (!session?.user?.id) {
+        console.error("User not authenticated");
+        return false;
+      }
+
+      await this.sql`
+        UPDATE documents
+        SET deleted_at = NULL, deleted_by = NULL, updated_by = ${session.user.id}
+        WHERE project_id = ${projectId} AND slug = ${slug}
+          AND deleted_at IS NOT NULL
+      `;
+
+      return true;
+    } catch (error) {
+      console.error("Error restoring document:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Permanently delete a document: remove the row and strip its entry from
+   * the navigation structure. Only intended for docs already in the trash.
+   */
+  async permanentlyDeleteDoc(
+    projectId: string,
+    slug: string
+  ): Promise<boolean> {
+    try {
+      const session = await auth();
+
+      if (!session?.user?.id) {
+        console.error("User not authenticated");
+        return false;
+      }
+
       await this.sql`
         DELETE FROM documents
         WHERE project_id = ${projectId} AND slug = ${slug}
@@ -337,7 +397,7 @@ export class ContentManager {
             return {
               ...route,
               children: route.children.filter(
-                (child) => child.path !== docPath
+                (child) => child.path !== docPath && child.slug !== slug
               ),
             };
           }
@@ -361,8 +421,34 @@ export class ContentManager {
 
       return true;
     } catch (error) {
-      console.error("Error deleting document:", error);
+      console.error("Error permanently deleting document:", error);
       return false;
+    }
+  }
+
+  /** List documents currently in the trash for a project. */
+  async listTrashedDocs(projectId: string): Promise<DocMeta[]> {
+    try {
+      const docs = await this.sql`
+        SELECT id, slug, title, description, created_at, updated_at, published, order_index
+        FROM documents
+        WHERE project_id = ${projectId} AND deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC
+      `;
+
+      return docs.map((doc) => ({
+        id: doc.id,
+        slug: doc.slug,
+        title: doc.title,
+        description: doc.description,
+        createdAt: doc.created_at,
+        updatedAt: doc.updated_at,
+        published: doc.published,
+        orderIndex: doc.order_index,
+      }));
+    } catch (error) {
+      console.error("Error listing trashed documents:", error);
+      return [];
     }
   }
 
@@ -371,7 +457,7 @@ export class ContentManager {
       const docs = await this.sql`
         SELECT id, slug, title, description, created_at, updated_at, published, order_index
         FROM documents
-        WHERE project_id = ${projectId} AND published = true
+        WHERE project_id = ${projectId} AND published = true AND deleted_at IS NULL
         ORDER BY order_index ASC
       `;
 

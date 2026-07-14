@@ -16,10 +16,11 @@ export async function GET(request: NextRequest) {
   const cm = ContentManager.create();
   const nav = await cm.getNavigation(project.id);
 
-  // Filter out draft (unpublished) documents — public clients must not see drafts
+  // Filter out draft (unpublished) and trashed documents — public clients
+  // must not see drafts or documents that have been moved to the trash
   const publishedDocs = await sql`
     SELECT slug FROM documents
-    WHERE project_id = ${project.id} AND published = true
+    WHERE project_id = ${project.id} AND published = true AND deleted_at IS NULL
   `;
   const publishedSlugs = new Set(publishedDocs.map((d) => d.slug as string));
 
