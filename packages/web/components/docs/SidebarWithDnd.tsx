@@ -41,15 +41,18 @@ const TitleWithBadges = memo(({ title }: { title: string }) => {
 TitleWithBadges.displayName = "TitleWithBadges";
 import {
   DndContext,
+  DragOverlay,
   closestCorners,
   pointerWithin,
   rectIntersection,
   KeyboardSensor,
   PointerSensor,
+  MeasuringStrategy,
   useSensor,
   useSensors,
   DragEndEvent,
   DragOverEvent,
+  DragStartEvent,
   type ClientRect,
 } from "@dnd-kit/core";
 import {
@@ -80,6 +83,7 @@ export default function SidebarWithDnd({
   const [routes, setRoutes] = useState<NavRoute[]>(navigation?.routes || []);
   const [openSectionPath, setOpenSectionPath] = useState<string | null>(null);
   const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const dragOverSectionIdRef = useRef<string | null>(null);
   const prevNavigationRef = useRef<Navigation | null>(null);
 
@@ -144,7 +148,23 @@ export default function SidebarWithDnd({
   const collisionDetection = useCallback(
     (args: Parameters<typeof closestCorners>[0]) => {
       const activeId = args.active.id as string;
-      // Section drags, or keyboard sensor (no pointer), keep default behavior.
+
+      // Section drags: only ever collide with other section containers. Otherwise,
+      // dropping a section over an *expanded* section resolves `over` to one of its
+      // child docs, the section-reorder branch bails, and the drag is a no-op
+      // (the category appears to snap back). Restricting droppables keeps the target
+      // a section regardless of which sections are expanded. Covers the keyboard
+      // sensor too (no pointerCoordinates).
+      if (activeId.startsWith("section-")) {
+        return closestCorners({
+          ...args,
+          droppableContainers: args.droppableContainers.filter((c) =>
+            String(c.id).startsWith("section-"),
+          ),
+        });
+      }
+
+      // Keyboard sensor for docs (no pointer) keeps default behavior.
       if (!activeId.startsWith("doc-") || !args.pointerCoordinates) {
         return closestCorners(args);
       }
@@ -192,6 +212,16 @@ export default function SidebarWithDnd({
     }),
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+    dragOverSectionIdRef.current = null;
+    setDragOverSectionId(null);
+  };
+
   const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     const activeItemId = active.id as string;
@@ -227,6 +257,7 @@ export default function SidebarWithDnd({
     const { active, over } = event;
     // The drag-over ref/state is only a visual highlight signal — clear it here.
     // Correctness is derived entirely from the active/over sortable data below.
+    setActiveId(null);
     dragOverSectionIdRef.current = null;
     setDragOverSectionId(null);
 
@@ -368,6 +399,27 @@ export default function SidebarWithDnd({
     [routes],
   );
 
+  // The item currently being dragged — rendered as a clean, collapsed clone in the
+  // DragOverlay so the drag follows the cursor smoothly regardless of how tall an
+  // expanded section is in the list.
+  const activeOverlay = useMemo(() => {
+    if (!activeId) return null;
+    if (activeId.startsWith("section-")) {
+      const route = routes.find(
+        (r) => `section-${r.id || r.path}` === activeId,
+      );
+      return route ? { title: route.title } : null;
+    }
+    if (activeId.startsWith("doc-")) {
+      const path = activeId.slice("doc-".length);
+      for (const route of routes) {
+        const child = route.children?.find((c) => c.path === path);
+        if (child) return { title: child.title };
+      }
+    }
+    return null;
+  }, [activeId, routes]);
+
   return (
     <TooltipProvider delayDuration={200}>
       <aside className="w-96 border-r bg-gray-50 px-4 py-6 overflow-y-auto h-full flex flex-col">
@@ -381,8 +433,11 @@ export default function SidebarWithDnd({
         <DndContext
           sensors={sensors}
           collisionDetection={collisionDetection}
+          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+          onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
         >
           <nav className="space-y-1.5 flex-1">
             <SortableContext
@@ -418,6 +473,19 @@ export default function SidebarWithDnd({
               </div>
             )}
           </nav>
+
+          <DragOverlay dropAnimation={{ duration: 200, easing: "cubic-bezier(0.18, 0.67, 0.6, 1.22)" }}>
+            {activeOverlay ? (
+              <div className="flex items-center gap-1 rounded-md bg-white shadow-lg ring-1 ring-blue-300">
+                <div className="cursor-grabbing p-1">
+                  <GripVertical size={14} className="text-gray-400" />
+                </div>
+                <div className="flex-1 px-3 py-2.5 text-sm font-semibold text-gray-700">
+                  <TitleWithBadges title={activeOverlay.title} />
+                </div>
+              </div>
+            ) : null}
+          </DragOverlay>
 
         </DndContext>
 
@@ -632,7 +700,7 @@ const SortableNavItem = memo(function SortableNavItem({
 
           <div
             className={`grid transition-all duration-300 ease-in-out ${
-              isOpen
+              isOpen && !isDragging
                 ? "grid-rows-[1fr] opacity-100"
                 : "grid-rows-[0fr] opacity-0"
             }`}
