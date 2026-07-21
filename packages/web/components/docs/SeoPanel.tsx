@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Search, Sparkles, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,18 @@ export default function SeoPanel({
   const metaTitle = seo.metaTitle ?? "";
   const metaDescription = seo.metaDescription ?? "";
   const schemaType = seo.schemaType ?? "Article";
+  const robots = {
+    index: seo.robots?.index ?? true,
+    follow: seo.robots?.follow ?? true,
+    maxSnippet: seo.robots?.maxSnippet ?? -1,
+    maxVideoPreview: seo.robots?.maxVideoPreview ?? -1,
+    maxImagePreview: seo.robots?.maxImagePreview ?? "large",
+  };
+  const sitemap = {
+    include: seo.sitemap?.include ?? true,
+    priority: seo.sitemap?.priority ?? (slug?.includes("/") ? 0.7 : 0.9),
+    changeFrequency: seo.sitemap?.changeFrequency ?? "weekly",
+  };
 
   const effectiveTitle = metaTitle || docTitle || "";
   const effectiveDesc = metaDescription || docDescription || "";
@@ -218,6 +231,90 @@ export default function SeoPanel({
             )}
           </div>
 
+          {/* Canonical URL */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-gray-600">Canonical URL Override</Label>
+            <Input
+              value={seo.canonicalUrl ?? ""}
+              onChange={(e) => onChange({ ...seo, canonicalUrl: e.target.value })}
+              placeholder="Leave empty to use this document URL"
+              className="text-sm"
+            />
+            <p className="text-xs text-gray-400">
+              Use only when this page should consolidate ranking signals to another URL
+            </p>
+          </div>
+
+          {/* Robots */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">Robots</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2">
+                <span className="text-sm text-gray-700">Index</span>
+                <Switch
+                  checked={robots.index}
+                  onCheckedChange={(checked) =>
+                    onChange({ ...seo, robots: { ...robots, index: checked } })
+                  }
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2">
+                <span className="text-sm text-gray-700">Follow</span>
+                <Switch
+                  checked={robots.follow}
+                  onCheckedChange={(checked) =>
+                    onChange({ ...seo, robots: { ...robots, follow: checked } })
+                  }
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">Max Snippet</Label>
+                <Input
+                  type="number"
+                  value={robots.maxSnippet}
+                  onChange={(e) =>
+                    onChange({
+                      ...seo,
+                      robots: { ...robots, maxSnippet: Number(e.target.value) },
+                    })
+                  }
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">Image Preview</Label>
+                <Select
+                  value={robots.maxImagePreview}
+                  onValueChange={(val) =>
+                    onChange({
+                      ...seo,
+                      robots: {
+                        ...robots,
+                        maxImagePreview: val as NonNullable<
+                          SeoData["robots"]
+                        >["maxImagePreview"],
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="large">Large</SelectItem>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">
+              Default: index, follow, max-snippet:-1, max-video-preview:-1, max-image-preview:large
+            </p>
+          </div>
+
           {/* Slug */}
           {slug !== undefined && onSlugChange && (
             <div className="space-y-1.5">
@@ -270,6 +367,105 @@ export default function SeoPanel({
             <p className="text-xs text-gray-400">
               Controls structured data type for rich results in Google Search
             </p>
+          </div>
+
+          {/* Social Sharing */}
+          <div className="space-y-3">
+            <Label className="text-xs font-medium text-gray-600">Social Sharing</Label>
+            <Input
+              value={seo.ogTitle ?? ""}
+              onChange={(e) => onChange({ ...seo, ogTitle: e.target.value })}
+              placeholder="Open Graph title, defaults to meta title"
+              className="text-sm"
+            />
+            <Input
+              value={seo.ogDescription ?? ""}
+              onChange={(e) => onChange({ ...seo, ogDescription: e.target.value })}
+              placeholder="Open Graph description, defaults to meta description"
+              className="text-sm"
+            />
+            <Input
+              value={seo.ogImage ?? ""}
+              onChange={(e) => onChange({ ...seo, ogImage: e.target.value })}
+              placeholder="https://example.com/og-image.jpg"
+              className="text-sm"
+            />
+            <Input
+              value={seo.ogImageAlt ?? ""}
+              onChange={(e) => onChange({ ...seo, ogImageAlt: e.target.value })}
+              placeholder="Image alt text, defaults to page title"
+              className="text-sm"
+            />
+          </div>
+
+          {/* Sitemap */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-gray-600">Sitemap</Label>
+            <label className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2">
+              <span className="text-sm text-gray-700">Include in sitemap</span>
+              <Switch
+                checked={sitemap.include}
+                onCheckedChange={(checked) =>
+                  onChange({ ...seo, sitemap: { ...sitemap, include: checked } })
+                }
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">Priority</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={sitemap.priority}
+                  onChange={(e) =>
+                    onChange({
+                      ...seo,
+                      sitemap: { ...sitemap, priority: Number(e.target.value) },
+                    })
+                  }
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-gray-500">Change Frequency</Label>
+                <Select
+                  value={sitemap.changeFrequency}
+                  onValueChange={(val) =>
+                    onChange({
+                      ...seo,
+                      sitemap: {
+                        ...sitemap,
+                        changeFrequency: val as NonNullable<SeoData["sitemap"]>["changeFrequency"],
+                      },
+                    })
+                  }
+                >
+                  <SelectTrigger className="text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="yearly">Yearly</SelectItem>
+                    <SelectItem value="never">Never</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          {/* Focus Keyword */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-gray-600">Focus Keyword</Label>
+            <Input
+              value={seo.focusKeyword ?? ""}
+              onChange={(e) => onChange({ ...seo, focusKeyword: e.target.value })}
+              placeholder="Primary query this page should target"
+              className="text-sm"
+            />
           </div>
 
           {/* Google Preview */}
