@@ -32,6 +32,26 @@ export interface Block {
   children?: Block[];
 }
 
+export interface SeoData {
+  metaTitle?: string;
+  metaDescription?: string;
+  schemaType?: "Article" | "TechArticle" | "HowTo" | "FAQPage";
+  canonicalUrl?: string;
+  robots?: {
+    index?: boolean;
+    follow?: boolean;
+    maxSnippet?: number;
+    maxVideoPreview?: number;
+    maxImagePreview?: "none" | "standard" | "large";
+  };
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogImageAlt?: string;
+  twitterCard?: "summary" | "summary_large_image";
+  focusKeyword?: string;
+}
+
 export interface DocContent {
   id?: string;
   slug: string;
@@ -41,6 +61,7 @@ export interface DocContent {
   published?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  seo?: SeoData;
 }
 
 export interface Project {
