@@ -45,6 +45,12 @@ export function ProjectGeneralSettings({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
+  const [isUploadingOrgLogo, setIsUploadingOrgLogo] = useState(false);
+  const [isSavingOrgFields, setIsSavingOrgFields] = useState(false);
+  const [orgFields, setOrgFields] = useState({
+    name: projectMetadata.organization?.name || "",
+    url: projectMetadata.organization?.url || "",
+  });
   const [isClearingCache, setIsClearingCache] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -380,6 +386,103 @@ export function ProjectGeneralSettings({
     }
   };
 
+  const organization = metadata.organization || {};
+
+  const saveOrganization = async (updatedOrganization: Record<string, any>) => {
+    const updatedMetadata = { ...metadata, organization: updatedOrganization };
+    setMetadata(updatedMetadata);
+
+    const response = await fetch(`/api/projects/${projectSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: projectName, slug: projectSlug, metadata: updatedMetadata }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Failed to save organization override");
+    }
+  };
+
+  const handleOrgLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Error", description: "Please upload an image file", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Error", description: "Image must be less than 2MB", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingOrgLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!response.ok) throw new Error("Failed to upload logo");
+
+      const { url } = await response.json();
+      await saveOrganization({ ...organization, logo: url });
+
+      toast({ title: "Success", description: "Organization logo uploaded and saved successfully" });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload logo",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingOrgLogo(false);
+    }
+  };
+
+  const handleRemoveOrgLogo = async () => {
+    try {
+      await saveOrganization({ ...organization, logo: "" });
+      toast({ title: "Success", description: "Organization logo removed successfully" });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to remove logo",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveOrgFields = async () => {
+    const urlPattern = /^https?:\/\/.+/;
+    if (orgFields.url && !urlPattern.test(orgFields.url)) {
+      toast({
+        title: "Error",
+        description: "Organization URL must be a valid URL starting with http:// or https://",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSavingOrgFields(true);
+    try {
+      await saveOrganization({ ...organization, name: orgFields.name, url: orgFields.url });
+      toast({ title: "Success", description: "Organization override saved successfully" });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save organization override",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingOrgFields(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Project Details */}
@@ -710,6 +813,114 @@ export function ProjectGeneralSettings({
               </p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Organization Override */}
+      <div className="bg-white border rounded-lg p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold">Organization Override</h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Optional. Overrides the instance-wide organization identity (set under global
+            Settings) for this project only — useful when this project belongs to a different
+            organization. Any field left blank falls back to the global default.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="org-name">Organization Name</Label>
+            <Input
+              id="org-name"
+              value={orgFields.name}
+              onChange={(e) => setOrgFields({ ...orgFields, name: e.target.value })}
+              placeholder="Falls back to the global organization name"
+              className="mt-1"
+              disabled={!isSuperAdmin}
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="org-url">Organization URL</Label>
+            <Input
+              id="org-url"
+              type="url"
+              value={orgFields.url}
+              onChange={(e) => setOrgFields({ ...orgFields, url: e.target.value })}
+              placeholder="Falls back to the global organization URL"
+              className="mt-1"
+              disabled={!isSuperAdmin}
+            />
+          </div>
+
+          {isSuperAdmin && (
+            <div className="flex justify-end">
+              <Button onClick={handleSaveOrgFields} disabled={isSavingOrgFields} size="sm">
+                {isSavingOrgFields ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+                ) : (
+                  <><Save className="h-4 w-4 mr-2" />Save</>
+                )}
+              </Button>
+            </div>
+          )}
+
+          <div>
+            <Label>Organization Logo</Label>
+            {organization.logo && (
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-md mt-1">
+                <div className="relative h-10 w-40 flex items-center justify-center bg-white border rounded">
+                  <Image
+                    src={organization.logo}
+                    alt="Organization logo"
+                    width={150}
+                    height={40}
+                    className="object-contain max-h-10"
+                  />
+                </div>
+                {isSuperAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveOrgLogo}
+                    disabled={isUploadingOrgLogo}
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {isSuperAdmin && (
+              <div className="mt-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingOrgLogo}
+                    onClick={() => document.getElementById("org-logo-upload")?.click()}
+                  >
+                    {isUploadingOrgLogo ? (
+                      <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+                    ) : (
+                      <><Upload className="h-4 w-4 mr-2" />{organization.logo ? "Change Logo" : "Upload Logo"}</>
+                    )}
+                  </Button>
+                  <input
+                    id="org-logo-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleOrgLogoUpload}
+                    className="hidden"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Falls back to the global organization logo. PNG, JPG, or SVG. Max 2MB.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
