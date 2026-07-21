@@ -8,6 +8,10 @@ import "./mainStyle.css";
 export const metadata: Metadata = {
   title: "TG Documentation",
   description: "Documentation builder for ThemeGrill",
+  openGraph: {
+    locale: "en_US",
+    siteName: "TG Documentation",
+  },
 };
 
 export default async function RootLayout({
