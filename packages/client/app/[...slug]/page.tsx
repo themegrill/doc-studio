@@ -1,10 +1,58 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import DocRendererClient from "@/components/docs/DocRendererClient";
+import DocRenderer from "@/components/docs/DocRenderer";
 import SectionPage from "@/components/docs/SectionPage";
-import { getDoc, getNavigation, PROJECT_SLUG } from "@/lib/api";
+import { getDoc, getNavigation, getProject, PROJECT_SLUG } from "@/lib/api";
 import type { Navigation } from "@/lib/api";
 import { stripTitleHTML } from "@/lib/parse-title-badges";
 import type { BreadcrumbItem } from "@/components/docs/Breadcrumb";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string[] }>;
+}): Promise<Metadata> {
+  const resolvedParams = await params;
+  const slug = resolvedParams.slug.join("/");
+
+  const [doc, project] = await Promise.all([getDoc(slug), getProject()]);
+
+  if (!doc) return {};
+
+  const seo = doc.seo || {};
+  const title = seo.metaTitle || stripTitleHTML(doc.title);
+  const description = seo.metaDescription || doc.description || project?.description;
+  const ogImage = seo.ogImage || project?.metadata?.logo || undefined;
+
+  return {
+    title,
+    description,
+    ...(seo.canonicalUrl && { alternates: { canonical: seo.canonicalUrl } }),
+    ...(seo.robots && {
+      robots: {
+        index: seo.robots.index ?? true,
+        follow: seo.robots.follow ?? true,
+        ...(seo.robots.maxSnippet !== undefined && { "max-snippet": seo.robots.maxSnippet }),
+        ...(seo.robots.maxImagePreview && { "max-image-preview": seo.robots.maxImagePreview }),
+        ...(seo.robots.maxVideoPreview !== undefined && {
+          "max-video-preview": seo.robots.maxVideoPreview,
+        }),
+      },
+    }),
+    openGraph: {
+      title: seo.ogTitle || title,
+      description: seo.ogDescription || description,
+      type: "article",
+      ...(ogImage && { images: [{ url: ogImage, alt: seo.ogImageAlt || title }] }),
+    },
+    twitter: {
+      card: seo.twitterCard || (ogImage ? "summary_large_image" : "summary"),
+      title: seo.ogTitle || title,
+      description: seo.ogDescription || description,
+      ...(ogImage && { images: [ogImage] }),
+    },
+  };
+}
 
 function buildBreadcrumbs(
   slug: string,
@@ -99,7 +147,7 @@ export default async function DocPage({
       return (
         <>
           {sectionDoc && (
-            <DocRendererClient
+            <DocRenderer
               doc={sectionDoc}
               slug={slug}
               projectSlug={PROJECT_SLUG}
@@ -123,7 +171,7 @@ export default async function DocPage({
 
   if (doc) {
     return (
-      <DocRendererClient
+      <DocRenderer
         doc={doc}
         slug={slug}
         projectSlug={PROJECT_SLUG}
