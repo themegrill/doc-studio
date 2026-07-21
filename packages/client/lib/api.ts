@@ -165,3 +165,22 @@ export async function getDoc(slug: string): Promise<DocContent | null> {
     return null;
   }
 }
+
+export interface Organization {
+  name: string;
+  logo: string;
+  url: string;
+}
+
+export async function getOrganization(): Promise<Organization | null> {
+  try {
+    const res = await fetchWithRetry(
+      `${API_BASE_URL}/api/organization`,
+      { next: { revalidate: 300 } }
+    );
+    if (!res || !res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
