@@ -678,3 +678,62 @@ button[class*="search"] {
   display: inline;
   font-size: 0.95rem;
 }
+
+/* For Table UI Fix */
+.bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table {
+	 margin: 24px 0;
+	 border-radius: 12px;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr th {
+	 padding: 16px !important;
+	 background: #1e1e1e !important;
+	 border: 0 !important;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr th:first-child {
+	 border-radius: 12px 0 0 12px;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr th:last-child {
+	 border-radius: 0 12px 12px 0;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr th p {
+	 color: #fff;
+	 font-weight: 600;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr td {
+	 border: 0 !important;
+	 padding: 16px !important;
+}
+.bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr td p {
+  font-size: 15px;
+  line-height: 25px;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr td:first-child {
+	 border-radius: 12px 0 0 12px;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr td:last-child {
+	 border-radius: 0 12px 12px 0;
+}
+ .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr:nth-child(odd) td {
+	 background: #f7f7f7;
+}
+
+.dark .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr th {
+	 padding: 16px !important;
+	 background: #ffffff !important;
+	 border: 0 !important;
+}
+
+.dark .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr th p {
+	 color: #1e1e1e;
+	 font-weight: 600;
+}
+
+.dark .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr td p {
+  font-size: 15px;
+  line-height: 25px;
+  color: #d2d2d2;
+}
+
+.dark .bn-block-outer .bn-block-content[data-content-type="table"] .tableWrapper-inner table tbody tr:nth-child(odd) td {
+	 background: rgba(255, 255, 255, 0.15) !important;
+}
