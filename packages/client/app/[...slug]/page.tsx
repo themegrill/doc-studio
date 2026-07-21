@@ -60,7 +60,11 @@ export async function generateMetadata({
   const title = seo.metaTitle || stripTitleHTML(doc.title);
   const description = seo.metaDescription || doc.description || project?.description;
   const ogImage =
-    seo.ogImage || project?.metadata?.logo || organization?.logo || undefined;
+    seo.ogImage ||
+    project?.metadata?.logo ||
+    project?.metadata?.organization?.logo ||
+    organization?.logo ||
+    undefined;
 
   return {
     title,
