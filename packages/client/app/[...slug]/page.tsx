@@ -1,11 +1,44 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import DocRenderer from "@/components/docs/DocRenderer";
 import SectionPage from "@/components/docs/SectionPage";
-import { getDoc, getNavigation, getProject, PROJECT_SLUG } from "@/lib/api";
-import type { Navigation } from "@/lib/api";
+import { getDoc, getNavigation, getOrganization, getProject, PROJECT_SLUG } from "@/lib/api";
+import type { DocContent, Navigation, Organization, Project } from "@/lib/api";
 import { stripTitleHTML } from "@/lib/parse-title-badges";
 import type { BreadcrumbItem } from "@/components/docs/Breadcrumb";
+import { buildDocJsonLd } from "@/lib/json-ld";
+
+async function getBaseUrl(): Promise<string> {
+  const h = await headers();
+  const host = h.get("host");
+  const protocol = h.get("x-forwarded-proto") || "http";
+  return `${protocol}://${host}`;
+}
+
+function JsonLd({
+  organization,
+  project,
+  doc,
+  slug,
+  breadcrumbs,
+  baseUrl,
+}: {
+  organization: Organization | null;
+  project: Project | null;
+  doc: DocContent;
+  slug: string;
+  breadcrumbs: BreadcrumbItem[];
+  baseUrl: string;
+}) {
+  const jsonLd = buildDocJsonLd({ baseUrl, organization, project, doc, slug, breadcrumbs });
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
+}
 
 export async function generateMetadata({
   params,
@@ -15,14 +48,19 @@ export async function generateMetadata({
   const resolvedParams = await params;
   const slug = resolvedParams.slug.join("/");
 
-  const [doc, project] = await Promise.all([getDoc(slug), getProject()]);
+  const [doc, project, organization] = await Promise.all([
+    getDoc(slug),
+    getProject(),
+    getOrganization(),
+  ]);
 
   if (!doc) return {};
 
   const seo = doc.seo || {};
   const title = seo.metaTitle || stripTitleHTML(doc.title);
   const description = seo.metaDescription || doc.description || project?.description;
-  const ogImage = seo.ogImage || project?.metadata?.logo || undefined;
+  const ogImage =
+    seo.ogImage || project?.metadata?.logo || organization?.logo || undefined;
 
   return {
     title,
@@ -103,7 +141,12 @@ export default async function DocPage({
   const slug = resolvedParams.slug.join("/");
 
   // Always fetch navigation — needed for section check and breadcrumbs
-  const navigation = await getNavigation();
+  const [navigation, project, organization, baseUrl] = await Promise.all([
+    getNavigation(),
+    getProject(),
+    getOrganization(),
+    getBaseUrl(),
+  ]);
 
   // For single-segment slugs, check if it matches a navigation section first.
   // Section pages take priority over documents with the same slug.
@@ -147,12 +190,22 @@ export default async function DocPage({
       return (
         <>
           {sectionDoc && (
-            <DocRenderer
-              doc={sectionDoc}
-              slug={slug}
-              projectSlug={PROJECT_SLUG}
-              breadcrumbs={buildBreadcrumbs(slug, navigation, sectionDoc.title)}
-            />
+            <>
+              <JsonLd
+                organization={organization}
+                project={project}
+                doc={sectionDoc}
+                slug={slug}
+                breadcrumbs={buildBreadcrumbs(slug, navigation, sectionDoc.title)}
+                baseUrl={baseUrl}
+              />
+              <DocRenderer
+                doc={sectionDoc}
+                slug={slug}
+                projectSlug={PROJECT_SLUG}
+                breadcrumbs={buildBreadcrumbs(slug, navigation, sectionDoc.title)}
+              />
+            </>
           )}
           <SectionPage
             projectSlug={PROJECT_SLUG}
@@ -171,12 +224,22 @@ export default async function DocPage({
 
   if (doc) {
     return (
-      <DocRenderer
-        doc={doc}
-        slug={slug}
-        projectSlug={PROJECT_SLUG}
-        breadcrumbs={buildBreadcrumbs(slug, navigation, doc.title)}
-      />
+      <>
+        <JsonLd
+          organization={organization}
+          project={project}
+          doc={doc}
+          slug={slug}
+          breadcrumbs={buildBreadcrumbs(slug, navigation, doc.title)}
+          baseUrl={baseUrl}
+        />
+        <DocRenderer
+          doc={doc}
+          slug={slug}
+          projectSlug={PROJECT_SLUG}
+          breadcrumbs={buildBreadcrumbs(slug, navigation, doc.title)}
+        />
+      </>
     );
   }
 
