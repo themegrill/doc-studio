@@ -100,7 +100,12 @@ export interface Project {
   name: string;
   slug: string;
   description?: string;
-  metadata?: { logo?: string; favicon?: string; [key: string]: any };
+  metadata?: {
+    logo?: string;
+    favicon?: string;
+    organization?: { name?: string; logo?: string; url?: string };
+    [key: string]: any;
+  };
 }
 
 export async function getProject(): Promise<Project | null> {

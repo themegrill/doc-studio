@@ -37,10 +37,18 @@ export function buildDocJsonLd({
 
   const title = seo.metaTitle || stripTitleHTML(doc.title);
   const description = seo.metaDescription || doc.description || project?.description || undefined;
-  const orgLogo = organization?.logo || project?.metadata?.logo || undefined;
-  const ogImage = seo.ogImage || orgLogo;
-  const orgName = organization?.name || project?.name || "Documentation";
-  const orgUrl = organization?.url || baseUrl;
+
+  // A project can override the shared org identity per-field (see
+  // project.metadata.organization); any field left unset falls back to the
+  // instance-wide default from the Settings page.
+  const orgOverride = project?.metadata?.organization;
+  const orgName = orgOverride?.name || organization?.name || project?.name || "Documentation";
+  const orgLogo = orgOverride?.logo || organization?.logo || undefined;
+  const orgUrl = orgOverride?.url || organization?.url || baseUrl;
+
+  // Social preview image prefers the project's own site logo over the org
+  // logo — a docs site's branding usually differs from the parent company's.
+  const ogImage = seo.ogImage || project?.metadata?.logo || orgLogo;
   const schemaType = SCHEMA_TYPES.includes(seo.schemaType as any) ? seo.schemaType : "Article";
 
   const graph: Record<string, unknown>[] = [
