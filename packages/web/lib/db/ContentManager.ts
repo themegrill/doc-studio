@@ -6,6 +6,32 @@ export interface SeoData {
   metaTitle?: string;
   metaDescription?: string;
   schemaType?: "Article" | "TechArticle" | "HowTo" | "FAQPage";
+  canonicalUrl?: string;
+  robots?: {
+    index?: boolean;
+    follow?: boolean;
+    maxSnippet?: number;
+    maxVideoPreview?: number;
+    maxImagePreview?: "none" | "standard" | "large";
+  };
+  ogTitle?: string;
+  ogDescription?: string;
+  ogImage?: string;
+  ogImageAlt?: string;
+  twitterCard?: "summary" | "summary_large_image";
+  sitemap?: {
+    include?: boolean;
+    priority?: number;
+    changeFrequency?:
+      | "always"
+      | "hourly"
+      | "daily"
+      | "weekly"
+      | "monthly"
+      | "yearly"
+      | "never";
+  };
+  focusKeyword?: string;
 }
 
 export interface DocMeta {
@@ -17,6 +43,7 @@ export interface DocMeta {
   updatedAt?: string;
   published?: boolean;
   orderIndex?: number;
+  seo?: SeoData;
 }
 
 export interface Block {
@@ -430,7 +457,7 @@ export class ContentManager {
   async listTrashedDocs(projectId: string): Promise<DocMeta[]> {
     try {
       const docs = await this.sql`
-        SELECT id, slug, title, description, created_at, updated_at, published, order_index
+        SELECT id, slug, title, description, created_at, updated_at, published, order_index, seo
         FROM documents
         WHERE project_id = ${projectId} AND deleted_at IS NOT NULL
         ORDER BY deleted_at DESC
@@ -445,6 +472,7 @@ export class ContentManager {
         updatedAt: doc.updated_at,
         published: doc.published,
         orderIndex: doc.order_index,
+        seo: (doc.seo as SeoData) || {},
       }));
     } catch (error) {
       console.error("Error listing trashed documents:", error);
@@ -455,7 +483,7 @@ export class ContentManager {
   async listDocs(projectId: string): Promise<DocMeta[]> {
     try {
       const docs = await this.sql`
-        SELECT id, slug, title, description, created_at, updated_at, published, order_index
+        SELECT id, slug, title, description, created_at, updated_at, published, order_index, seo
         FROM documents
         WHERE project_id = ${projectId} AND published = true AND deleted_at IS NULL
         ORDER BY order_index ASC
@@ -470,6 +498,7 @@ export class ContentManager {
         updatedAt: doc.updated_at,
         published: doc.published,
         orderIndex: doc.order_index,
+        seo: (doc.seo as SeoData) || {},
       }));
     } catch (error) {
       console.error("Error listing documents:", error);
