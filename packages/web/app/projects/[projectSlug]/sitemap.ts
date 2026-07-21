@@ -25,12 +25,14 @@ export default async function sitemap({
 
   const baseUrl = getBaseUrl();
 
-  return docs.map((doc) => ({
-    url: project.domain
-      ? `https://${project.domain}/docs/${doc.slug}`
-      : `${baseUrl}/projects/${projectSlug}/docs/${doc.slug}`,
-    lastModified: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
-    changeFrequency: "weekly" as const,
-    priority: doc.slug.includes("/") ? 0.7 : 0.9,
-  }));
+  return docs
+    .filter((doc) => doc.seo?.sitemap?.include !== false)
+    .map((doc) => ({
+      url: project.domain
+        ? `https://${project.domain}/docs/${doc.slug}`
+        : `${baseUrl}/projects/${projectSlug}/docs/${doc.slug}`,
+      lastModified: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
+      changeFrequency: doc.seo?.sitemap?.changeFrequency || ("weekly" as const),
+      priority: doc.seo?.sitemap?.priority ?? (doc.slug.includes("/") ? 0.7 : 0.9),
+    }));
 }
