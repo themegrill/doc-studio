@@ -47,7 +47,7 @@ export default function Sidebar({ navigation, projectMetadata = {} }: SidebarPro
       </div>
       <nav className="space-y-1 flex-1">
         {navigation?.routes?.map((route) => (
-          <NavItem key={route.path ?? route.title} route={route} pathname={pathname} depth={0} />
+          <NavItem key={route.path ?? route.title} route={route} pathname={pathname!} depth={0} />
         ))}
       </nav>
 
