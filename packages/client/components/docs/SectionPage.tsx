@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import { FolderOpen } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
