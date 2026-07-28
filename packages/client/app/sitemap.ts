@@ -31,11 +31,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const docs = await Promise.all(collectSlugs(navigation.routes).map((slug) => getDoc(slug)));
 
   return docs
-    .filter((doc) => doc?.published !== false && doc?.seo?.sitemap?.include !== false)
+    .filter(
+      (doc): doc is NonNullable<typeof doc> =>
+        doc !== null && doc.published !== false && doc.seo?.sitemap?.include !== false
+    )
     .map((doc) => ({
-      url: new URL(`/${doc!.slug}`, baseUrl).toString(),
-      lastModified: doc!.updatedAt ? new Date(doc!.updatedAt) : new Date(),
-      changeFrequency: doc!.seo?.sitemap?.changeFrequency || "weekly",
-      priority: doc!.seo?.sitemap?.priority ?? (doc!.slug.includes("/") ? 0.7 : 0.9),
+      url: new URL(`/${doc.slug}`, baseUrl).toString(),
+      lastModified: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
+      changeFrequency: doc.seo?.sitemap?.changeFrequency || "weekly",
+      priority: doc.seo?.sitemap?.priority ?? (doc.slug.includes("/") ? 0.7 : 0.9),
     }));
 }
