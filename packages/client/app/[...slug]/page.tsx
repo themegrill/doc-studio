@@ -61,6 +61,7 @@ export async function generateMetadata({
   const description = seo.metaDescription || doc.description || project?.description;
   const ogImage =
     seo.ogImage ||
+    project?.metadata?.ogImage ||
     project?.metadata?.logo ||
     project?.metadata?.organization?.logo ||
     organization?.logo ||

@@ -12,6 +12,7 @@ interface OrganizationConfig {
   name: string;
   logo: string;
   url: string;
+  organizationId: string;
 }
 
 export function OrganizationSettings() {
@@ -20,7 +21,7 @@ export function OrganizationSettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [config, setConfig] = useState<OrganizationConfig>({ name: "", logo: "", url: "" });
+  const [config, setConfig] = useState<OrganizationConfig>({ name: "", logo: "", url: "", organizationId: "" });
 
   useEffect(() => {
     fetch("/api/organization")
@@ -137,6 +138,23 @@ export function OrganizationSettings() {
             onChange={(e) => setConfig({ ...config, url: e.target.value })}
             placeholder="https://example.com"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="org-schema-id">Canonical Organization ID (schema.org @id)</Label>
+          <Input
+            id="org-schema-id"
+            type="text"
+            value={config.organizationId}
+            onChange={(e) => setConfig({ ...config, organizationId: e.target.value })}
+            placeholder="https://parent-company.com/#organization"
+          />
+          <p className="text-xs text-gray-500">
+            Optional. If your organization already publishes a canonical Organization entity
+            elsewhere (e.g. on your main company site), enter its schema.org @id URL here.
+            Doc pages will reference it directly instead of generating a new Organization
+            entity in their JSON-LD.
+          </p>
         </div>
 
         <div className="space-y-2">

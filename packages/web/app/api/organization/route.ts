@@ -9,9 +9,10 @@ interface OrganizationConfig {
   name: string;
   logo: string;
   url: string;
+  organizationId: string;
 }
 
-const DEFAULTS: OrganizationConfig = { name: "", logo: "", url: "" };
+const DEFAULTS: OrganizationConfig = { name: "", logo: "", url: "", organizationId: "" };
 
 /**
  * Public organization identity (name/logo/url), shared across all projects.
@@ -43,12 +44,13 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { name, logo, url } = body as Partial<OrganizationConfig>;
+  const { name, logo, url, organizationId } = body as Partial<OrganizationConfig>;
 
   const value = {
     name: (name ?? "").trim(),
     logo: (logo ?? "").trim(),
     url: (url ?? "").trim(),
+    organizationId: (organizationId ?? "").trim(),
   };
 
   await sql`

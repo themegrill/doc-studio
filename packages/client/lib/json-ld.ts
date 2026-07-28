@@ -28,7 +28,7 @@ export function buildDocJsonLd({
 }) {
   const seo = doc.seo || {};
   const pageUrl = `${baseUrl}/${slug}`;
-  const orgId = `${baseUrl}/#organization`;
+  const orgId = organization?.organizationId?.trim() || `${baseUrl}/#organization`;
   const websiteId = `${baseUrl}/#website`;
   const webpageId = `${pageUrl}#webpage`;
   const breadcrumbId = `${pageUrl}#breadcrumb`;
@@ -44,28 +44,18 @@ export function buildDocJsonLd({
   const orgOverride = project?.metadata?.organization;
   const orgName = orgOverride?.name || organization?.name || project?.name || "Documentation";
   const orgLogo = orgOverride?.logo || organization?.logo || undefined;
-  const orgUrl = orgOverride?.url || organization?.url || baseUrl;
 
-  // Social preview image prefers the project's own site logo over the org
-  // logo — a docs site's branding usually differs from the parent company's.
-  const ogImage = seo.ogImage || project?.metadata?.logo || orgLogo;
+  // Social preview image prefers the project's own dedicated OG image, then
+  // its logo, over the org logo — a docs site's branding usually differs
+  // from the parent company's.
+  const ogImage = seo.ogImage || project?.metadata?.ogImage || project?.metadata?.logo || orgLogo;
   const schemaType = SCHEMA_TYPES.includes(seo.schemaType as any) ? seo.schemaType : "Article";
 
+  // The Organization entity itself is not embedded here — it's referenced by
+  // @id only. If `organization.organizationId` is configured, that points at
+  // a canonical Organization entity hosted elsewhere (e.g. the parent
+  // company's own site); otherwise it falls back to a local self-reference.
   const graph: Record<string, unknown>[] = [
-    {
-      "@type": "Organization",
-      "@id": orgId,
-      name: orgName,
-      url: orgUrl,
-      ...(orgLogo && {
-        logo: {
-          "@type": "ImageObject",
-          "@id": `${baseUrl}/#logo`,
-          url: orgLogo,
-          contentUrl: orgLogo,
-        },
-      }),
-    },
     {
       "@type": "WebSite",
       "@id": websiteId,

@@ -103,6 +103,7 @@ export interface Project {
   metadata?: {
     logo?: string;
     favicon?: string;
+    ogImage?: string;
     organization?: { name?: string; logo?: string; url?: string };
     [key: string]: any;
   };
@@ -175,6 +176,7 @@ export interface Organization {
   name: string;
   logo: string;
   url: string;
+  organizationId?: string;
 }
 
 export async function getOrganization(): Promise<Organization | null> {

@@ -46,6 +46,7 @@ export function ProjectGeneralSettings({
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
   const [isUploadingOrgLogo, setIsUploadingOrgLogo] = useState(false);
+  const [isUploadingOgImage, setIsUploadingOgImage] = useState(false);
   const [isSavingOrgFields, setIsSavingOrgFields] = useState(false);
   const [orgFields, setOrgFields] = useState({
     name: projectMetadata.organization?.name || "",
@@ -383,6 +384,83 @@ export function ProjectGeneralSettings({
       router.refresh();
     } catch (error) {
       toast({ title: "Error", description: "Failed to remove favicon", variant: "destructive" });
+    }
+  };
+
+  const handleOgImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Error", description: "Please upload an image file", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Error", description: "Image must be less than 2MB", variant: "destructive" });
+      return;
+    }
+
+    setIsUploadingOgImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!response.ok) throw new Error("Failed to upload image");
+
+      const { url } = await response.json();
+      const updatedMetadata = { ...metadata, ogImage: url };
+      setMetadata(updatedMetadata);
+
+      const saveResponse = await fetch(`/api/projects/${projectSlug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: projectName, slug: projectSlug, metadata: updatedMetadata }),
+      });
+
+      if (!saveResponse.ok) {
+        const errorData = await saveResponse.json();
+        throw new Error(errorData.error || "Failed to save social sharing image");
+      }
+
+      toast({ title: "Success", description: "Social sharing image uploaded and saved successfully" });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload image",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingOgImage(false);
+    }
+  };
+
+  const handleRemoveOgImage = async () => {
+    try {
+      const updatedMetadata = { ...metadata, ogImage: "" };
+      setMetadata(updatedMetadata);
+
+      const response = await fetch(`/api/projects/${projectSlug}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: projectName, slug: projectSlug, metadata: updatedMetadata }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to remove social sharing image");
+      }
+
+      toast({ title: "Success", description: "Social sharing image removed successfully" });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to remove image",
+        variant: "destructive",
+      });
     }
   };
 
@@ -810,6 +888,82 @@ export function ProjectGeneralSettings({
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 ICO, PNG, or SVG. Max 1MB. Recommended size: 32x32px
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Project Social Sharing Image */}
+      <div className="bg-white border rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold">Social Sharing Image</h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Default Open Graph/Twitter preview image for this project&apos;s docs (recommended:
+              1200x630px). Used when a document doesn&apos;t set its own social image, instead of
+              falling back to the project logo or organization logo.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {metadata.ogImage && (
+            <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-md">
+              <div className="relative h-20 w-36 flex items-center justify-center bg-white border rounded overflow-hidden">
+                <Image
+                  src={metadata.ogImage}
+                  alt="Social sharing image"
+                  width={288}
+                  height={151}
+                  className="object-cover"
+                />
+              </div>
+              {isSuperAdmin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveOgImage}
+                  disabled={isUploadingOgImage}
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Remove
+                </Button>
+              )}
+            </div>
+          )}
+
+          {isSuperAdmin && (
+            <div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isUploadingOgImage}
+                  onClick={() => document.getElementById("og-image-upload")?.click()}
+                >
+                  {isUploadingOgImage ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      {metadata.ogImage ? "Change Image" : "Upload Image"}
+                    </>
+                  )}
+                </Button>
+                <input
+                  id="og-image-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleOgImageUpload}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                PNG, JPG, or WebP. Max 2MB. Recommended size: 1200x630px
               </p>
             </div>
           )}
