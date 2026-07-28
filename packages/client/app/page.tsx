@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { FolderOpen, FileText } from "lucide-react";
-import { getProject, getNavigation } from "@/lib/api";
+import { getProject, getNavigation, getOrganization } from "@/lib/api";
 import type { NavRoute } from "@/lib/api";
 import { parseTitleWithBadges } from "@/lib/parse-title-badges";
 import { Badge } from "@/components/ui/badge-pro";
+import { buildHomeJsonLd } from "@/lib/json-ld";
 
 const MAX_DOCS_PREVIEW = 3;
 
@@ -33,19 +35,41 @@ function TitleWithBadges({ title }: { title: string }) {
 }
 
 export default async function RootPage() {
-  const [project, navigation] = await Promise.all([getProject(), getNavigation()]);
+  const [project, navigation, organization, requestHeaders] = await Promise.all([
+    getProject(),
+    getNavigation(),
+    getOrganization(),
+    headers(),
+  ]);
 
   if (!project || !navigation) {
     notFound();
   }
 
+  const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host");
+  const protocol =
+    requestHeaders.get("x-forwarded-proto") || (host?.startsWith("localhost") ? "http" : "https");
+  const baseUrl = host ? `${protocol}://${host}` : "http://localhost:3001";
   const sections = (navigation.routes || []).map((section: NavRoute) => ({
     ...section,
     count: section.children?.length ?? (section.path ? 1 : 0),
   }));
+  const jsonLd = buildHomeJsonLd({
+    baseUrl,
+    organization,
+    project,
+    sections: navigation.routes || [],
+  });
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8">
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
+      <div className="max-w-6xl mx-auto px-6 py-8">
       {/* Hero */}
       <div className="mb-10 pb-8 border-b border-gray-100 dark:border-gray-800">
         <h1 className="text-3xl font-medium tracking-tight text-gray-800 dark:text-gray-100 mb-3">
@@ -139,7 +163,8 @@ export default async function RootPage() {
           })}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
 

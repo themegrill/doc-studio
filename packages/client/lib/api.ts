@@ -81,6 +81,18 @@ export interface SeoData {
   ogImage?: string;
   ogImageAlt?: string;
   twitterCard?: "summary" | "summary_large_image";
+  sitemap?: {
+    include?: boolean;
+    priority?: number;
+    changeFrequency?:
+      | "always"
+      | "hourly"
+      | "daily"
+      | "weekly"
+      | "monthly"
+      | "yearly"
+      | "never";
+  };
   focusKeyword?: string;
 }
 
@@ -104,6 +116,8 @@ export interface Project {
     logo?: string;
     favicon?: string;
     ogImage?: string;
+    ogImageWidth?: number;
+    ogImageHeight?: number;
     organization?: { name?: string; logo?: string; url?: string };
     [key: string]: any;
   };

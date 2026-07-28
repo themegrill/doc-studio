@@ -1,8 +1,96 @@
-import type { DocContent, Organization, Project } from "@/lib/api";
+import type { DocContent, NavRoute, Organization, Project } from "@/lib/api";
 import type { BreadcrumbItem } from "@/components/docs/Breadcrumb";
 import { stripTitleHTML } from "@/lib/parse-title-badges";
 
 const SCHEMA_TYPES = ["Article", "TechArticle", "HowTo", "FAQPage"] as const;
+
+function buildOrganizationId(
+  baseUrl: string,
+  project: Project | null,
+  organization: Organization | null
+): string {
+  const projectOrganizationUrl = project?.metadata?.organization?.url?.trim();
+  if (projectOrganizationUrl) {
+    return `${projectOrganizationUrl.replace(/\/+$/, "")}/#organization`;
+  }
+  return organization?.organizationId?.trim() || `${baseUrl.replace(/\/+$/, "")}/#organization`;
+}
+
+export function buildHomeJsonLd({
+  baseUrl,
+  organization,
+  project,
+  sections,
+}: {
+  baseUrl: string;
+  organization: Organization | null;
+  project: Project;
+  sections: NavRoute[];
+}) {
+  const orgOverride = project.metadata?.organization;
+  const organizationId = buildOrganizationId(baseUrl, project, organization);
+  const organizationUrl = orgOverride?.url?.trim() || organization?.url?.trim();
+  const websiteId = `${baseUrl}/#website`;
+  const homepageId = `${baseUrl}/#webpage`;
+  const organizationName =
+    orgOverride?.name || organization?.name || project.name || "Documentation";
+  const organizationLogo = orgOverride?.logo || organization?.logo || project.metadata?.logo;
+
+  const sectionItems = sections
+    .map((section, index) => {
+      const slug =
+        section.slug || section.path?.replace(/^\/docs\//, "").replace(/^\/+|\/+$/g, "");
+      if (!slug) return null;
+      return {
+        "@type": "ListItem",
+        position: index + 1,
+        name: stripTitleHTML(section.title),
+        url: new URL(`/${slug}`, baseUrl).toString(),
+      };
+    })
+    .filter(Boolean);
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: organizationName,
+        ...(organizationUrl && { url: organizationUrl }),
+        ...(organizationLogo && {
+          logo: {
+            "@type": "ImageObject",
+            url: new URL(organizationLogo, baseUrl).toString(),
+          },
+        }),
+      },
+      {
+        "@type": "WebSite",
+        "@id": websiteId,
+        url: baseUrl,
+        name: project.name,
+        ...(project.description && { description: project.description }),
+        publisher: { "@id": organizationId },
+      },
+      {
+        "@type": "CollectionPage",
+        "@id": homepageId,
+        url: baseUrl,
+        name: `${project.name} Documentation`,
+        ...(project.description && { description: project.description }),
+        isPartOf: { "@id": websiteId },
+        about: { "@id": organizationId },
+        ...(sectionItems.length > 0 && {
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: sectionItems,
+          },
+        }),
+      },
+    ],
+  };
+}
 
 /**
  * Builds a schema.org @graph for a doc page: Organization, WebSite, WebPage,
@@ -28,7 +116,7 @@ export function buildDocJsonLd({
 }) {
   const seo = doc.seo || {};
   const pageUrl = `${baseUrl}/${slug}`;
-  const orgId = organization?.organizationId?.trim() || `${baseUrl}/#organization`;
+  const orgId = buildOrganizationId(baseUrl, project, organization);
   const websiteId = `${baseUrl}/#website`;
   const webpageId = `${pageUrl}#webpage`;
   const breadcrumbId = `${pageUrl}#breadcrumb`;
@@ -51,10 +139,9 @@ export function buildDocJsonLd({
   const ogImage = seo.ogImage || project?.metadata?.ogImage || project?.metadata?.logo || orgLogo;
   const schemaType = SCHEMA_TYPES.includes(seo.schemaType as any) ? seo.schemaType : "Article";
 
-  // The Organization entity itself is not embedded here — it's referenced by
-  // @id only. If `organization.organizationId` is configured, that points at
-  // a canonical Organization entity hosted elsewhere (e.g. the parent
-  // company's own site); otherwise it falls back to a local self-reference.
+  // The Organization entity is referenced by @id. The current project's
+  // organization URL is canonical; the instance-wide organization ID and a
+  // local docs-site ID are fallbacks for projects without that setting.
   const graph: Record<string, unknown>[] = [
     {
       "@type": "WebSite",

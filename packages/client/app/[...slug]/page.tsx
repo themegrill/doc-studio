@@ -8,6 +8,15 @@ import type { DocContent, Navigation, Organization, Project } from "@/lib/api";
 import { stripTitleHTML } from "@/lib/parse-title-badges";
 import type { BreadcrumbItem } from "@/components/docs/Breadcrumb";
 import { buildDocJsonLd } from "@/lib/json-ld";
+import {
+  buildCanonicalUrl,
+  buildRobotsContent,
+  buildSocialImage,
+  getSectionTitle,
+  stripHtml,
+  toAbsoluteUrl,
+  toIsoDate,
+} from "@/lib/seo/doc-metadata";
 
 async function getBaseUrl(): Promise<string> {
   const h = await headers();
@@ -48,51 +57,49 @@ export async function generateMetadata({
   const resolvedParams = await params;
   const slug = resolvedParams.slug.join("/");
 
-  const [doc, project, organization] = await Promise.all([
+  const [doc, project, organization, navigation, baseUrl] = await Promise.all([
     getDoc(slug),
     getProject(),
     getOrganization(),
+    getNavigation(),
+    getBaseUrl(),
   ]);
 
   if (!doc) return {};
 
   const seo = doc.seo || {};
-  const title = seo.metaTitle || stripTitleHTML(doc.title);
-  const description = seo.metaDescription || doc.description || project?.description;
-  const ogImage =
-    seo.ogImage ||
-    project?.metadata?.ogImage ||
-    project?.metadata?.logo ||
-    project?.metadata?.organization?.logo ||
-    organization?.logo ||
-    undefined;
+  const title = stripHtml(seo.metaTitle || doc.title);
+  const description =
+    stripHtml(seo.metaDescription || doc.description || project?.description) || undefined;
+  const canonicalUrl =
+    toAbsoluteUrl(seo.canonicalUrl, baseUrl) || buildCanonicalUrl(baseUrl, slug);
+  const sectionTitle = getSectionTitle(navigation?.routes, slug);
+  const image = buildSocialImage(seo, project, organization, title, baseUrl);
+  const publishedTime = toIsoDate(doc.createdAt);
+  const modifiedTime = toIsoDate(doc.updatedAt);
 
   return {
     title,
     description,
-    ...(seo.canonicalUrl && { alternates: { canonical: seo.canonicalUrl } }),
-    ...(seo.robots && {
-      robots: {
-        index: seo.robots.index ?? true,
-        follow: seo.robots.follow ?? true,
-        ...(seo.robots.maxSnippet !== undefined && { "max-snippet": seo.robots.maxSnippet }),
-        ...(seo.robots.maxImagePreview && { "max-image-preview": seo.robots.maxImagePreview }),
-        ...(seo.robots.maxVideoPreview !== undefined && {
-          "max-video-preview": seo.robots.maxVideoPreview,
-        }),
-      },
-    }),
+    robots: buildRobotsContent(seo),
+    alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: seo.ogTitle || title,
-      description: seo.ogDescription || description,
+      title: stripHtml(seo.ogTitle || title),
+      description: stripHtml(seo.ogDescription || description),
       type: "article",
-      ...(ogImage && { images: [{ url: ogImage, alt: seo.ogImageAlt || title }] }),
+      url: canonicalUrl,
+      locale: "en_US",
+      siteName: stripHtml(project?.name),
+      ...(sectionTitle && { section: sectionTitle }),
+      ...(publishedTime && { publishedTime }),
+      ...(modifiedTime && { modifiedTime }),
+      ...(image && { images: [image] }),
     },
     twitter: {
-      card: seo.twitterCard || (ogImage ? "summary_large_image" : "summary"),
-      title: seo.ogTitle || title,
-      description: seo.ogDescription || description,
-      ...(ogImage && { images: [ogImage] }),
+      card: seo.twitterCard || (image ? "summary_large_image" : "summary"),
+      title: stripHtml(seo.ogTitle || title),
+      description: stripHtml(seo.ogDescription || description),
+      ...(image && { images: [image.url] }),
     },
   };
 }
