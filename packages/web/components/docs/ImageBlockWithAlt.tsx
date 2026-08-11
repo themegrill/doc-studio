@@ -1,7 +1,8 @@
 "use client";
 
 import { createReactBlockSpec, ResizableFileBlockWrapper, useResolveUrl } from "@blocknote/react";
-import { Image as ImageIcon } from "lucide-react";
+import { Image as ImageIcon, AlertTriangle, BookOpen } from "lucide-react";
+import { useGuidelines } from "@/hooks/use-editorial";
 
 type ImageBlock = {
   id: string;
@@ -43,6 +44,10 @@ function ImageBlockContent({
   editor: any;
 }) {
   const hasUrl = !!block.props.url;
+  // Global ruleset: the alt requirement and the annotation style guide are
+  // org-wide, so this hint does not need the per-project override.
+  const { guidelines } = useGuidelines();
+  const altMissing = !String(block.props.alt ?? "").trim();
 
   return (
     <div>
@@ -73,6 +78,35 @@ function ImageBlockContent({
             placeholder="Describe this image for screen readers and SEO…"
             className="flex-1 text-xs text-gray-500 bg-transparent border-none outline-none placeholder:text-gray-300 focus:placeholder:text-gray-400 py-0.5"
           />
+
+          {/* Alt text is required by the editorial guidelines (DOCSTUDIO-45 §3)
+              but was previously only suggested by the placeholder. */}
+          {guidelines.images.requireAlt && altMissing && (
+            <span
+              title="Alt text is required by the documentation guidelines"
+              className="flex items-center gap-1 shrink-0 text-[10px] font-medium text-amber-600 select-none"
+            >
+              <AlertTriangle size={11} />
+              Required
+            </span>
+          )}
+
+          {/* Annotation consistency is human judgement, so the guide is linked
+              at the moment it is needed rather than checked. */}
+          {guidelines.images.annotationStyleGuideUrl && (
+            <a
+              href={guidelines.images.annotationStyleGuideUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              title="Annotation style guide"
+              className="flex items-center gap-1 shrink-0 text-[10px] font-medium text-gray-400 hover:text-blue-600 transition-colors select-none"
+            >
+              <BookOpen size={11} />
+              Annotation style
+            </a>
+          )}
         </div>
       )}
     </div>

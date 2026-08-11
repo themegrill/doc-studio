@@ -16,6 +16,7 @@ import {
   stripHtml,
   toAbsoluteUrl,
   toIsoDate,
+  applyTitleSuffix,
 } from "@/lib/seo/doc-metadata";
 
 async function getBaseUrl(): Promise<string> {
@@ -78,8 +79,14 @@ export async function generateMetadata({
   const publishedTime = toIsoDate(doc.createdAt);
   const modifiedTime = toIsoDate(doc.updatedAt);
 
+  // The site-name suffix the guideline calls a "smart tag" (DOCSTUDIO-45 §4.4).
+  // Applied to the document title only — Open Graph carries the site name
+  // separately via `siteName`, so appending it there too would duplicate it.
+  const titleSuffix =
+    project?.settings?.editorialGuidelines?.metaTitle?.suffix;
+
   return {
-    title,
+    title: applyTitleSuffix(title, titleSuffix),
     description,
     robots: buildRobotsContent(seo),
     alternates: { canonical: canonicalUrl },

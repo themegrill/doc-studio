@@ -18,6 +18,15 @@ type AIFeatures = {
   textGeneration: boolean;
   titleGeneration: boolean;
   descriptionGeneration: boolean;
+  editorialReview: boolean;
+};
+
+const DEFAULT_AI_FEATURES: AIFeatures = {
+  chat: true,
+  textGeneration: true,
+  titleGeneration: true,
+  descriptionGeneration: true,
+  editorialReview: true,
 };
 
 type AIConfig = {
@@ -156,16 +165,13 @@ export async function getAIConfig(): Promise<
     config.temperature = 0.7;
   }
 
-  const features = await getSetting<AIFeatures>("ai.features", {
-    chat: true,
-    textGeneration: true,
-    titleGeneration: true,
-    descriptionGeneration: true,
-  });
+  const features = await getSetting<AIFeatures>("ai.features", DEFAULT_AI_FEATURES);
 
   return {
     ...config,
-    enabledFeatures: features,
+    // A stored row written before a feature existed omits its key; merging over
+    // the defaults keeps new features on rather than silently disabled.
+    enabledFeatures: { ...DEFAULT_AI_FEATURES, ...features },
   };
 }
 
@@ -175,14 +181,9 @@ export async function getAIConfig(): Promise<
 export async function isAIFeatureEnabled(
   feature: keyof AIFeatures
 ): Promise<boolean> {
-  const features = await getSetting<AIFeatures>("ai.features", {
-    chat: true,
-    textGeneration: true,
-    titleGeneration: true,
-    descriptionGeneration: true,
-  });
+  const features = await getSetting<AIFeatures>("ai.features", DEFAULT_AI_FEATURES);
 
-  return features[feature] ?? false;
+  return { ...DEFAULT_AI_FEATURES, ...features }[feature] ?? false;
 }
 
 // Export a settings object for easier usage

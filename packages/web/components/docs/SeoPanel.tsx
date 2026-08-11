@@ -13,6 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { SeoData } from "@/lib/db/ContentManager";
+import {
+  DEFAULT_GUIDELINES,
+  type EditorialGuidelines,
+} from "@/lib/editorial/guidelines";
+import { countedMetaTitle, type Finding } from "@/lib/editorial/rules";
 
 interface SeoPanelProps {
   seo: SeoData;
@@ -22,6 +27,68 @@ interface SeoPanelProps {
   contentPreview?: string;
   slug?: string;
   onSlugChange?: (slug: string) => void;
+  /** Effective editorial guidelines — drives the character bands. */
+  guidelines?: EditorialGuidelines;
+  /** Live findings for the meta fields, shown inline under each input. */
+  findings?: Finding[];
+  /** Passed to the AI routes so per-project overrides apply to generation. */
+  projectSlug?: string | null;
+}
+
+/**
+ * A length counter that shows the band, not just the ceiling (DOCSTUDIO-45 §4).
+ *
+ * The old counter read "34 / 60" in neutral grey, because only the maximum was
+ * known. The minimum is equally part of the guideline and is the one people
+ * miss, so an under-length value now reads amber rather than looking fine.
+ */
+function BandCounter({
+  length,
+  min,
+  max,
+  suffixNote,
+}: {
+  length: number;
+  min: number;
+  max: number;
+  suffixNote?: string;
+}) {
+  const tooLong = length > max;
+  const tooShort = length > 0 && length < min;
+  const tone = tooLong || tooShort ? "text-amber-600" : length === 0 ? "text-gray-400" : "text-emerald-600";
+
+  return (
+    <p className={`text-xs ${tone}`}>
+      {length} / {min}–{max}
+      {tooLong
+        ? " — too long for Google"
+        : tooShort
+        ? " — too short"
+        : length === 0
+        ? " characters"
+        : ""}
+      {suffixNote && <span className="text-gray-400"> · {suffixNote}</span>}
+    </p>
+  );
+}
+
+/** Inline findings for one field, rendered under its input. */
+function FieldFindings({ findings }: { findings: Finding[] }) {
+  if (!findings.length) return null;
+  return (
+    <ul className="space-y-0.5">
+      {findings.map((finding) => (
+        <li
+          key={finding.id}
+          className={`text-xs ${
+            finding.severity === "warning" ? "text-amber-600" : "text-gray-400"
+          }`}
+        >
+          {finding.message}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export default function SeoPanel({
@@ -32,6 +99,9 @@ export default function SeoPanel({
   contentPreview,
   slug,
   onSlugChange,
+  guidelines = DEFAULT_GUIDELINES,
+  findings = [],
+  projectSlug,
 }: SeoPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [titleGenerating, setTitleGenerating] = useState(false);
@@ -72,6 +142,7 @@ export default function SeoPanel({
           content: contentPreview,
           docTitle,
           currentMetaTitle: metaTitle,
+          projectSlug,
         }),
       });
       if (!res.ok) {
@@ -99,6 +170,7 @@ export default function SeoPanel({
           content: contentPreview,
           docTitle,
           currentMetaDescription: metaDescription,
+          projectSlug,
         }),
       });
       if (!res.ok) {
@@ -169,14 +241,23 @@ export default function SeoPanel({
             {titleError ? (
               <p className="text-xs text-red-500">{titleError}</p>
             ) : (
-              <p
-                className={`text-xs ${
-                  effectiveTitle.length > 60 ? "text-amber-600" : "text-gray-400"
-                }`}
-              >
-                {effectiveTitle.length} / 60{" "}
-                {effectiveTitle.length > 60 ? "— too long for Google" : "characters"}
-              </p>
+              <>
+                <BandCounter
+                  length={countedMetaTitle(effectiveTitle, guidelines).length}
+                  min={guidelines.metaTitle.min}
+                  max={guidelines.metaTitle.max}
+                  suffixNote={
+                    guidelines.metaTitle.suffix
+                      ? guidelines.metaTitle.suffixCountsTowardLimit
+                        ? `includes "${guidelines.metaTitle.suffix.trim()}"`
+                        : `"${guidelines.metaTitle.suffix.trim()}" added automatically`
+                      : undefined
+                  }
+                />
+                <FieldFindings
+                  findings={findings.filter((f) => f.field === "metaTitle")}
+                />
+              </>
             )}
           </div>
 
@@ -220,14 +301,16 @@ export default function SeoPanel({
             {descError ? (
               <p className="text-xs text-red-500">{descError}</p>
             ) : (
-              <p
-                className={`text-xs ${
-                  effectiveDesc.length > 160 ? "text-amber-600" : "text-gray-400"
-                }`}
-              >
-                {effectiveDesc.length} / 160{" "}
-                {effectiveDesc.length > 160 ? "— too long for Google" : "characters"}
-              </p>
+              <>
+                <BandCounter
+                  length={effectiveDesc.length}
+                  min={guidelines.metaDescription.min}
+                  max={guidelines.metaDescription.max}
+                />
+                <FieldFindings
+                  findings={findings.filter((f) => f.field === "metaDescription")}
+                />
+              </>
             )}
           </div>
 

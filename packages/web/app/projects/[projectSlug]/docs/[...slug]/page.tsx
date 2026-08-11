@@ -17,7 +17,9 @@ import {
   toAbsoluteUrl,
   toIsoDate,
   type ProjectSeoData,
+  applyTitleSuffix,
 } from "@/lib/seo/doc-metadata";
+import { getGuidelines } from "@/lib/editorial/config";
 
 type PageParams = { projectSlug: string; slug: string[] };
 
@@ -51,9 +53,11 @@ export async function generateMetadata({
   const publishedTime = toIsoDate(doc.createdAt);
   const modifiedTime = toIsoDate(doc.updatedAt);
   const robotsContent = buildRobotsContent(seo);
+  // The site-name suffix the guideline calls a "smart tag" (DOCSTUDIO-45 §4.4).
+  const { metaTitle: metaTitleRules } = await getGuidelines(projectSlug);
 
   return {
-    title,
+    title: applyTitleSuffix(title, metaTitleRules.suffix),
     description,
     robots: robotsContent,
     alternates: {

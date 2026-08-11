@@ -46,6 +46,11 @@ interface EditingContextType {
   isPublished: boolean;
   setIsPublished: (value: boolean) => void;
 
+  // Outstanding editorial guideline warnings for the document being edited
+  // (DOCSTUDIO-45). Advisory only — these never block a save or publish.
+  guidelineWarnings: string[];
+  setGuidelineWarnings: (value: string[]) => void;
+
   // Save operation status
   isSaving: boolean;
   setIsSaving: (value: boolean) => void;
@@ -66,6 +71,18 @@ export function EditingProvider({ children }: { children: ReactNode }) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [guidelineWarnings, setGuidelineWarningsState] = useState<string[]>([]);
+
+  // Skip the state update when the warning list is unchanged. DocRenderer
+  // recomputes findings on every keystroke, and a new array reference each time
+  // would re-render the whole nav bar for no visible change.
+  const setGuidelineWarnings = useCallback((next: string[]) => {
+    setGuidelineWarningsState((prev) =>
+      prev.length === next.length && prev.every((m, i) => m === next[i])
+        ? prev
+        : next,
+    );
+  }, []);
 
   /**
    * Handler Pattern Explanation:
@@ -157,8 +174,11 @@ export function EditingProvider({ children }: { children: ReactNode }) {
       setSaveSuccess,
       saveError,
       setSaveError,
+      guidelineWarnings,
+      setGuidelineWarnings,
     }),
-    [isEditing, isDirty, draftEnabled, isPublished, isSaving, saveSuccess, saveError],
+    [isEditing, isDirty, draftEnabled, isPublished, isSaving, saveSuccess, saveError,
+     guidelineWarnings, setGuidelineWarnings],
   );
 
   return (

@@ -31,6 +31,11 @@ const toastVariants = cva(
         default: "border bg-background text-foreground",
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
+        // A guideline that was not met is a rejection, not a failure. Red is
+        // reserved for things that actually broke; the rest of the editorial UI
+        // uses amber for this, and the toast should match it.
+        warning:
+          "warning group border-warning-foreground/25 bg-warning text-warning-foreground",
       },
     },
     defaultVariants: {

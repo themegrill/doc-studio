@@ -44,6 +44,7 @@ interface AISettingsData {
     textGeneration: boolean;
     titleGeneration: boolean;
     descriptionGeneration: boolean;
+    editorialReview: boolean;
   };
 }
 
@@ -65,6 +66,7 @@ export function AISettings() {
       textGeneration: true,
       titleGeneration: true,
       descriptionGeneration: true,
+      editorialReview: true,
     },
   });
 
@@ -406,6 +408,21 @@ export function AISettings() {
                 onCheckedChange={() =>
                   handleFeatureToggle("descriptionGeneration")
                 }
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="editorialReview">Editorial Review</Label>
+                <p className="text-sm text-gray-500">
+                  Review documents against the editorial guidelines for the
+                  judgement calls a character count cannot make
+                </p>
+              </div>
+              <Switch
+                id="editorialReview"
+                checked={settings.enabledFeatures.editorialReview}
+                onCheckedChange={() => handleFeatureToggle("editorialReview")}
               />
             </div>
           </div>

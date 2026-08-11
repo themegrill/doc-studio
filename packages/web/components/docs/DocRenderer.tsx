@@ -27,6 +27,7 @@ import {
   Loader2,
   Video,
   Crown,
+  AlertTriangle,
 } from "lucide-react";
 import {
   VideoBlockEditorProps,
@@ -52,6 +53,21 @@ import { Badge } from "@/components/ui/badge-pro";
 import SeoPanel from "@/components/docs/SeoPanel";
 import type { SeoData } from "@/lib/db/ContentManager";
 import { useAIFeatures } from "@/hooks/use-ai-features";
+import { useToast } from "@/hooks/use-toast";
+import GuidelinesPanel from "@/components/docs/GuidelinesPanel";
+import {
+  useGuidelines,
+  useEditorialLint,
+  useDocumentCategory,
+} from "@/hooks/use-editorial";
+import { DEFAULT_GUIDELINES } from "@/lib/editorial/guidelines";
+import { checkImage } from "@/lib/editorial/image-check";
+import { readImageInfo } from "@/lib/editorial/image-dimensions";
+import {
+  FINDING_FIELD_LABEL,
+  type Finding,
+  type LintBlock,
+} from "@/lib/editorial/rules";
 import {
   AIExtension,
   AIMenuController,
@@ -258,6 +274,9 @@ interface ImproveTextState {
   error: string;
 }
 
+/** Stable reference — a fresh [] each render would re-run the lint memo. */
+const NO_REVIEW_FINDINGS: Finding[] = [];
+
 export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview = false }: Props) {
   const router = useRouter();
   const editingContext = useEditing();
@@ -278,8 +297,10 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     setOnSave: contextSetOnSave,
     setOnSaveDraft: contextSetOnSaveDraft,
     setOnCancel: contextSetOnCancel,
+    setGuidelineWarnings: contextSetGuidelineWarnings,
   } = editingContext;
   const { isEnabled: isFeatureEnabled } = useAIFeatures();
+  const { toast } = useToast();
   const [editorState, setEditorState] = useState<EditorState>({
     isEditing: false,
     title: doc.title,
@@ -323,6 +344,29 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   const { data: session } = useSession();
   const isAuthenticated = !!session?.user;
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
+
+  // ── Editorial guidelines (DOCSTUDIO-45) ─────────────────────────────────────
+  // The effective ruleset for this project, plus findings recomputed as the
+  // writer types. Everything here is advisory: it never blocks a save.
+  const { guidelines } = useGuidelines(projectSlug);
+  // Editorial Review findings are a snapshot of the document at the moment the
+  // button was pressed. Storing the state they were judged against alongside
+  // them means a later edit drops them automatically — without that, the panel
+  // kept showing advice naming a title the writer had already changed.
+  const [review, setReview] = useState<{ key: string; findings: Finding[] } | null>(
+    null,
+  );
+  // Bumped on every editor change so the lint memo re-reads editor.document —
+  // reading it directly would return a fresh array on each render.
+  const [contentVersion, setContentVersion] = useState(0);
+  // uploadFile is captured once when the editor is created, so it must read the
+  // guidelines through a ref rather than closing over the first loaded value.
+  // Synced in an effect: writing a ref during render is a React violation, and a
+  // one-render lag is irrelevant because uploads happen on user action.
+  const guidelinesRef = useRef(guidelines);
+  useEffect(() => {
+    guidelinesRef.current = guidelines;
+  }, [guidelines]);
 
   // Memoize title parsing to ensure consistent server/client rendering
   const parsedTitle = useMemo(() => {
@@ -1032,6 +1076,21 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     schema: editorSchema,
     dictionary: {
       ...blockNoteLocale,
+      // BlockNote shows a fixed `upload_error` string and discards whatever
+      // uploadFile throws, so the writer only ever saw "Error: Upload failed".
+      // State the screenshot spec on the button itself, and point at the toast
+      // that carries the actual reason (DOCSTUDIO-45 §4.3).
+      file_panel: {
+        ...blockNoteLocale.file_panel,
+        upload: {
+          ...blockNoteLocale.file_panel.upload,
+          file_placeholder: {
+            ...blockNoteLocale.file_panel.upload.file_placeholder,
+            image: `Upload image — WebP, ${DEFAULT_GUIDELINES.images.width}px wide, under ${DEFAULT_GUIDELINES.images.maxKb}KB`,
+          },
+          upload_error: "Upload rejected — see the message for details",
+        },
+      },
       ai: aiLocale, // AI dictionary should be nested under 'ai' key
     },
     extensions: [
@@ -1042,8 +1101,34 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
       }),
     ],
     uploadFile: async (file: File) => {
+      // Screenshot compliance (DOCSTUDIO-45 §3). Checked here, before the upload
+      // starts, so the writer sees every failing rule at once instead of one at
+      // a time — and so a 1.4MB PNG never leaves the browser. /api/upload runs
+      // the identical check as the rule of record.
+      // Detect from the header rather than file.type: a dragged file often
+      // arrives with an empty or generic MIME type, and skipping the check on
+      // that basis let non-compliant screenshots through to the server.
+      const header = new Uint8Array(
+        await file.slice(0, 64 * 1024).arrayBuffer(),
+      );
+      const detected = readImageInfo(header);
+
+      if (detected.format !== "unknown" && detected.format !== "svg") {
+        const check = checkImage(header, file.size, guidelinesRef.current);
+        if (!check.ok) {
+          // The toast is the only place the writer actually reads the reason.
+          toast({
+            title: "Screenshot doesn't meet the guidelines",
+            description: check.failures.join(" "),
+            variant: "warning",
+          });
+          throw new Error(check.failures.join(" "));
+        }
+      }
+
       const formData = new FormData();
       formData.append("file", file);
+      if (projectSlug) formData.append("projectSlug", projectSlug);
 
       try {
         const response = await fetch("/api/upload", {
@@ -1052,9 +1137,35 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          console.error("[DocRenderer] Upload failed:", error);
-          throw new Error(error.error || "Upload failed");
+          // Always surface a sentence, never a bare object — the previous code
+          // logged `{}` when the body had no `error` key, which told nobody
+          // anything. `failures` is the per-rule list from the guideline check.
+          const body = await response
+            .json()
+            .catch(() => ({}) as Record<string, unknown>);
+
+          const message =
+            Array.isArray(body.failures) && body.failures.length
+              ? body.failures.join(" ")
+              : typeof body.error === "string" && body.error
+                ? body.error
+                : `Upload failed (${response.status} ${response.statusText})`;
+
+          console.error("[DocRenderer] Upload failed:", message, {
+            status: response.status,
+            body,
+          });
+          toast({
+            // A rejected screenshot is a guideline miss, not a broken upload —
+            // amber. Anything else genuinely failed, so keep that red.
+            title:
+              body.guideline === "images"
+                ? "Screenshot doesn't meet the guidelines"
+                : "Upload failed",
+            description: message,
+            variant: body.guideline === "images" ? "warning" : "destructive",
+          });
+          throw new Error(message);
         }
 
         const data = await response.json();
@@ -1180,6 +1291,71 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     // on every call, defeating memoization. The preview is best-effort context for AI chat.
   );
 
+  // Blocks as the lint rules see them. Keyed on contentVersion so it refreshes
+  // when the document changes but not on unrelated re-renders.
+  const lintBlocks = useMemo(
+    () => editor.document as unknown as LintBlock[],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor, contentVersion],
+  );
+
+  // Identifies exactly what the review was run against.
+  const reviewKey = `${editorState.title}\u0000${editorState.description}\u0000${
+    editorState.seo.metaTitle ?? ""
+  }\u0000${editorState.seo.metaDescription ?? ""}\u0000${contentVersion}`;
+  const reviewFindings =
+    review && review.key === reviewKey ? review.findings : NO_REVIEW_FINDINGS;
+
+  // A section overview edits its own title; a normal document inherits the
+  // section it sits under, resolved from its slug.
+  const derivedCategoryTitle = useDocumentCategory(
+    projectSlug,
+    doc.slug,
+    editorState.isEditing && !isSectionOverview,
+  );
+  const effectiveCategoryTitle =
+    editorState.sectionTitle ?? derivedCategoryTitle;
+
+  const { findings: editorialFindings } = useEditorialLint({
+    guidelines,
+    projectSlug,
+    slug: editorState.slug,
+    title: editorState.title,
+    description: editorState.description,
+    seo: editorState.seo,
+    blocks: lintBlocks,
+    // Section titles can carry the same badge markup document titles do, so a
+    // section called "Payment & Billing Pro" would never match the approved
+    // list and would warn forever (DOCSTUDIO-45 §4.2).
+    categoryTitle: effectiveCategoryTitle
+      ? parseTitleWithBadges(effectiveCategoryTitle).cleanTitle
+      : undefined,
+    extraFindings: reviewFindings,
+    enabled: editorState.isEditing,
+  });
+
+  // Surface the outstanding warnings on the Publish button in the top nav, so
+  // they are visible even with the Guidelines panel collapsed (DOCSTUDIO-45).
+  // Prefixed with the field: messages are short and field-relative, so
+  // "Not set — add one, 50–60 characters" is meaningless on its own.
+  const warningMessages = useMemo(
+    () =>
+      editorialFindings
+        .filter((f) => f.severity === "warning")
+        .map((f) => `${FINDING_FIELD_LABEL[f.field]} — ${f.message}`),
+    [editorialFindings],
+  );
+
+  useEffect(() => {
+    contextSetGuidelineWarnings(warningMessages);
+  }, [warningMessages, contextSetGuidelineWarnings]);
+
+
+  useEffect(
+    () => () => contextSetGuidelineWarnings([]),
+    [contextSetGuidelineWarnings],
+  );
+
   const handleGenerateTitle = async () => {
     setTitleAIState({ isGenerating: true, error: "" });
 
@@ -1212,6 +1388,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         body: JSON.stringify({
           content: contentPreview,
           currentTitle: editorState.title,
+          projectSlug,
         }),
       });
 
@@ -1269,6 +1446,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           content: contentPreview,
           title: editorState.title,
           currentDescription: editorState.description,
+          projectSlug,
         }),
       });
 
@@ -1329,6 +1507,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         body: JSON.stringify({
           text: textSelection.text,
           context: textSelection.field === "title" ? "title" : "description",
+          projectSlug,
         }),
       });
 
@@ -1581,6 +1760,9 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     }
     if (isAuthenticated) contextSetIsDirty(true);
 
+    // Let the editorial lint re-read the document (DOCSTUDIO-45).
+    setContentVersion((v) => v + 1);
+
     if (!isTransformingRef.current) {
       isTransformingRef.current = true;
       try {
@@ -1744,6 +1926,70 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
               {titleAIState.error && (
                 <p className="text-sm text-red-600">{titleAIState.error}</p>
               )}
+
+              {/* Live title guidance (DOCSTUDIO-45 §1) — word count plus any
+                  phrasing warning, with the guideline's own example as the fix. */}
+              {(() => {
+                const clean = parsedTitle.cleanTitle.trim();
+                const words = clean ? clean.split(/\s+/).filter(Boolean).length : 0;
+                const titleFindings = editorialFindings.filter(
+                  (f) => f.field === "title",
+                );
+                const over = words > guidelines.title.maxWords;
+                return (
+                  <div className="space-y-0.5 -mt-1">
+                    <p
+                      className={`text-xs ${
+                        over ? "text-amber-600" : "text-gray-400"
+                      }`}
+                    >
+                      {words} {words === 1 ? "word" : "words"} / max{" "}
+                      {guidelines.title.maxWords}
+                    </p>
+                    {titleFindings.map((finding) => {
+                      // Warnings are rule breaches; info-level findings come from
+                      // the AI review and are suggestions. They should not look
+                      // identical — the old build painted both amber.
+                      const isWarning = finding.severity === "warning";
+                      return (
+                        <div
+                          key={finding.id}
+                          className={`flex items-start gap-1.5 rounded px-1.5 py-1 -mx-1.5 ${
+                            isWarning ? "bg-amber-50/60" : "bg-gray-50"
+                          }`}
+                        >
+                          {isWarning ? (
+                            <AlertTriangle
+                              size={12}
+                              className="text-amber-500 shrink-0 mt-[3px]"
+                            />
+                          ) : (
+                            <Sparkles
+                              size={12}
+                              className="text-purple-400 shrink-0 mt-[3px]"
+                            />
+                          )}
+                          <div className="min-w-0 leading-snug">
+                            <p
+                              className={`text-xs ${
+                                isWarning ? "text-amber-700" : "text-gray-600"
+                              }`}
+                            >
+                              {finding.message}
+                            </p>
+                            {finding.hint && (
+                              <p className="text-[11px] text-gray-400 mt-0.5">
+                                {finding.hint}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
               {!isSectionOverview && (
                 <button
                   type="button"
@@ -1830,6 +2076,23 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                   setEditorState((prev) => ({ ...prev, slug: newSlug }));
                   editingContext.setIsDirty(true);
                 } : undefined}
+                guidelines={guidelines}
+                findings={editorialFindings}
+                projectSlug={projectSlug}
+              />
+
+              <GuidelinesPanel
+                findings={editorialFindings}
+                contentPreview={documentContext.blocksPreview}
+                title={editorState.title}
+                description={editorState.description}
+                metaTitle={editorState.seo.metaTitle}
+                metaDescription={editorState.seo.metaDescription}
+                categoryTitle={effectiveCategoryTitle}
+                projectSlug={projectSlug}
+                onReviewFindings={(findings) =>
+                  setReview({ key: reviewKey, findings })
+                }
               />
             </div>
           ) : (

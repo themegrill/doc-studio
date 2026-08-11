@@ -7,7 +7,7 @@ import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings, FileEdit } from "lucide-react";
+import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings, FileEdit, AlertTriangle } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
@@ -40,8 +40,22 @@ function EditControls() {
     isSaving,
     saveSuccess,
     saveError,
+    guidelineWarnings,
   } = useEditing();
   const pathname = usePathname();
+
+  // Outstanding guideline warnings are shown once before publishing and then
+  // the publish proceeds regardless (DOCSTUDIO-45 §3.1 — warn only, never block).
+  const [showWarnings, setShowWarnings] = useState(false);
+
+  const handlePublish = () => {
+    if (guidelineWarnings.length > 0 && !showWarnings) {
+      setShowWarnings(true);
+      return;
+    }
+    setShowWarnings(false);
+    onSave();
+  };
 
   // Only show controls on individual document/section pages, not on the sections index
   const isDocumentPage = pathname.includes('/docs/');
@@ -62,7 +76,28 @@ function EditControls() {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative flex items-center gap-2">
+      {showWarnings && (
+        <GuidelineWarningPopover
+          warnings={guidelineWarnings}
+          onDismiss={() => setShowWarnings(false)}
+          onPublishAnyway={() => {
+            setShowWarnings(false);
+            onSave();
+          }}
+        />
+      )}
+      {guidelineWarnings.length > 0 && !showWarnings && (
+        <button
+          type="button"
+          onClick={() => setShowWarnings(true)}
+          title="Guidelines not met"
+          className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+        >
+          <AlertTriangle size={12} />
+          {guidelineWarnings.length}
+        </button>
+      )}
       {saveSuccess && (
         <div className="flex items-center gap-1 text-sm text-green-600">
           <CheckCircle size={16} />
@@ -86,7 +121,7 @@ function EditControls() {
       </Button>
       {isPublished ? (
         <Button
-          onClick={onSave}
+          onClick={handlePublish}
           disabled={isSaving}
           size="sm"
           className="flex items-center gap-2"
@@ -122,7 +157,7 @@ function EditControls() {
             </Button>
           )}
           <Button
-            onClick={onSave}
+            onClick={handlePublish}
             disabled={isSaving}
             size="sm"
             className="flex items-center gap-2"
@@ -141,6 +176,54 @@ function EditControls() {
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The pre-publish checklist (DOCSTUDIO-45 §4).
+ *
+ * Shown once when Publish is pressed with outstanding warnings. Publishing is
+ * never blocked — the second press goes through — so this is information, not a
+ * gate. Save Draft never triggers it at all.
+ */
+function GuidelineWarningPopover({
+  warnings,
+  onDismiss,
+  onPublishAnyway,
+}: {
+  warnings: string[];
+  onDismiss: () => void;
+  onPublishAnyway: () => void;
+}) {
+  return (
+    <div className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg border border-amber-200 bg-white shadow-lg">
+      <div className="flex items-start gap-2 border-b border-gray-100 px-4 py-3">
+        <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
+        <div>
+          <p className="text-sm font-medium text-gray-900">
+            {warnings.length} guideline{warnings.length === 1 ? "" : "s"} not met
+          </p>
+          <p className="text-xs text-gray-500">
+            You can publish anyway — this is a reminder, not a block.
+          </p>
+        </div>
+      </div>
+      <ul className="max-h-56 space-y-1.5 overflow-y-auto px-4 py-3">
+        {warnings.map((warning, index) => (
+          <li key={index} className="text-xs leading-relaxed text-gray-600">
+            {warning}
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
+        <Button variant="outline" size="sm" onClick={onDismiss}>
+          Review first
+        </Button>
+        <Button size="sm" onClick={onPublishAnyway}>
+          Publish anyway
+        </Button>
+      </div>
     </div>
   );
 }

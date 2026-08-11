@@ -5,6 +5,18 @@
 
 import { Settings } from "./settings";
 
+/**
+ * Every switchable AI feature. Adding one here means also adding it to the
+ * defaults in lib/settings.ts, the hook in hooks/use-ai-features.ts and the
+ * toggles in components/settings/AISettings.tsx.
+ */
+export type AIFeature =
+  | "chat"
+  | "textGeneration"
+  | "titleGeneration"
+  | "descriptionGeneration"
+  | "editorialReview";
+
 export interface AIConfig {
   apiKey: string;
   defaultModel: string;
@@ -15,6 +27,7 @@ export interface AIConfig {
     textGeneration: boolean;
     titleGeneration: boolean;
     descriptionGeneration: boolean;
+    editorialReview: boolean;
   };
 }
 
@@ -36,9 +49,7 @@ export async function getAIConfig(): Promise<AIConfig> {
 /**
  * Check if a specific AI feature is enabled
  */
-export async function isFeatureEnabled(
-  feature: "chat" | "textGeneration" | "titleGeneration" | "descriptionGeneration"
-): Promise<boolean> {
+export async function isFeatureEnabled(feature: AIFeature): Promise<boolean> {
   return await Settings.ai.isFeatureEnabled(feature);
 }
 
@@ -71,7 +82,7 @@ export async function getMaxTokens(): Promise<number> {
  * Returns error response if not configured/enabled, null if OK
  */
 export async function validateAIFeature(
-  feature: "chat" | "textGeneration" | "titleGeneration" | "descriptionGeneration"
+  feature: AIFeature
 ): Promise<{ error: string; status: number } | null> {
   // Check if feature is enabled
   const enabled = await isFeatureEnabled(feature);

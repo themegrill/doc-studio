@@ -4,6 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
 import { logAIUsage } from "@/lib/ai-usage-tracker";
+import {
+  buildGuidelinePrompt,
+  generateWithinBand,
+} from "@/lib/editorial/ai-prompt";
 
 export const maxDuration = 30;
 
@@ -19,43 +23,65 @@ export async function POST(req: NextRequest) {
 
     const config = await getAIConfig();
     const body = await req.json();
-    const { content, docTitle, currentMetaDescription } = body;
+    const { content, docTitle, currentMetaDescription, projectSlug } = body;
 
     if (!content || typeof content !== "string") {
       return NextResponse.json({ error: "Content is required" }, { status: 400 });
     }
 
+    // Rules come from the shared editorial ruleset, so this route cannot drift
+    // from what the SEO panel's counter shows the writer.
+    const { guidelines, system } = await buildGuidelinePrompt(
+      "metaDescription",
+      projectSlug,
+    );
+    const { min, max } = guidelines.metaDescription;
+
     const anthropic = createAnthropic({ apiKey: config.apiKey });
-    const { text, usage } = await generateText({
-      model: anthropic(config.defaultModel),
-      system: `You are an SEO expert writing meta descriptions for documentation pages.
-A good meta description:
-- Is 140–160 characters (strict maximum 160)
-- Summarises the page value and entices the reader to click
-- Includes the primary keyword naturally
-- Is written in active voice
-- Does NOT start with the page title verbatim
-- Returns ONLY the description text — no quotes, no explanation`,
-      prompt: `Write an SEO meta description for this documentation page.
+    const basePrompt = `Write an SEO meta description for this documentation page.
 
 Page title: ${docTitle || "Untitled"}
 ${currentMetaDescription ? `Current meta description: "${currentMetaDescription}"\n` : ""}
 Content excerpt:
 ${content}
 
-Output a single meta description, max 160 characters.`,
-      temperature: 0.4,
-      maxOutputTokens: 120,
-    });
+Output a single meta description of ${min}–${max} characters.`;
 
-    const metaDescription = text.trim().replace(/^["']|["']$/g, "").slice(0, 160);
+    // See generateWithinBand — the floor is undershot far more often than the
+    // ceiling is breached, so a short answer gets one expansion attempt.
+    const { text: metaDescription, inputTokens, outputTokens, retried } =
+      await generateWithinBand(
+        async (nudge) => {
+          const { text, usage } = await generateText({
+            model: anthropic(config.defaultModel),
+            system,
+            prompt: nudge ? `${basePrompt}\n\n${nudge}` : basePrompt,
+            temperature: 0.4,
+            maxOutputTokens: 200,
+          });
+          return {
+            text,
+            inputTokens: usage?.inputTokens || 0,
+            outputTokens: usage?.outputTokens || 0,
+          };
+        },
+        (raw) => raw.trim().replace(/^["']|["']$/g, "").slice(0, max),
+        min,
+        max,
+      );
+
+    if (retried) {
+      console.log(
+        `[generate-seo-description] Retried for length; final ${metaDescription.length} chars (band ${min}–${max})`,
+      );
+    }
 
     await logAIUsage({
       userId: session?.user?.id,
       feature: "descriptionGeneration",
       model: config.defaultModel,
-      promptTokens: usage?.inputTokens || 0,
-      completionTokens: usage?.outputTokens || 0,
+      promptTokens: inputTokens,
+      completionTokens: outputTokens,
       durationMs: Date.now() - startTime,
       success: true,
     });

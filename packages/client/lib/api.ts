@@ -112,6 +112,17 @@ export interface Project {
   name: string;
   slug: string;
   description?: string;
+  /**
+   * Per-project overrides written by the admin app. Only the pieces the public
+   * site needs are typed — currently the site-name suffix appended to page
+   * titles (DOCSTUDIO-45 §4.4).
+   */
+  settings?: {
+    editorialGuidelines?: {
+      metaTitle?: { suffix?: string };
+    };
+    [key: string]: unknown;
+  };
   metadata?: {
     logo?: string;
     favicon?: string;
