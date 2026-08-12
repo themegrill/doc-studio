@@ -2093,6 +2093,28 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                 onReviewFindings={(findings) =>
                   setReview({ key: reviewKey, findings })
                 }
+                onApplySuggestion={(field, value) => {
+                  setEditorState((prev) => {
+                    if (field === "title") {
+                      // Preserve the Pro badge, which lives inside the raw title.
+                      return {
+                        ...prev,
+                        title: isPro ? `${value} ${PRO_SPAN}` : value,
+                      };
+                    }
+                    if (field === "metaTitle") {
+                      return { ...prev, seo: { ...prev.seo, metaTitle: value } };
+                    }
+                    if (field === "metaDescription") {
+                      return {
+                        ...prev,
+                        seo: { ...prev.seo, metaDescription: value },
+                      };
+                    }
+                    return prev;
+                  });
+                  editingContext.setIsDirty(true);
+                }}
               />
             </div>
           ) : (

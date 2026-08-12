@@ -129,11 +129,20 @@ export function renderGuidelinesPrompt(
       ].join("\n");
 
     case "review":
+      // Deliberately excludes every character band, dimension and file-size
+      // limit. Those are measured exactly by lib/editorial/rules.ts and shown
+      // to the writer already. Handing them to the model made it re-check them
+      // and get them wrong — it reported a 55-character meta title as "only 56
+      // characters" and flagged it, when 55 sits inside the required 50–60.
+      // Removing the numbers removes the temptation; the instruction alone was
+      // not enough.
       return [
         "You are a documentation editor reviewing a page against the team's editorial guidelines.",
         "",
         "## Page titles",
-        ...titleRules(guidelines).map((rule) => `- ${rule}`),
+        "- Be task-oriented — name what the reader is trying to do, not how the feature is built.",
+        `- Never begin with filler such as ${list(guidelines.title.bannedPrefixes)}. Write "Generate Purchase Invoice", not "How to Generate the Invoice for Your Purchase".`,
+        "- Prefer a phrase over a sentence, and let a reader grasp the topic within a few seconds.",
         "",
         "## Categories",
         "- Categories reflect how users search, not how our plugins are structured.",
@@ -144,19 +153,20 @@ export function renderGuidelinesPrompt(
           : "- Reuse an existing category wherever one fits.",
         "",
         "## Meta title",
-        ...metaTitleRules(guidelines).map((rule) => `- ${rule}`),
+        "- Lead with the feature or task name, using the page's real primary keyword.",
+        `- Avoid filler such as ${list(guidelines.metaTitle.bannedFiller)} unless it genuinely matches the search intent.`,
+        "- If the page is add-on specific, name the add-on.",
         "",
         "## Meta description",
-        ...metaDescriptionRules(guidelines).map((rule) => `- ${rule}`),
+        "- Say what the reader will accomplish, rather than restating the title.",
+        `- Open with an action such as ${list(
+          guidelines.metaDescription.actionVerbs.slice(0, 6),
+        )}.`,
+        "- Read naturally, with the primary keyword used once and no keyword stuffing.",
         "",
         "## Screenshots",
-        `- Images must be ${guidelines.images.allowedFormats.join(" or ")}, ${
-          guidelines.images.widthMode === "exact" ? "exactly" : "at most"
-        } ${guidelines.images.width}px wide, and under ${guidelines.images.maxKb}KB.`,
         "- Use a full-page screenshot only when the whole page provides useful context; crop or zoom when only one setting is relevant.",
-        guidelines.images.requireAlt
-          ? "- Every image needs alt text."
-          : "- Alt text is encouraged on every image.",
+        "- Each screenshot should make the relevant element immediately obvious.",
       ].join("\n");
   }
 }
@@ -173,5 +183,6 @@ export const JUDGEMENT_ONLY_INSTRUCTION = [
   "- Whether the category describes what the user is trying to achieve, rather than our plugin architecture.",
   "- Whether the meta description says what the reader accomplishes, rather than restating the title.",
   "- Whether the meta title leads with the real primary keyword for this page.",
+  "NEVER state or estimate a character count, length, file size or pixel dimension — those are measured exactly elsewhere and your estimate will be wrong.",
   "Return at most 4 findings. If the page is in good shape, return none.",
 ].join("\n");

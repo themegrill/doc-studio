@@ -27,8 +27,17 @@ export interface Finding {
   field: FindingField;
   /** What is wrong, in one sentence, from the writer's side of the screen. */
   message: string;
-  /** How to fix it. Quotes the guideline's own wording or example where there is one. */
+  /** How to fix it, in prose. Quotes the guideline's own wording where there is one. */
   hint?: string;
+  /**
+   * Replacement text the writer can use as-is.
+   *
+   * Kept separate from `hint` because rendering a bare rewritten title under a
+   * complaint reads as a non-sequitur — a writer seeing "Automate Event
+   * Notifications" beneath "the title names a feature" has no way to know it is
+   * a proposed replacement rather than a stray fragment.
+   */
+  suggestion?: string;
 }
 
 /**

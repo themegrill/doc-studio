@@ -34,9 +34,11 @@ const ReviewSchema = z.object({
         message: z
           .string()
           .describe("What is wrong, in one sentence, addressed to the writer"),
-        hint: z
+        suggestion: z
           .string()
-          .describe("A concrete suggested fix — ideally the rewritten text"),
+          .describe(
+            "The replacement text itself, ready to paste in — the rewritten title, meta title or meta description. Text only, no explanation and no surrounding quotes.",
+          ),
       }),
     )
     .max(4),
@@ -111,7 +113,7 @@ ${content}`,
       severity: "info",
       field: finding.field,
       message: finding.message,
-      hint: finding.hint,
+      suggestion: finding.suggestion?.trim() || undefined,
     }));
 
     await logAIUsage({

@@ -8,7 +8,7 @@ import SearchDialog from "@/components/docs/SearchDialog";
 import Image from "next/image";
 import Link from "next/link";
 import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings, FileEdit, AlertTriangle } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { EditingProvider, useEditing } from "@/contexts/EditingContext";
@@ -196,11 +196,42 @@ function GuidelineWarningPopover({
   onDismiss: () => void;
   onPublishAnyway: () => void;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Escape and click-outside. Without these the only ways out were the two
+  // buttons, which forced a decision on someone who just wanted to keep typing
+  // — and both are what people reach for before hunting for a close button.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    const onPointer = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) onDismiss();
+    };
+    document.addEventListener("keydown", onKey);
+    // Deferred to the next frame so the click that opened the popover does not
+    // immediately close it again.
+    const id = window.setTimeout(
+      () => document.addEventListener("mousedown", onPointer),
+      0,
+    );
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+      window.clearTimeout(id);
+    };
+  }, [onDismiss]);
+
   return (
-    <div className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg border border-amber-200 bg-white shadow-lg">
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Guidelines not met"
+      className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg border border-amber-200 bg-white shadow-lg"
+    >
       <div className="flex items-start gap-2 border-b border-gray-100 px-4 py-3">
         <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-gray-900">
             {warnings.length} guideline{warnings.length === 1 ? "" : "s"} not met
           </p>
@@ -208,6 +239,14 @@ function GuidelineWarningPopover({
             You can publish anyway — this is a reminder, not a block.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Close"
+          className="-mr-1 -mt-1 shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+        >
+          <X size={14} />
+        </button>
       </div>
       <ul className="max-h-56 space-y-1.5 overflow-y-auto px-4 py-3">
         {warnings.map((warning, index) => (

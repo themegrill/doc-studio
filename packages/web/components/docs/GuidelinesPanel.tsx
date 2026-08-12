@@ -10,9 +10,17 @@ import {
   Info,
   Sparkles,
   Loader2,
+  Check,
 } from "lucide-react";
 import { useAIFeatures } from "@/hooks/use-ai-features";
 import { FINDING_FIELD_LABEL, type Finding } from "@/lib/editorial/rules";
+
+/** Fields whose suggestion maps to an editable text input. */
+const APPLYABLE_FIELDS: Finding["field"][] = [
+  "title",
+  "metaTitle",
+  "metaDescription",
+];
 
 /**
  * The pre-publish checklist, live (DOCSTUDIO-45 §4).
@@ -33,6 +41,8 @@ interface GuidelinesPanelProps {
   categoryTitle?: string;
   projectSlug?: string | null;
   onReviewFindings?: (findings: Finding[]) => void;
+  /** Applies a suggested rewrite to the field it belongs to. */
+  onApplySuggestion?: (field: Finding["field"], value: string) => void;
 }
 
 export default function GuidelinesPanel({
@@ -45,6 +55,7 @@ export default function GuidelinesPanel({
   categoryTitle,
   projectSlug,
   onReviewFindings,
+  onApplySuggestion,
 }: GuidelinesPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [reviewing, setReviewing] = useState(false);
@@ -109,9 +120,16 @@ export default function GuidelinesPanel({
         <ClipboardCheck size={15} className="text-gray-400 shrink-0" />
         <span>Guidelines</span>
 
+        {/* "All clear" must mean the list below is empty. Counting only
+            warnings meant a page with four AI suggestions still claimed to be
+            clear while listing all four directly underneath. */}
         {warnings.length > 0 ? (
           <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 border border-amber-200">
             {warnings.length}
+          </span>
+        ) : notes.length > 0 ? (
+          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-200">
+            {notes.length} {notes.length === 1 ? "suggestion" : "suggestions"}
           </span>
         ) : (
           <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
@@ -179,6 +197,33 @@ export default function GuidelinesPanel({
                         >
                           {finding.hint}
                         </p>
+                      )}
+
+                      {finding.suggestion && (
+                        <div className="mt-1.5 flex items-start gap-2 rounded border border-gray-200 bg-white px-2 py-1.5">
+                          <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-gray-400 mt-0.5">
+                            Suggested
+                          </span>
+                          <p className="min-w-0 flex-1 text-xs text-gray-700">
+                            {finding.suggestion}
+                          </p>
+                          {onApplySuggestion &&
+                            APPLYABLE_FIELDS.includes(finding.field) && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onApplySuggestion(
+                                    finding.field,
+                                    finding.suggestion as string,
+                                  )
+                                }
+                                className="shrink-0 inline-flex items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] font-medium text-gray-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
+                              >
+                                <Check size={11} />
+                                Use
+                              </button>
+                            )}
+                        </div>
                       )}
                     </div>
                   </li>
