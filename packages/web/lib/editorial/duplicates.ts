@@ -22,8 +22,6 @@ export interface FindDuplicatesArgs {
   slug: string;
   metaTitle?: string | null;
   metaDescription?: string | null;
-  /** "project" checks within one product's docs; "global" checks every project. */
-  scope?: "project" | "global";
 }
 
 export async function findMetaDuplicates({
@@ -31,7 +29,6 @@ export async function findMetaDuplicates({
   slug,
   metaTitle,
   metaDescription,
-  scope = "project",
 }: FindDuplicatesArgs): Promise<DuplicateMatches> {
   const matches: DuplicateMatches = { metaTitle: null, metaDescription: null };
 
@@ -40,7 +37,6 @@ export async function findMetaDuplicates({
   if (!trimmedTitle && !trimmedDescription) return matches;
 
   const sql = getDb();
-  const scopedToProject = scope === "project";
 
   // Titles can carry embedded badge markup (see lib/parse-title-badges.ts), so
   // the colliding document's title must be cleaned before it reaches the
@@ -56,8 +52,8 @@ export async function findMetaDuplicates({
         FROM documents
         WHERE deleted_at IS NULL
           AND seo->>'metaTitle' = ${trimmedTitle}
-          AND NOT (project_id = ${projectId} AND slug = ${slug})
-          AND (${!scopedToProject} OR project_id = ${projectId})
+          AND project_id = ${projectId}
+          AND slug != ${slug}
         LIMIT 1
       `;
       matches.metaTitle = cleanTitle(row?.title);
@@ -69,8 +65,8 @@ export async function findMetaDuplicates({
         FROM documents
         WHERE deleted_at IS NULL
           AND seo->>'metaDescription' = ${trimmedDescription}
-          AND NOT (project_id = ${projectId} AND slug = ${slug})
-          AND (${!scopedToProject} OR project_id = ${projectId})
+          AND project_id = ${projectId}
+          AND slug != ${slug}
         LIMIT 1
       `;
       matches.metaDescription = cleanTitle(row?.title);

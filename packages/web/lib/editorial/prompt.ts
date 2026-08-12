@@ -43,9 +43,7 @@ const metaTitleRules = (g: EditorialGuidelines) => {
   if (g.metaTitle.suffix) {
     rules.push(
       `Not include the site-name suffix "${g.metaTitle.suffix.trim()}" — it is appended automatically by a smart tag.`,
-      g.metaTitle.suffixCountsTowardLimit
-        ? `Count the ${g.metaTitle.suffix.length}-character suffix toward the ${g.metaTitle.min}–${g.metaTitle.max} band, so keep your text ${g.metaTitle.max - g.metaTitle.suffix.length} characters or fewer.`
-        : `The character band applies to your text alone, before the suffix is added.`,
+      `That ${g.metaTitle.suffix.length}-character suffix counts toward the band, so your own text must be ${Math.max(0, g.metaTitle.min - g.metaTitle.suffix.length)}–${Math.max(0, g.metaTitle.max - g.metaTitle.suffix.length)} characters.`,
     );
   } else {
     rules.push("Not include the site name.");
@@ -164,7 +162,7 @@ export function renderGuidelinesPrompt(
         )}.`,
         "- Read naturally, with the primary keyword used once and no keyword stuffing.",
         "",
-        "## Screenshots",
+        "## Images and screenshots",
         "- Use a full-page screenshot only when the whole page provides useful context; crop or zoom when only one setting is relevant.",
         "- Each screenshot should make the relevant element immediately obvious.",
       ].join("\n");

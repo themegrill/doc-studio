@@ -137,17 +137,18 @@ const fileExtension = (url: string) => {
 };
 
 /**
- * The length the meta title is judged on. The site-name suffix is appended at
- * render time via a smart tag, so whether it counts toward the 50–60 band is a
- * configured decision rather than an assumption — see guidelines.ts.
+ * The length the meta title is judged on: the writer's text plus the site-name
+ * suffix that gets appended at render time.
+ *
+ * The suffix is included because Google measures what it displays. Judging the
+ * writer's text alone would pass a title at 60 characters that actually renders
+ * at 71 and gets cut off.
  */
 export function countedMetaTitle(
   metaTitle: string,
   guidelines: EditorialGuidelines,
 ): string {
-  return guidelines.metaTitle.suffixCountsTowardLimit
-    ? `${metaTitle}${guidelines.metaTitle.suffix}`
-    : metaTitle;
+  return `${metaTitle}${guidelines.metaTitle.suffix}`;
 }
 
 export function lintDocument(
@@ -252,7 +253,7 @@ export function lintDocument(
       });
     }
 
-    if (guidelines.metaTitle.warnOnDuplicate && input.duplicates?.metaTitle) {
+    if (guidelines.duplicates.warn && input.duplicates?.metaTitle) {
       findings.push({
         id: "meta-title-duplicate",
         severity: "warning",
@@ -331,7 +332,7 @@ export function lintDocument(
     }
 
     if (
-      guidelines.metaDescription.warnOnDuplicate &&
+      guidelines.duplicates.warn &&
       input.duplicates?.metaDescription
     ) {
       findings.push({

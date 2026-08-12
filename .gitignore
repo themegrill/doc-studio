@@ -45,3 +45,6 @@ Thumbs.db
 
 # Knowledge Base Cache
 .cache/
+
+# Playwright MCP scratch output
+.playwright-mcp/

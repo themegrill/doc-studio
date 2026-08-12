@@ -1118,7 +1118,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         if (!check.ok) {
           // The toast is the only place the writer actually reads the reason.
           toast({
-            title: "Screenshot doesn't meet the guidelines",
+            title: "Image doesn't meet the guidelines",
             description: check.failures.join(" "),
             variant: "warning",
           });
@@ -1160,7 +1160,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
             // amber. Anything else genuinely failed, so keep that red.
             title:
               body.guideline === "images"
-                ? "Screenshot doesn't meet the guidelines"
+                ? "Image doesn't meet the guidelines"
                 : "Upload failed",
             description: message,
             variant: body.guideline === "images" ? "warning" : "destructive",

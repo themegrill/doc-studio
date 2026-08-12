@@ -68,14 +68,19 @@ function Section({
   children,
 }: {
   title: string;
-  description: string;
+  /**
+   * Only where it states something the label cannot — what the setting
+   * controls, or how the system behaves. Restating the editorial guideline is
+   * noise here: admins see this screen, writers get the rules in the editor.
+   */
+  description?: string;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-4 border-t border-gray-100 pt-6 first:border-0 first:pt-0">
       <div className="space-y-0.5">
         <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <p className="text-xs text-gray-500">{description}</p>
+        {description && <p className="text-xs text-gray-500">{description}</p>}
       </div>
       {children}
     </div>
@@ -182,7 +187,10 @@ export function EditorialGuidelinesSettings({
         ...guidelines,
         categories: {
           ...guidelines.categories,
-          allowed: textToList(categoriesText),
+          // The global screen no longer edits this list, so it writes an empty
+          // one rather than preserving a value nobody can see. That also clears
+          // any org-wide list saved before the field moved to project scope.
+          allowed: projectSlug ? textToList(categoriesText) : [],
         },
       };
 
@@ -262,20 +270,20 @@ export function EditorialGuidelinesSettings({
           <ClipboardCheck size={18} className="text-gray-400" />
           Documentation Guidelines
         </CardTitle>
-        <CardDescription>
-          {projectSlug
-            ? "Override the org-wide guidelines for this project. Leave a field at its inherited value to keep following the default."
-            : "The editorial rules the editor checks while writing and the AI follows when generating. Changing a value here updates both."}
-        </CardDescription>
+        {projectSlug && (
+          <CardDescription>
+            Override the org-wide guidelines for this project. Leave a field at
+            its inherited value to keep following the default.
+          </CardDescription>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-6">
         <Section
           title="Post titles"
-          description="Short, task-oriented titles — “Generate Purchase Invoice”, not “How to Generate the Invoice for Your Purchase”."
         >
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Maximum words" hint="Awaiting Documentation sign-off">
+            <Field label="Maximum words">
               <Input
                 type="number"
                 min={1}
@@ -285,7 +293,7 @@ export function EditorialGuidelinesSettings({
                 }
               />
             </Field>
-            <Field label="Maximum characters" hint="Awaiting Documentation sign-off">
+            <Field label="Maximum characters">
               <Input
                 type="number"
                 min={1}
@@ -316,28 +324,26 @@ export function EditorialGuidelinesSettings({
 
         <Section
           title="Categories"
-          description="Group articles by what the user is trying to achieve, not by add-on name."
         >
-          <Field
-            label="Approved categories"
-            hint={
-              projectSlug
-                ? "One per line. Leave empty to use this project's existing sections as its approved categories — only fill this in when Marketing hands over a canonical list."
-                : "One per line. Normally left empty: each project uses its own existing sections. Only set an org-wide list if every product genuinely shares one taxonomy."
-            }
-          >
-            <textarea
-              value={categoriesText}
-              onChange={(e) => setCategoriesText(e.target.value)}
-              rows={5}
-              placeholder={
-                projectSlug
-                  ? "Empty — using this project's existing sections"
-                  : "Empty — each project uses its own sections"
-              }
-              className="w-full text-sm rounded-md border border-input bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </Field>
+          {/* Project-only. An org-wide list is the trap this feature already fell
+              into once: four URM categories seeded globally meant every other
+              product inherited a taxonomy that had nothing to do with it. Left
+              empty — the correct state — a project uses its own live sections,
+              which is always more current than anything typed here. */}
+          {projectSlug ? (
+            <Field
+              label="Approved categories"
+              hint="One per line. Leave empty to use this project's existing sections — only fill this in when Marketing hands over a fixed list."
+            >
+              <textarea
+                value={categoriesText}
+                onChange={(e) => setCategoriesText(e.target.value)}
+                rows={5}
+                placeholder="Empty — using this project's existing sections"
+                className="w-full text-sm rounded-md border border-input bg-background px-3 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </Field>
+          ) : null}
 
           {projectSlug && (
             <button
@@ -368,7 +374,7 @@ export function EditorialGuidelinesSettings({
         </Section>
 
         <Section
-          title="Screenshots"
+          title="Images"
           description="Checked on upload. Non-compliant images are refused rather than converted, so the author composes them deliberately."
         >
           <div className="grid grid-cols-2 gap-4">
@@ -384,7 +390,7 @@ export function EditorialGuidelinesSettings({
             </Field>
             <Field
               label="Width rule"
-              hint="Awaiting Documentation sign-off — “exactly” rejects cropped screenshots."
+              hint="“Exactly” means every image must be placed on a 1150px canvas first."
             >
               <Select
                 value={guidelines.images.widthMode}
@@ -422,18 +428,6 @@ export function EditorialGuidelinesSettings({
               />
             </Field>
           </div>
-          <Field
-            label="Annotation style guide URL"
-            hint="Linked from the image toolbar. Annotation consistency is human judgement, not a check."
-          >
-            <Input
-              value={guidelines.images.annotationStyleGuideUrl}
-              onChange={(e) =>
-                patch("images", { annotationStyleGuideUrl: e.target.value })
-              }
-              placeholder="https://…"
-            />
-          </Field>
           <div className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2">
             <span className="text-sm text-gray-700">Require alt text</span>
             <Switch
@@ -471,29 +465,6 @@ export function EditorialGuidelinesSettings({
               />
             </Field>
           </div>
-          {/* Whether the suffix counts toward the band is an org-wide SEO
-              ruling (open question 3), not something each product answers
-              differently — so it stays global even though the suffix itself
-              does not. */}
-          {!projectSlug && (
-            <div className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2">
-              <div>
-                <span className="text-sm text-gray-700">
-                  Count the site-name suffix toward the character limit
-                </span>
-                <p className="text-xs text-gray-500">
-                  Awaiting SEO sign-off. Off means the band applies to the
-                  writer&apos;s text alone, before the suffix is appended.
-                </p>
-              </div>
-              <Switch
-                checked={guidelines.metaTitle.suffixCountsTowardLimit}
-                onCheckedChange={(checked) =>
-                  patch("metaTitle", { suffixCountsTowardLimit: checked })
-                }
-              />
-            </div>
-          )}
 
           {/* Project-only: the site name is product-specific, so an org-wide
               value would be wrong for every project but one — the same mistake
@@ -502,7 +473,7 @@ export function EditorialGuidelinesSettings({
             <>
               <Field
                 label="Site-name suffix"
-                hint="Appended to every page title on the public docs site, e.g. “ – URM Docs”. Leave empty to append nothing."
+                hint="Appended to every page title on the public docs site, e.g. “ – URM Docs”. It counts toward the character band above. Leave empty to append nothing."
               >
                 <Input
                   value={guidelines.metaTitle.suffix}
@@ -511,21 +482,7 @@ export function EditorialGuidelinesSettings({
                 />
               </Field>
             </>
-          ) : (
-            <p className="text-xs text-gray-500">
-              The site-name suffix is set per project, under that project&apos;s
-              Guidelines tab — it is the product&apos;s own name.
-            </p>
-          )}
-          <div className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2">
-            <span className="text-sm text-gray-700">Warn on duplicates</span>
-            <Switch
-              checked={guidelines.metaTitle.warnOnDuplicate}
-              onCheckedChange={(checked) =>
-                patch("metaTitle", { warnOnDuplicate: checked })
-              }
-            />
-          </div>
+          ) : null}
         </Section>
 
         <Section
@@ -568,44 +525,32 @@ export function EditorialGuidelinesSettings({
                 }
               />
             </Field>
-          ) : (
-            <p className="text-xs text-gray-500">
-              The product name to mention is set per project, under that
-              project&apos;s Guidelines tab.
-            </p>
-          )}
+          ) : null}
+        </Section>
+
+        {/* Global only. Scope describes a relationship *between* projects, so it
+            cannot vary by project without contradicting itself: if one project
+            looks across all products and another looks only at itself, the same
+            pair of documents is a duplicate from one side and not from the
+            other. Enforced server-side too — see setProjectOverride. */}
+        {!projectSlug && (
+        <Section
+          title="Uniqueness"
+          description="Applies to both the meta title and the meta description."
+        >
           <div className="flex items-center justify-between rounded-md border border-gray-200 px-3 py-2">
-            <span className="text-sm text-gray-700">Warn on duplicates</span>
+            <span className="text-sm text-gray-700">
+              Warn when another article already uses the same text
+            </span>
             <Switch
-              checked={guidelines.metaDescription.warnOnDuplicate}
+              checked={guidelines.duplicates.warn}
               onCheckedChange={(checked) =>
-                patch("metaDescription", { warnOnDuplicate: checked })
+                patch("duplicates", { warn: checked })
               }
             />
           </div>
-          <Field
-            label="Uniqueness scope"
-            hint="Awaiting SEO sign-off — whether meta must be unique within one product or across all of them."
-          >
-            <Select
-              value={guidelines.duplicateScope}
-              onValueChange={(value) =>
-                setGuidelines((prev) => ({
-                  ...prev,
-                  duplicateScope: value as "project" | "global",
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="project">Within this product</SelectItem>
-                <SelectItem value="global">Across every product</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
         </Section>
+        )}
 
         <div className="flex items-center gap-2 border-t border-gray-100 pt-5">
           <Button onClick={handleSave} disabled={isSaving}>

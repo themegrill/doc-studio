@@ -76,11 +76,31 @@ async function readProjectOverride(
 
 export const getProjectOverride = cache(readProjectOverride);
 
+/**
+ * Settings a project may never override.
+ *
+ * `duplicates.scope` describes a relationship *between* projects, so it cannot
+ * vary by project without contradicting itself — if one project looks across
+ * all products and another looks only at itself, the same pair of documents is
+ * a duplicate from one side and not from the other. The settings UI hides it,
+ * and this makes the invariant real rather than cosmetic.
+ */
+const GLOBAL_ONLY_KEYS = ["duplicates"] as const;
+
 export async function setProjectOverride(
   projectSlug: string,
   patch: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const sql = getDb();
+
+  for (const key of GLOBAL_ONLY_KEYS) {
+    if (key in patch) {
+      console.warn(
+        `[editorial] Ignoring "${key}" in the override for "${projectSlug}" — it is global-only.`,
+      );
+      delete patch[key];
+    }
+  }
   // Uncached, for the same reason as setGlobalGuidelines.
   const merged = { ...(await readProjectOverride(projectSlug)), ...patch };
 

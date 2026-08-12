@@ -1,7 +1,7 @@
 "use client";
 
 import { createReactBlockSpec, ResizableFileBlockWrapper, useResolveUrl } from "@blocknote/react";
-import { Image as ImageIcon, AlertTriangle, BookOpen } from "lucide-react";
+import { Image as ImageIcon, AlertTriangle } from "lucide-react";
 import { useGuidelines } from "@/hooks/use-editorial";
 
 type ImageBlock = {
@@ -89,23 +89,6 @@ function ImageBlockContent({
               <AlertTriangle size={11} />
               Required
             </span>
-          )}
-
-          {/* Annotation consistency is human judgement, so the guide is linked
-              at the moment it is needed rather than checked. */}
-          {guidelines.images.annotationStyleGuideUrl && (
-            <a
-              href={guidelines.images.annotationStyleGuideUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
-              onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              title="Annotation style guide"
-              className="flex items-center gap-1 shrink-0 text-[10px] font-medium text-gray-400 hover:text-blue-600 transition-colors select-none"
-            >
-              <BookOpen size={11} />
-              Annotation style
-            </a>
           )}
         </div>
       )}

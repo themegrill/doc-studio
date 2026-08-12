@@ -75,6 +75,30 @@ check(
   'Starts with "how to" — lead with a verb, e.g. "Configure Login Form".',
 );
 
+// The word limit must catch every avoided example on length alone, so the rule
+// does not depend on the filler-prefix check as its only line of defence. At the
+// previous default of 6 words, "How to Configure the Login Form" slipped past.
+for (const avoided of [
+  "How to Generate the Invoice for Your Purchase",
+  "How to Use Buy Now Button Block",
+  "How to Configure the Login Form",
+]) {
+  check(
+    `length alone flags: ${avoided}`,
+    ids({ title: avoided, seo: OK_SEO }).includes("title-too-long"),
+    true,
+  );
+}
+
+// ...and every preferred example must still pass untouched.
+for (const preferred of [
+  "Generate Purchase Invoice",
+  "Using Buy Now Button",
+  "Configure Login Form",
+]) {
+  check(`stays clean: ${preferred}`, ids({ title: preferred, seo: OK_SEO }), []);
+}
+
 // ─── meta ─────────────────────────────────────────────────────────────────────
 console.log("\nmeta title and description");
 
@@ -88,6 +112,26 @@ check(
   ["meta-title-too-short"],
 );
 check(
+  "the uniqueness switch off suppresses the warning",
+  ids(
+    { title: "Generate Purchase Invoice", seo: OK_SEO, duplicates: { metaTitle: "Managing Users" } },
+    mergeGuidelines(DEFAULT_GUIDELINES, { duplicates: { warn: false } }),
+  ),
+  [],
+);
+check(
+  "one switch governs both fields",
+  ids(
+    {
+      title: "Generate Purchase Invoice",
+      seo: OK_SEO,
+      duplicates: { metaTitle: "A", metaDescription: "B" },
+    },
+    DEFAULT_GUIDELINES,
+  ),
+  ["meta-description-duplicate", "meta-title-duplicate"],
+);
+check(
   "a duplicate names the colliding article",
   lintDocument(
     { title: "Generate Purchase Invoice", seo: OK_SEO, duplicates: { metaTitle: "Managing Users" } },
@@ -96,20 +140,28 @@ check(
   'Already used by "Managing Users" — must be unique.',
 );
 
-const suffixCounts = mergeGuidelines(DEFAULT_GUIDELINES, {
-  metaTitle: { ...DEFAULT_GUIDELINES.metaTitle, suffix: " – URM Docs", suffixCountsTowardLimit: true },
-});
-const suffixFree = mergeGuidelines(DEFAULT_GUIDELINES, {
-  metaTitle: { ...DEFAULT_GUIDELINES.metaTitle, suffix: " – URM Docs", suffixCountsTowardLimit: false },
+// The suffix always counts, because Google measures the string it displays.
+// " – URM Docs" is 11 characters, so a project with that suffix leaves the
+// writer 39–49 characters of their own text against a 50–60 band.
+const withSuffix = mergeGuidelines(DEFAULT_GUIDELINES, {
+  metaTitle: { ...DEFAULT_GUIDELINES.metaTitle, suffix: " – URM Docs" },
 });
 check(
-  "suffix counted → a 55-char title breaches the ceiling",
-  ids({ title: "Generate Purchase Invoice", seo: OK_SEO }, suffixCounts),
+  "55 chars of writer text renders at 66 and breaches the ceiling",
+  ids({ title: "Generate Purchase Invoice", seo: OK_SEO }, withSuffix),
   ["meta-title-too-long"],
 );
 check(
-  "suffix not counted → the same title passes",
-  ids({ title: "Generate Purchase Invoice", seo: OK_SEO }, suffixFree),
+  "44 chars of writer text renders at 55 and sits in the band",
+  ids(
+    { title: "Generate Purchase Invoice", seo: { ...OK_SEO, metaTitle: "x".repeat(44) } },
+    withSuffix,
+  ),
+  [],
+);
+check(
+  "with no suffix configured the writer's text is judged as-is",
+  ids({ title: "Generate Purchase Invoice", seo: OK_SEO }),
   [],
 );
 check(
@@ -117,9 +169,9 @@ check(
   ids(
     {
       title: "Generate Purchase Invoice",
-      seo: { ...OK_SEO, metaTitle: "Configure Stripe Payments for Your Store – URM Docs" },
+      seo: { ...OK_SEO, metaTitle: "Configure Stripe Payments Fast – URM Docs" },
     },
-    suffixFree,
+    withSuffix,
   ),
   ["meta-title-suffix-duplicated"],
 );

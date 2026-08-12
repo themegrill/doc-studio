@@ -248,9 +248,7 @@ export default function SeoPanel({
                   max={guidelines.metaTitle.max}
                   suffixNote={
                     guidelines.metaTitle.suffix
-                      ? guidelines.metaTitle.suffixCountsTowardLimit
-                        ? `includes "${guidelines.metaTitle.suffix.trim()}"`
-                        : `"${guidelines.metaTitle.suffix.trim()}" added automatically`
+                      ? `includes "${guidelines.metaTitle.suffix.trim()}"`
                       : undefined
                   }
                 />

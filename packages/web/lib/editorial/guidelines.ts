@@ -18,9 +18,18 @@ import { z } from "zod";
 
 export const EditorialGuidelinesSchema = z.object({
   title: z.object({
-    /** PROPOSED — the guideline says "concise" but gives no number. Documentation team to confirm. */
+    /**
+     * Editorial concision, derived from the guideline's own examples table:
+     * its preferred titles run to 4 words, its avoided ones start at 6, so 5
+     * is the dividing line. This is the rule that does the real work.
+     */
     maxWords: z.number().int().positive(),
-    /** PROPOSED — see maxWords. */
+    /**
+     * An SEO safety net rather than a second style rule. H1 length does not
+     * affect ranking, but Google may show the post title as the search title
+     * (and DocStudio falls back to it when no meta title is set), and search
+     * titles truncate at roughly 600px ≈ 60 characters.
+     */
     maxChars: z.number().int().positive(),
     /** Lowercase; matched against the start of the title. */
     bannedPrefixes: z.array(z.string()),
@@ -55,24 +64,23 @@ export const EditorialGuidelinesSchema = z.object({
     /** Hard ceiling for the upload validator. */
     maxKb: z.number().positive(),
     requireAlt: z.boolean(),
-    /** Linked from the image toolbar. Annotation style is human judgement, not a check. */
-    annotationStyleGuideUrl: z.string(),
   }),
 
   metaTitle: z.object({
     min: z.number().int().nonnegative(),
     max: z.number().int().positive(),
-    /** Appended automatically at render time via smart tag, e.g. " – URM Docs". */
-    suffix: z.string(),
     /**
-     * OPEN QUESTION — does the min/max band include the suffix? The guideline
-     * implies not (it is "added automatically"), but a 58-char title plus an
-     * 11-char suffix renders at 69 and Google truncates it.
+     * Appended automatically at render time via smart tag, e.g. " – URM Docs".
+     *
+     * It always counts toward the band below, because Google measures the
+     * string it displays — which includes the suffix. Making that configurable
+     * only allowed the tool to be set up to give advice that guarantees
+     * truncation: 60 characters of writer text plus an 11-character suffix
+     * renders at 71.
      */
-    suffixCountsTowardLimit: z.boolean(),
+    suffix: z.string(),
     /** Lowercase; matched against the start of the meta title. */
     bannedFiller: z.array(z.string()),
-    warnOnDuplicate: z.boolean(),
   }),
 
   metaDescription: z.object({
@@ -82,22 +90,30 @@ export const EditorialGuidelinesSchema = z.object({
     brandMention: z.string(),
     /** Lowercase; at least one should open the description. */
     actionVerbs: z.array(z.string()),
-    warnOnDuplicate: z.boolean(),
   }),
 
   /**
-   * OPEN QUESTION — must meta be unique within one product's docs, or across
-   * every product DocStudio hosts?
+   * Meta uniqueness. One concern rather than a flag per field: the guideline
+   * requires both the title and the description to be unique, and the check
+   * runs the same query for each.
+   *
+   * Deliberately no scope option. Each project's public docs site is its own
+   * deployment on its own domain or subdomain, so two products never share a
+   * site — identical titles on separate sites do not compete in search. An
+   * "across every product" setting could only produce warnings about a website
+   * the writer does not work on.
    */
-  duplicateScope: z.enum(["project", "global"]),
+  duplicates: z.object({
+    warn: z.boolean(),
+  }),
 });
 
 export type EditorialGuidelines = z.infer<typeof EditorialGuidelinesSchema>;
 
 export const DEFAULT_GUIDELINES: EditorialGuidelines = {
   title: {
-    maxWords: 6,
-    maxChars: 45,
+    maxWords: 5,
+    maxChars: 60,
     bannedPrefixes: ["how to", "guide to", "overview of", "a guide to"],
   },
 
@@ -114,16 +130,13 @@ export const DEFAULT_GUIDELINES: EditorialGuidelines = {
     targetKb: 50,
     maxKb: 100,
     requireAlt: true,
-    annotationStyleGuideUrl: "",
   },
 
   metaTitle: {
     min: 50,
     max: 60,
     suffix: "",
-    suffixCountsTowardLimit: false,
     bannedFiller: ["how to", "guide to", "overview"],
-    warnOnDuplicate: true,
   },
 
   metaDescription: {
@@ -142,10 +155,11 @@ export const DEFAULT_GUIDELINES: EditorialGuidelines = {
       "customize",
       "connect",
     ],
-    warnOnDuplicate: true,
   },
 
-  duplicateScope: "project",
+  duplicates: {
+    warn: true,
+  },
 };
 
 /** Settings key in the `global_settings` table. */

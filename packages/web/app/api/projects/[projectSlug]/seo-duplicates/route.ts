@@ -43,7 +43,6 @@ export async function GET(
       slug: search.get("slug") ?? "",
       metaTitle: search.get("metaTitle"),
       metaDescription: search.get("metaDescription"),
-      scope: guidelines.duplicateScope,
     });
 
     return NextResponse.json({ duplicates });
