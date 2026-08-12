@@ -553,8 +553,13 @@ export default function SeoPanel({
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-gray-600">Google Preview</Label>
             <div className="border border-gray-200 rounded-md p-3 bg-gray-50 space-y-0.5">
+              {/* Must include the site-name suffix: it is appended at render,
+                  so a preview without it shows a shorter title than Google
+                  will — which is precisely what a preview exists to prevent. */}
               <p className="text-sm text-blue-700 font-medium truncate">
-                {effectiveTitle || "Page title"}
+                {effectiveTitle
+                  ? countedMetaTitle(effectiveTitle, guidelines)
+                  : "Page title"}
               </p>
               <p className="text-xs text-green-700 truncate">yoursite.com › docs › ...</p>
               <p className="text-xs text-gray-600 mt-0.5 line-clamp-2 leading-relaxed">
