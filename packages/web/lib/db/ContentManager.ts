@@ -486,7 +486,10 @@ export class ContentManager {
         SELECT id, slug, title, description, created_at, updated_at, published, order_index, seo
         FROM documents
         WHERE project_id = ${projectId} AND published = true AND deleted_at IS NULL
-        ORDER BY order_index ASC
+        -- slug is the tiebreaker, not decoration: order_index is 0 for every
+        -- document the UI creates, so ordering on it alone let Postgres return
+        -- any permutation — the sitemap could reshuffle between builds.
+        ORDER BY order_index ASC, slug ASC
       `;
 
       return docs.map((doc) => ({
