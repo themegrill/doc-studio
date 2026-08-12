@@ -14,6 +14,7 @@ import DocRendererClient from "@/components/docs/DocRendererClient";
 import AddSectionOverviewButton from "@/components/docs/AddSectionOverviewButton";
 import RemoveSectionOverviewButton from "@/components/docs/RemoveSectionOverviewButton";
 import SectionHeader from "@/components/docs/SectionPage";
+import { TitleWithBadges } from "@/components/docs/TitleWithBadges";
 
 export default async function SectionPage({
   params,
@@ -179,7 +180,7 @@ export default async function SectionPage({
                   <CardHeader className="flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="line-clamp-2 leading-snug flex-1">
-                        {doc.title}
+                        <TitleWithBadges title={doc.title} />
                       </CardTitle>
                       {isAuthenticated && (
                         <span

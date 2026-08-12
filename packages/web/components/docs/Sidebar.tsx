@@ -7,7 +7,6 @@ import { ChevronRight, ChevronDown, FileText, Book, Plus } from "lucide-react";
 import { useState, useMemo, useCallback, memo } from "react";
 import AddSectionButton from "@/components/docs/AddSectionButton";
 import AddDocumentButton from "@/components/docs/AddDocumentButton";
-import { useEditing } from "@/contexts/EditingContext";
 import {
   Tooltip,
   TooltipContent,
@@ -24,14 +23,7 @@ interface SidebarProps {
 export default function Sidebar({ navigation, isAuthenticated, projectSlug }: SidebarProps) {
   // Call usePathname once at the parent level instead of in each NavItem
   const pathname = usePathname();
-  const { isEditing, isDirty } = useEditing();
 
-  const onLinkClick = useCallback((e: React.MouseEvent) => {
-    if (isEditing && isDirty) {
-      const confirmed = window.confirm("You have unsaved changes. Leave without saving?");
-      if (!confirmed) e.preventDefault();
-    }
-  }, [isEditing, isDirty]);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -51,7 +43,6 @@ export default function Sidebar({ navigation, isAuthenticated, projectSlug }: Si
             pathname={pathname}
             isAuthenticated={isAuthenticated}
             projectSlug={projectSlug}
-            onLinkClick={onLinkClick}
           />
         )) || null}
 
@@ -73,13 +64,11 @@ const NavItem = memo(function NavItem({
   pathname,
   isAuthenticated,
   projectSlug: propProjectSlug,
-  onLinkClick,
 }: {
   route: NavRoute;
   pathname: string;
   isAuthenticated?: boolean;
   projectSlug?: string | null;
-  onLinkClick?: (e: React.MouseEvent) => void;
 }) {
   const [isOpen, setIsOpen] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
@@ -132,8 +121,7 @@ const sectionSlug = useMemo(
           >
             <Link
               href={parentLink}
-              onClick={onLinkClick}
-              className={`flex-1 flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`flex-1 flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                 isParentActive
                   ? "bg-blue-100 text-blue-700"
                   : "text-gray-700 hover:bg-gray-100"
@@ -184,8 +172,7 @@ const sectionSlug = useMemo(
                   <Link
                     key={child.path}
                     href={childLink}
-                    onClick={onLinkClick}
-                    className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+                            className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
                       pathname === childLink
                         ? "bg-blue-100 text-blue-700 font-medium"
                         : "text-gray-600 hover:bg-gray-100"
@@ -214,7 +201,6 @@ const sectionSlug = useMemo(
       ) : (
         <Link
 			href={route.path ? buildLink(route.path) : "#"}
-			onClick={onLinkClick}
 			className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
 				route.path && pathname === buildLink(route.path)
 				? "bg-blue-100 text-blue-700 font-medium"

@@ -47,6 +47,9 @@ function EditControls() {
   // Outstanding guideline warnings are shown once before publishing and then
   // the publish proceeds regardless (DOCSTUDIO-45 §3.1 — warn only, never block).
   const [showWarnings, setShowWarnings] = useState(false);
+  // Unpublishing takes a page off the live site, so it asks first. Reversible,
+  // hence a lightweight inline confirm rather than a modal.
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
 
   const handlePublish = () => {
     if (guidelineWarnings.length > 0 && !showWarnings) {
@@ -77,6 +80,15 @@ function EditControls() {
 
   return (
     <div className="relative flex items-center gap-2">
+      {confirmUnpublish && (
+        <UnpublishConfirmPopover
+          onCancel={() => setConfirmUnpublish(false)}
+          onConfirm={() => {
+            setConfirmUnpublish(false);
+            onSaveDraft();
+          }}
+        />
+      )}
       {showWarnings && (
         <GuidelineWarningPopover
           warnings={guidelineWarnings}
@@ -120,6 +132,19 @@ function EditControls() {
         <span className="hidden sm:inline">Cancel</span>
       </Button>
       {isPublished ? (
+        <>
+        {draftEnabled && (
+          <Button
+            onClick={() => setConfirmUnpublish(true)}
+            disabled={isSaving}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <FileEdit size={16} />
+            <span className="hidden sm:inline">Move to draft</span>
+          </Button>
+        )}
         <Button
           onClick={handlePublish}
           disabled={isSaving}
@@ -138,6 +163,7 @@ function EditControls() {
             </>
           )}
         </Button>
+        </>
       ) : (
         <>
           {draftEnabled && (
@@ -176,6 +202,67 @@ function EditControls() {
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Confirms taking a published page off the public site.
+ *
+ * Reversible in one click, so this is a light inline confirm rather than a
+ * modal — but it is still outward-facing: the page stops being reachable by
+ * readers and drops out of the sidebar the moment it is saved.
+ */
+function UnpublishConfirmPopover({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    const onPointer = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    const id = window.setTimeout(
+      () => document.addEventListener("mousedown", onPointer),
+      0,
+    );
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+      window.clearTimeout(id);
+    };
+  }, [onCancel]);
+
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Move to draft"
+      className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
+    >
+      <div className="px-4 py-3">
+        <p className="text-sm font-medium text-gray-900">Move this page to draft?</p>
+        <p className="mt-1 text-xs text-gray-500">
+          It will be removed from the published site and disappear from the
+          sidebar until you publish it again. Your content is kept.
+        </p>
+      </div>
+      <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
+        <Button variant="outline" size="sm" onClick={onCancel}>
+          Keep published
+        </Button>
+        <Button size="sm" onClick={onConfirm}>
+          Move to draft
+        </Button>
+      </div>
     </div>
   );
 }

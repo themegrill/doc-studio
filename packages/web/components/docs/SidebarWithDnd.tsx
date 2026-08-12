@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { TitleWithBadges } from "@/components/docs/TitleWithBadges";
 import { usePathname, useRouter } from "next/navigation";
 import { Navigation, NavRoute } from "@/lib/db/ContentManager";
 import {
@@ -13,9 +14,6 @@ import {
 import { useState, useMemo, useCallback, memo, useEffect, useRef } from "react";
 import AddSectionButton from "@/components/docs/AddSectionButton";
 import AddDocumentButton from "@/components/docs/AddDocumentButton";
-import { useEditing } from "@/contexts/EditingContext";
-import { parseTitleWithBadges } from "@/lib/parse-title-badges";
-import { Badge } from "@/components/ui/badge-pro";
 import {
   Tooltip,
   TooltipContent,
@@ -24,21 +22,6 @@ import {
 } from "@/components/ui/tooltip";
 
 // Helper component to render title with badges
-const TitleWithBadges = memo(({ title }: { title: string }) => {
-  const { cleanTitle, badges } = useMemo(() => parseTitleWithBadges(title), [title]);
-
-  return (
-    <span className="inline-flex items-center">
-      {cleanTitle}
-      {badges.map((badge, idx) => (
-        <Badge key={`badge-${idx}-${badge.text}`} variant={badge.variant} className="ml-1.5 text-[10px] px-1.5 py-0">
-          {badge.text}
-        </Badge>
-      ))}
-    </span>
-  );
-});
-TitleWithBadges.displayName = "TitleWithBadges";
 import {
   DndContext,
   DragOverlay,
@@ -79,7 +62,6 @@ export default function SidebarWithDnd({
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isEditing, isDirty } = useEditing();
   const [routes, setRoutes] = useState<NavRoute[]>(navigation?.routes || []);
   const [openSectionPath, setOpenSectionPath] = useState<string | null>(null);
   const [dragOverSectionId, setDragOverSectionId] = useState<string | null>(null);
@@ -387,12 +369,6 @@ export default function SidebarWithDnd({
     }
   };
 
-  const onLinkClick = useCallback((e: React.MouseEvent) => {
-    if (isEditing && isDirty) {
-      const confirmed = window.confirm("You have unsaved changes. Leave without saving?");
-      if (!confirmed) e.preventDefault();
-    }
-  }, [isEditing, isDirty]);
 
   const sectionIds = useMemo(
     () => routes.map((route) => `section-${route.id || route.path}`),
@@ -460,7 +436,6 @@ export default function SidebarWithDnd({
                         openSectionPath === routeId ? null : ( routeId ?? null ),
                       )
                     }
-                    onLinkClick={onLinkClick}
                   />
                 );
               })}
@@ -543,7 +518,6 @@ const SortableNavItem = memo(function SortableNavItem({
   isOpen,
   isDropTarget,
   onToggle,
-  onLinkClick,
 }: {
   route: NavRoute;
   pathname: string;
@@ -552,7 +526,6 @@ const SortableNavItem = memo(function SortableNavItem({
   isOpen: boolean;
   isDropTarget?: boolean;
   onToggle: () => void;
-  onLinkClick?: (e: React.MouseEvent) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -652,7 +625,6 @@ const SortableNavItem = memo(function SortableNavItem({
             <Link
               href={parentLink}
               onClick={(e) => {
-                onLinkClick?.(e);
                 if (!e.defaultPrevented && hasChildren) {
                   onToggle();
                 }
@@ -720,8 +692,7 @@ const SortableNavItem = memo(function SortableNavItem({
                         buildLink={buildLink}
                         pathname={pathname}
                         isAuthenticated={isAuthenticated}
-                        onLinkClick={onLinkClick}
-                        disabled={!isOpen}
+                            disabled={!isOpen}
                       />
                     ))}
                   </SortableContext>
@@ -754,7 +725,6 @@ const SortableNavItem = memo(function SortableNavItem({
           )}
           <Link
             href={buildLink(route.path)}
-            onClick={onLinkClick}
             className={`flex-1 flex items-center font-semibold px-3 py-2.5 text-sm rounded-md transition-colors ${
               pathname === buildLink(route.path)
                 ? "bg-blue-100 text-blue-700 "
@@ -775,14 +745,12 @@ const SortableDocItem = memo(function SortableDocItem({
   buildLink,
   pathname,
   isAuthenticated,
-  onLinkClick,
   disabled,
 }: {
   child: NavRoute;
   buildLink: (path: string) => string;
   pathname: string;
   isAuthenticated?: boolean;
-  onLinkClick?: (e: React.MouseEvent) => void;
   disabled?: boolean;
 }) {
   const {
@@ -819,7 +787,6 @@ const SortableDocItem = memo(function SortableDocItem({
       )}
       <Link
         href={childLink}
-        onClick={onLinkClick}
         className={`flex-1 flex items-center px-3 py-2 text-sm rounded-md transition-colors ${
           pathname === childLink
             ? "bg-blue-100 text-blue-700 font-medium"

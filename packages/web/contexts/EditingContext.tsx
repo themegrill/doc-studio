@@ -6,6 +6,7 @@ import {
   useState,
   ReactNode,
   useMemo,
+  useEffect,
   useRef,
   useCallback,
 } from "react";
@@ -182,8 +183,74 @@ export function EditingProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <EditingContext.Provider value={value}>{children}</EditingContext.Provider>
+    <EditingContext.Provider value={value}>
+      <UnsavedChangesGuard active={isEditing && isDirty} />
+      {children}
+    </EditingContext.Provider>
   );
+}
+
+/**
+ * Warns before unsaved edits are abandoned (DOCSTUDIO-41).
+ *
+ * The guard used to be opt-in per link — a `window.confirm` wired into the two
+ * sidebar components — so every other route out of the page silently discarded
+ * the writer's work: the site logo, the Settings button, quick search results,
+ * the changelog and website links, closing the tab. The reported symptom was
+ * the logo; the cause was that protection had to be remembered for each new
+ * link.
+ *
+ * Listening once at the document level inverts that: navigation is guarded by
+ * default and future links inherit it.
+ */
+function UnsavedChangesGuard({ active }: { active: boolean }) {
+  useEffect(() => {
+    if (!active) return;
+
+    // Covers reloads, tab close and anything that leaves the app entirely.
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    // Covers in-app navigation, which beforeunload never sees because the
+    // App Router changes route without unloading the document.
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      // Modified clicks open a new tab, so the current work is not at risk.
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const anchor = (event.target as HTMLElement | null)?.closest?.("a");
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      if (anchor.target && anchor.target !== "_self") return;
+
+      // Links inside the document body are handled by the editor itself —
+      // clicking one while editing places the cursor rather than navigating.
+      if (anchor.closest(".bn-editor")) return;
+
+      const confirmed = window.confirm(
+        "You have unsaved changes. Leave without saving?",
+      );
+      if (!confirmed) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    // Capture phase, so the decision is made before a router link handles it.
+    document.addEventListener("click", onClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [active]);
+
+  return null;
 }
 
 /**
