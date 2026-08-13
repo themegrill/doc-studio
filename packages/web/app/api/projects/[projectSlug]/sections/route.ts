@@ -1,7 +1,63 @@
 import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db/postgres";
 import { checkProjectAccess } from "@/lib/project-helpers";
+import { ContentManager } from "@/lib/db/ContentManager";
+import { stripTitleHTML } from "@/lib/parse-title-badges";
 import { NextRequest } from "next/server";
+
+/**
+ * List a project's sections (DOCSTUDIO-45 §4.2).
+ *
+ * A project's existing sections act as its approved categories unless Marketing
+ * has configured an explicit list, so the editor needs to be able to read them.
+ *
+ * Reads through ContentManager.getNavigation rather than selecting `structure`
+ * directly — that helper is the only path that handles the double-encoded-JSON
+ * case and a missing `routes` array. Titles are stripped of badge markup
+ * (a section may be titled `Payment & Billing <span class="premium-feature">Pro</span>`)
+ * so they can be compared against what a writer actually types.
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectSlug: string }> }
+) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { projectSlug } = await params;
+  const sql = getDb();
+
+  const [project] = await sql`
+    SELECT id FROM projects WHERE slug = ${projectSlug}
+  `;
+
+  if (!project) {
+    return Response.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  if (!(await checkProjectAccess(session.user.id, project.id, "viewer"))) {
+    return Response.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const navigation = await ContentManager.create().getNavigation(project.id);
+
+    const sections = navigation.routes
+      .map((route) => ({
+        title: stripTitleHTML(route.title ?? "").trim(),
+        path: route.path ?? null,
+      }))
+      .filter((section) => section.title.length > 0);
+
+    return Response.json({ sections });
+  } catch (error) {
+    console.error("[GET /api/projects/:slug/sections] Error:", error);
+    // Advisory data — an empty list simply means no category guidance.
+    return Response.json({ sections: [] });
+  }
+}
 
 /**
  * Add a new section to project navigation

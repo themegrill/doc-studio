@@ -4,12 +4,13 @@ import { useState } from "react";
 import { ProjectMembersTable } from "./ProjectMembersTable";
 import { MigrationImport } from "./MigrationImport";
 import { ProjectGeneralSettings } from "./ProjectGeneralSettings";
-import { Users, Settings, BookOpen, Globe, Upload, ArrowLeftRight, Puzzle, Database } from "lucide-react";
+import { Users, Settings, BookOpen, Globe, Upload, ArrowLeftRight, Puzzle, Database, ClipboardCheck } from "lucide-react";
 import { KnowledgeBaseSettings } from "./KnowledgeBaseSettings";
 import { DeploySettings } from "./DeploySettings";
 import { RedirectsSettings } from "./RedirectsSettings";
 import { IntegrationsSettings } from "./IntegrationsSettings";
 import { SampleDataSettings } from "./SampleDataSettings";
+import { EditorialGuidelinesSettings } from "@/components/settings/EditorialGuidelinesSettings";
 
 interface DeployState {
   domain: string;
@@ -47,7 +48,7 @@ interface ProjectSettingsTabsProps {
   projectIntegrations: Record<string, any>;
 }
 
-type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy" | "redirects" | "integrations" | "sample-data";
+type TabType = "general" | "members" | "knowledge-base" | "import" | "deploy" | "redirects" | "integrations" | "guidelines" | "sample-data";
 
 export function ProjectSettingsTabs({
   projectSlug,
@@ -104,6 +105,11 @@ export function ProjectSettingsTabs({
       id: "integrations" as const,
       label: "Integrations",
       icon: Puzzle,
+    },
+    {
+      id: "guidelines" as const,
+      label: "Guidelines",
+      icon: ClipboardCheck,
     },
     {
       id: "sample-data" as const,
@@ -250,6 +256,22 @@ export function ProjectSettingsTabs({
               projectSlug={projectSlug}
               initialRedirects={projectRedirects}
             />
+          </div>
+        )}
+
+        {activeTab === "guidelines" && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">Documentation Guidelines</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Override the org-wide editorial rules for this project. The
+                site-name suffix, the product name and the approved category
+                list are product-specific; everything else usually stays at the
+                inherited value.
+              </p>
+            </div>
+
+            <EditorialGuidelinesSettings projectSlug={projectSlug} />
           </div>
         )}
 

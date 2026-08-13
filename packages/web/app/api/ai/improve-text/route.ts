@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
 import { logAIUsage } from "@/lib/ai-usage-tracker";
+import { buildGuidelinePrompt } from "@/lib/editorial/ai-prompt";
 
 export const maxDuration = 30;
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    const { text, context } = body;
+    const { text, context, projectSlug } = body;
 
     if (!text || typeof text !== "string") {
       return NextResponse.json(
@@ -35,23 +36,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Rules come from the shared editorial ruleset, so improving a title applies
+    // the same length and phrasing rules the editor checks live.
+    const { system: guidelineRules } = await buildGuidelinePrompt(
+      context === "title" ? "title" : "description",
+      projectSlug,
+    );
+
     // Improve text using Claude with settings from database
     const anthropic = createAnthropic({ apiKey: config.apiKey });
     const { text: improvedText, usage } = await generateText({
       model: anthropic(config.defaultModel),
-      system: `You are a helpful writing assistant that improves text clarity, grammar, and professionalism.
-${
-  context === "title"
-    ? "You are improving a document title. Keep it concise (3-8 words) and professional."
-    : "You are improving a document description. Keep it brief (1-2 sentences) and informative."
-}
+      system: `You are a writing assistant improving an existing ${
+        context === "title" ? "document title" : "document description"
+      } for clarity, grammar and professionalism.
 
-Rules:
-- Fix grammar and spelling errors
-- Improve clarity and readability
-- Maintain the original meaning
-- Keep it professional and suitable for documentation
-- Return ONLY the improved text, nothing else (no quotes, no explanations)`,
+${guidelineRules}
+
+Additional rules:
+- Fix grammar and spelling errors.
+- Improve clarity and readability.
+- Maintain the original meaning — this is an edit, not a rewrite.`,
       prompt: `Improve this ${context}:
 
 ${text}`,

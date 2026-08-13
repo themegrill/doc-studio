@@ -16,7 +16,8 @@
     "sync-kb:clear": "tsx scripts/utils/sync-knowledge-bases.ts --clear",
     "create-missed-tables": "tsx scripts/utils/create-ai-usage-table.ts && tsx scripts/utils/create-global-settings-table.ts",
     "sync-client": "node scripts/sync-client.js",
-    "sync-client:dry": "node scripts/sync-client.js --dry-run"
+    "sync-client:dry": "node scripts/sync-client.js --dry-run",
+    "check:editorial": "tsx scripts/check-editorial-rules.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.35",

@@ -3,6 +3,9 @@ import { auth } from "@/lib/auth";
 import { put } from "@vercel/blob";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
+import { checkImage } from "@/lib/editorial/image-check";
+import { readImageInfo } from "@/lib/editorial/image-dimensions";
+import { getGuidelines } from "@/lib/editorial/config";
 
 export async function POST(request: NextRequest) {
   console.log("[POST /api/upload] File upload request received");
@@ -52,12 +55,28 @@ export async function POST(request: NextRequest) {
       "video/quicktime",
       "video/x-msvideo",
     ];
-    const isImage = validImageTypes.includes(file.type);
-    const isVideo = validVideoTypes.includes(file.type);
+    // Browsers frequently hand over a dragged file with an empty or generic
+    // `type` (e.g. "" or application/octet-stream), which used to fail the MIME
+    // allowlist and produce a confusing rejection for a perfectly good PNG. Sniff
+    // the real format from the header bytes and let that override the MIME.
+    const headerBytes = new Uint8Array(
+      await file.slice(0, 64 * 1024).arrayBuffer(),
+    );
+    const sniffed = readImageInfo(headerBytes);
+
+    const isImage =
+      validImageTypes.includes(file.type) || sniffed.format !== "unknown";
+    const isVideo = !isImage && validVideoTypes.includes(file.type);
+
     if (!isImage && !isVideo) {
-      console.error("[POST /api/upload] Invalid file type:", { type: file.type });
+      console.error("[POST /api/upload] Invalid file type:", {
+        type: file.type || "(none)",
+        sniffed: sniffed.format,
+      });
       return NextResponse.json(
-        { error: "Invalid file type. Only images and videos are allowed." },
+        {
+          error: `Unsupported file type${file.type ? ` "${file.type}"` : ""}. Only images and videos are allowed.`,
+        },
         { status: 400 },
       );
     }
@@ -71,6 +90,39 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Screenshot compliance (DOCSTUDIO-45 §3). The editor runs the identical
+    // check before uploading so the writer gets instant feedback; this is the
+    // rule of record, since the endpoint is reachable directly. We reject rather
+    // than auto-convert — see lib/editorial/image-check.ts for why.
+    if (isImage) {
+      const guidelines = await getGuidelines(
+        formData.get("projectSlug")?.toString() || null,
+      );
+      const check = checkImage(new Uint8Array(buffer), file.size, guidelines);
+
+      if (!check.ok) {
+        console.error("[POST /api/upload] Image failed editorial guidelines:", {
+          name: file.name,
+          failures: check.failures,
+        });
+        return NextResponse.json(
+          {
+            error: check.failures.join(" "),
+            failures: check.failures,
+            guideline: "images",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (check.notes.length) {
+        console.log("[POST /api/upload] Image accepted with notes:", check.notes);
+      }
+    }
+
     const timestamp = Date.now();
     const randomStr = Math.random().toString(36).substring(2, 15);
     const ext = file.name.split(".").pop();
@@ -80,9 +132,6 @@ export async function POST(request: NextRequest) {
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       const pathname = `uploads/${username}/${filename}`;
       console.log("[POST /api/upload] Uploading to Vercel Blob:", { pathname });
-
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
 
       const blob = await put(pathname, buffer, {
         access: "public",
@@ -104,8 +153,6 @@ export async function POST(request: NextRequest) {
     await mkdir(uploadsDir, { recursive: true });
 
     const filepath = path.join(uploadsDir, filename);
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
 
     console.log("[POST /api/upload] Saving file to:", { filepath });
     await writeFile(filepath, buffer);

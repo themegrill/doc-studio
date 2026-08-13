@@ -14,6 +14,7 @@ import DocRendererClient from "@/components/docs/DocRendererClient";
 import AddSectionOverviewButton from "@/components/docs/AddSectionOverviewButton";
 import RemoveSectionOverviewButton from "@/components/docs/RemoveSectionOverviewButton";
 import SectionHeader from "@/components/docs/SectionPage";
+import { TitleWithBadges } from "@/components/docs/TitleWithBadges";
 
 export default async function SectionPage({
   params,
@@ -93,7 +94,7 @@ export default async function SectionPage({
     (slug): slug is string => typeof slug === "string" && slug.length > 0
   );
 
-  const [sectionDoc, documents] = await Promise.all([
+  const [sectionDoc, documentRows] = await Promise.all([
     isAuthenticated ? cm.getDocAdmin(project.id, sectionSlug) : cm.getDoc(project.id, sectionSlug),
     validChildSlugs.length > 0
       ? isAuthenticated
@@ -103,7 +104,6 @@ export default async function SectionPage({
             WHERE project_id = ${project.id}
               AND slug = ANY(${sql.array(validChildSlugs)})
               AND deleted_at IS NULL
-            ORDER BY order_index ASC, created_at ASC
           `
         : sql`
             SELECT id, slug, title, description, published, created_at, updated_at
@@ -112,10 +112,27 @@ export default async function SectionPage({
               AND slug = ANY(${sql.array(validChildSlugs)})
               AND published = true
               AND deleted_at IS NULL
-            ORDER BY order_index ASC, created_at ASC
           `
       : Promise.resolve([]),
   ]);
+
+  // Put the rows back into sidebar order (DOCSTUDIO-42).
+  //
+  // `validChildSlugs` already carries it — drag-and-drop rewrites
+  // navigation.structure and the sidebar renders that array as-is — but
+  // `slug = ANY(array)` is unordered set membership, so Postgres discards it.
+  // The previous `ORDER BY order_index` could not recover it either: order_index
+  // is 0 for every document the UI creates (saveDoc never sets it, and the
+  // reorder endpoint only rewrites the navigation JSONB), so the sort collapsed
+  // to creation order and the cards disagreed with the sidebar.
+  //
+  // Driving from the slug list rather than sorting the rows also handles the
+  // anonymous branch for free: an unpublished document simply has no row and
+  // drops out.
+  const bySlug = new Map(documentRows.map((row) => [row.slug as string, row]));
+  const documents = validChildSlugs
+    .map((slug) => bySlug.get(slug))
+    .filter((row): row is (typeof documentRows)[number] => row !== undefined);
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -179,7 +196,7 @@ export default async function SectionPage({
                   <CardHeader className="flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="line-clamp-2 leading-snug flex-1">
-                        {doc.title}
+                        <TitleWithBadges title={doc.title} />
                       </CardTitle>
                       {isAuthenticated && (
                         <span

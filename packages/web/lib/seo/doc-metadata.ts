@@ -254,3 +254,23 @@ export async function buildJsonLd(
     "@graph": [website, webpage, article, breadcrumb, imageObject].filter(Boolean),
   };
 }
+
+/**
+ * Append the site-name suffix to a page title (DOCSTUDIO-45 §4.4).
+ *
+ * The guideline describes the suffix as "added automatically via smart tag".
+ * Nothing in DocStudio actually did that — the editor told writers it was being
+ * appended while `generateMetadata` shipped the bare title — so this is that
+ * smart tag. Configured per project, because the site name is product-specific.
+ *
+ * Idempotent: a writer who types the suffix anyway (the editor warns them) gets
+ * it once, not twice.
+ */
+export function applyTitleSuffix(title: string, suffix?: string | null): string {
+  const clean = (title ?? "").trim();
+  const tag = (suffix ?? "").trim();
+  if (!clean || !tag) return clean;
+  return clean.toLowerCase().endsWith(tag.toLowerCase())
+    ? clean
+    : `${clean}${suffix}`;
+}

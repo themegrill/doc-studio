@@ -7,8 +7,8 @@ import TableOfContents from "@/components/docs/TableOfContents";
 import SearchDialog from "@/components/docs/SearchDialog";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings, FileEdit } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { Menu, X, Pencil, Save, Loader2, CheckCircle, AlertCircle, Eye, Settings, FileEdit, AlertTriangle } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { EditingProvider, useEditing } from "@/contexts/EditingContext";
@@ -40,8 +40,25 @@ function EditControls() {
     isSaving,
     saveSuccess,
     saveError,
+    guidelineWarnings,
   } = useEditing();
   const pathname = usePathname();
+
+  // Outstanding guideline warnings are shown once before publishing and then
+  // the publish proceeds regardless (DOCSTUDIO-45 §3.1 — warn only, never block).
+  const [showWarnings, setShowWarnings] = useState(false);
+  // Unpublishing takes a page off the live site, so it asks first. Reversible,
+  // hence a lightweight inline confirm rather than a modal.
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
+
+  const handlePublish = () => {
+    if (guidelineWarnings.length > 0 && !showWarnings) {
+      setShowWarnings(true);
+      return;
+    }
+    setShowWarnings(false);
+    onSave();
+  };
 
   // Only show controls on individual document/section pages, not on the sections index
   const isDocumentPage = pathname.includes('/docs/');
@@ -62,7 +79,37 @@ function EditControls() {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative flex items-center gap-2">
+      {confirmUnpublish && (
+        <UnpublishConfirmPopover
+          onCancel={() => setConfirmUnpublish(false)}
+          onConfirm={() => {
+            setConfirmUnpublish(false);
+            onSaveDraft();
+          }}
+        />
+      )}
+      {showWarnings && (
+        <GuidelineWarningPopover
+          warnings={guidelineWarnings}
+          onDismiss={() => setShowWarnings(false)}
+          onPublishAnyway={() => {
+            setShowWarnings(false);
+            onSave();
+          }}
+        />
+      )}
+      {guidelineWarnings.length > 0 && !showWarnings && (
+        <button
+          type="button"
+          onClick={() => setShowWarnings(true)}
+          title="Guidelines not met"
+          className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+        >
+          <AlertTriangle size={12} />
+          {guidelineWarnings.length}
+        </button>
+      )}
       {saveSuccess && (
         <div className="flex items-center gap-1 text-sm text-green-600">
           <CheckCircle size={16} />
@@ -85,8 +132,21 @@ function EditControls() {
         <span className="hidden sm:inline">Cancel</span>
       </Button>
       {isPublished ? (
+        <>
+        {draftEnabled && (
+          <Button
+            onClick={() => setConfirmUnpublish(true)}
+            disabled={isSaving}
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <FileEdit size={16} />
+            <span className="hidden sm:inline">Move to draft</span>
+          </Button>
+        )}
         <Button
-          onClick={onSave}
+          onClick={handlePublish}
           disabled={isSaving}
           size="sm"
           className="flex items-center gap-2"
@@ -103,6 +163,7 @@ function EditControls() {
             </>
           )}
         </Button>
+        </>
       ) : (
         <>
           {draftEnabled && (
@@ -122,7 +183,7 @@ function EditControls() {
             </Button>
           )}
           <Button
-            onClick={onSave}
+            onClick={handlePublish}
             disabled={isSaving}
             size="sm"
             className="flex items-center gap-2"
@@ -141,6 +202,154 @@ function EditControls() {
           </Button>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * Confirms taking a published page off the public site.
+ *
+ * Reversible in one click, so this is a light inline confirm rather than a
+ * modal — but it is still outward-facing: the page stops being reachable by
+ * readers and drops out of the sidebar the moment it is saved.
+ */
+function UnpublishConfirmPopover({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    const onPointer = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    const id = window.setTimeout(
+      () => document.addEventListener("mousedown", onPointer),
+      0,
+    );
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+      window.clearTimeout(id);
+    };
+  }, [onCancel]);
+
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Move to draft"
+      className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg border border-gray-200 bg-white shadow-lg"
+    >
+      <div className="px-4 py-3">
+        <p className="text-sm font-medium text-gray-900">Move this page to draft?</p>
+        <p className="mt-1 text-xs text-gray-500">
+          It will be removed from the published site and disappear from the
+          sidebar until you publish it again. Your content is kept.
+        </p>
+      </div>
+      <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
+        <Button variant="outline" size="sm" onClick={onCancel}>
+          Keep published
+        </Button>
+        <Button size="sm" onClick={onConfirm}>
+          Move to draft
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The pre-publish checklist (DOCSTUDIO-45 §4).
+ *
+ * Shown once when Publish is pressed with outstanding warnings. Publishing is
+ * never blocked — the second press goes through — so this is information, not a
+ * gate. Save Draft never triggers it at all.
+ */
+function GuidelineWarningPopover({
+  warnings,
+  onDismiss,
+  onPublishAnyway,
+}: {
+  warnings: string[];
+  onDismiss: () => void;
+  onPublishAnyway: () => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Escape and click-outside. Without these the only ways out were the two
+  // buttons, which forced a decision on someone who just wanted to keep typing
+  // — and both are what people reach for before hunting for a close button.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    const onPointer = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node)) onDismiss();
+    };
+    document.addEventListener("keydown", onKey);
+    // Deferred to the next frame so the click that opened the popover does not
+    // immediately close it again.
+    const id = window.setTimeout(
+      () => document.addEventListener("mousedown", onPointer),
+      0,
+    );
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+      window.clearTimeout(id);
+    };
+  }, [onDismiss]);
+
+  return (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Guidelines not met"
+      className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg border border-amber-200 bg-white shadow-lg"
+    >
+      <div className="flex items-start gap-2 border-b border-gray-100 px-4 py-3">
+        <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-600" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gray-900">
+            {warnings.length} guideline{warnings.length === 1 ? "" : "s"} not met
+          </p>
+          <p className="text-xs text-gray-500">
+            You can publish anyway — this is a reminder, not a block.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Close"
+          className="-mr-1 -mt-1 shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <ul className="max-h-56 space-y-1.5 overflow-y-auto px-4 py-3">
+        {warnings.map((warning, index) => (
+          <li key={index} className="text-xs leading-relaxed text-gray-600">
+            {warning}
+          </li>
+        ))}
+      </ul>
+      <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-4 py-2.5">
+        <Button variant="outline" size="sm" onClick={onDismiss}>
+          Review first
+        </Button>
+        <Button size="sm" onClick={onPublishAnyway}>
+          Publish anyway
+        </Button>
+      </div>
     </div>
   );
 }

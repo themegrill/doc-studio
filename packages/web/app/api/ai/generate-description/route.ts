@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
 import { logAIUsage } from "@/lib/ai-usage-tracker";
+import { buildGuidelinePrompt } from "@/lib/editorial/ai-prompt";
 
 export const maxDuration = 30;
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    const { content, title, currentDescription } = body;
+    const { content, title, currentDescription, projectSlug } = body;
 
     if (!content || typeof content !== "string") {
       return NextResponse.json(
@@ -35,17 +36,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Rules come from the shared editorial ruleset (see lib/editorial/prompt.ts).
+    const { system } = await buildGuidelinePrompt("description", projectSlug);
+
     // Generate description using Claude with settings from database
     const anthropic = createAnthropic({ apiKey: config.apiKey });
     const { text, usage } = await generateText({
       model: anthropic(config.defaultModel),
-      system: `You are a helpful assistant that generates concise, informative descriptions for documentation pages.
-The description should be:
-- Brief but informative (1-2 sentences, max 150 characters)
-- Summarize the main topic or purpose
-- Professional and suitable for technical documentation
-- Not repeat the title verbatim
-- Return ONLY the description text, nothing else`,
+      system,
       prompt: `Based on this documentation content, generate a clear and concise description:
 
 Title: ${title || "Untitled"}

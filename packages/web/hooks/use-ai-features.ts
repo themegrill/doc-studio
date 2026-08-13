@@ -7,7 +7,16 @@ interface AIFeatures {
   textGeneration: boolean;
   titleGeneration: boolean;
   descriptionGeneration: boolean;
+  editorialReview: boolean;
 }
+
+const DEFAULT_FEATURES: AIFeatures = {
+  chat: true,
+  textGeneration: true,
+  titleGeneration: true,
+  descriptionGeneration: true,
+  editorialReview: true,
+};
 
 interface AIFeaturesHook {
   features: AIFeatures;
@@ -21,12 +30,7 @@ interface AIFeaturesHook {
  * Use this in components to conditionally show/hide AI features
  */
 export function useAIFeatures(): AIFeaturesHook {
-  const [features, setFeatures] = useState<AIFeatures>({
-    chat: true,
-    textGeneration: true,
-    titleGeneration: true,
-    descriptionGeneration: true,
-  });
+  const [features, setFeatures] = useState<AIFeatures>(DEFAULT_FEATURES);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadFeatures = async () => {
@@ -34,7 +38,9 @@ export function useAIFeatures(): AIFeaturesHook {
       const response = await fetch("/api/settings/ai/features");
       if (response.ok) {
         const data = await response.json();
-        setFeatures(data.features);
+        // Merge over defaults: a settings row written before a feature existed
+        // omits its key, which would otherwise read as "disabled".
+        setFeatures({ ...DEFAULT_FEATURES, ...data.features });
       }
     } catch (error) {
       console.error("Failed to load AI features:", error);

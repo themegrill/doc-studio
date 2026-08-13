@@ -1,6 +1,7 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AISettings } from "@/components/settings/AISettings";
 import { GitHubSettings } from "@/components/settings/GitHubSettings";
+import { EditorialGuidelinesSettings } from "@/components/settings/EditorialGuidelinesSettings";
 import { OrganizationSettings } from "@/components/settings/OrganizationSettings";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
@@ -43,6 +44,13 @@ export default async function SettingsPage() {
           <div>
             <h2 className="text-2xl font-semibold mb-4">AI Configuration</h2>
             <AISettings />
+          </div>
+
+          <div id="editorial">
+            <h2 className="text-2xl font-semibold mb-4">
+              Documentation Guidelines
+            </h2>
+            <EditorialGuidelinesSettings />
           </div>
 
           <div id="github">

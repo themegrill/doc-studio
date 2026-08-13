@@ -15,11 +15,13 @@ export async function GET() {
       WHERE key = 'ai.features'
     `;
 
-    const features = result?.value || {
+    const features = {
       chat: true,
       textGeneration: true,
       titleGeneration: true,
       descriptionGeneration: true,
+      editorialReview: true,
+      ...(result?.value ?? {}),
     };
 
     return NextResponse.json({
@@ -35,6 +37,7 @@ export async function GET() {
         textGeneration: true,
         titleGeneration: true,
         descriptionGeneration: true,
+        editorialReview: true,
       },
     });
   }

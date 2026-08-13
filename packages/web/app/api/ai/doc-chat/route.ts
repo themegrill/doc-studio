@@ -4,8 +4,9 @@ import { getKnowledgeBasePromptAsync } from "@/lib/knowledge-base-loader";
 import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
 import { logAIUsage } from "@/lib/ai-usage-tracker";
-import fs from "fs";
-import path from "path";
+import { loadGuidelineMarkdown } from "@/lib/editorial/guideline-doc";
+import { renderGuidelinesPrompt } from "@/lib/editorial/prompt";
+import { getGuidelines } from "@/lib/editorial/config";
 import crypto from "crypto";
 
 export const maxDuration = 300;
@@ -36,51 +37,26 @@ export async function POST(req: Request) {
     // Get AI configuration
     const config = await getAIConfig();
 
-    // Load documentation writing guideline
-    let documentationGuidelinePrompt = "";
-    try {
-      const guidelinePath = path.join(
-        process.cwd(),
-        "template",
-        "documentation-guideline.md"
-      );
-      if (fs.existsSync(guidelinePath)) {
-        documentationGuidelinePrompt = fs.readFileSync(guidelinePath, "utf-8");
-      }
-    } catch (error) {
-      console.error(
-        "[Doc Chat API] Failed to load documentation guideline:",
-        error
+    // Load the prose style guide (global, overridden per project) plus the
+    // machine-readable ruleset, both shared with the one-shot AI routes so the
+    // chat assistant and the "Write with AI" buttons give the same advice.
+    const projectSlug = documentContext?.projectSlug;
+    const {
+      standards: editorialStandardsPrompt,
+      global: documentationGuidelinePrompt,
+      project: projectSpecificGuidelinePrompt,
+    } = loadGuidelineMarkdown(projectSlug);
+
+    if (projectSpecificGuidelinePrompt) {
+      console.log(
+        `[Doc Chat API] Loaded project-specific guideline for ${projectSlug}`
       );
     }
 
-    // Load project-specific documentation guideline if it exists (overrides general)
-    const projectSlug = documentContext?.projectSlug;
-    let projectSpecificGuidelinePrompt = "";
-    if (projectSlug) {
-      try {
-        const projectGuidelinePath = path.join(
-          process.cwd(),
-          "template",
-          projectSlug,
-          "documentation-guideline.md"
-        );
-        if (fs.existsSync(projectGuidelinePath)) {
-          projectSpecificGuidelinePrompt = fs.readFileSync(
-            projectGuidelinePath,
-            "utf-8"
-          );
-          console.log(
-            `[Doc Chat API] Loaded project-specific guideline for ${projectSlug}`
-          );
-        }
-      } catch (error) {
-        console.error(
-          "[Doc Chat API] Failed to load project-specific documentation guideline:",
-          error
-        );
-      }
-    }
+    const editorialRulesPrompt = renderGuidelinesPrompt(
+      await getGuidelines(projectSlug),
+      "review"
+    );
 
     // Load knowledge base for this project (served from cache after first load)
     console.log(`[doc-chat] projectSlug=${projectSlug ?? "null"}`);
@@ -242,6 +218,18 @@ No product knowledge base is available for this project. For all Tier 1 product 
       ? `\n\n---\n\n## DOCUMENTATION WRITING STANDARDS\n\nApply these standards to all documentation you write or edit:\n\n${documentationGuidelinePrompt}`
       : "";
 
+    // The checkable rules — lengths, formats, approved categories — rendered from
+    // the same settings object the editor's live hints read, so the assistant
+    // cannot advise something the editor will then flag.
+    // Standards first, then the generated numbers. Both apply to every project;
+    // neither is replaced by a project's own writing guideline.
+    const editorialRulesSection = [
+      editorialStandardsPrompt
+        ? `\n\n---\n\n${editorialStandardsPrompt}`
+        : "",
+      `\n\n---\n\n## EDITORIAL RULES\n\n${editorialRulesPrompt}`,
+    ].join("");
+
     // ── Editor tools section ──────────────────────────────────────────────────
 
     const editorToolsPrompt = editorEnabled
@@ -373,7 +361,7 @@ Step 2 — After seeing \`[Tool Result: ...]\` with the block ID, update:
 
 Direct editing is not active in this session. Provide your edits as suggested text that the user can apply manually. For inline editing, users can use the BlockNote AI toolbar (sparkles button).`;
 
-    const systemPrompt = `${basePrompt}${guidelineSection}\n${editorToolsPrompt}`;
+    const systemPrompt = `${basePrompt}${guidelineSection}${editorialRulesSection}\n${editorToolsPrompt}`;
 
     // ── Build model messages ───────────────────────────────────────────────────
 

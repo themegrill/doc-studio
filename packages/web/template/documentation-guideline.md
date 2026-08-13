@@ -348,6 +348,9 @@ Before completing documentation, the assistant MUST ensure:
 
 ---
 
+
+---
+
 # Core Principle
 
 Documentation must enable users to complete tasks independently, accurately, and confidently.
@@ -370,4 +373,5 @@ Before delivering documentation, verify:
 - Management is covered
 - Language is simple and concise
 - Placeholder images (`placeholder.png`) are included where UI clarity is needed
+
 ```

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateAIFeature, getAIConfig } from "@/lib/ai-config";
 import { logAIUsage } from "@/lib/ai-usage-tracker";
+import { buildGuidelinePrompt } from "@/lib/editorial/ai-prompt";
 
 export const maxDuration = 30;
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     // Parse request body
     const body = await req.json();
-    const { content, currentTitle } = body;
+    const { content, currentTitle, projectSlug } = body;
 
     if (!content || typeof content !== "string") {
       return NextResponse.json(
@@ -35,29 +36,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Rules come from the shared editorial ruleset, so the generated title is
+    // task-oriented and free of the "How to" prefix the editor would flag.
+    const { guidelines, system } = await buildGuidelinePrompt(
+      "title",
+      projectSlug,
+    );
+
     // Generate title using Claude with settings from database
     const anthropic = createAnthropic({ apiKey: config.apiKey });
     const { text, usage } = await generateText({
       model: anthropic(config.defaultModel),
-      system: `You are a helpful assistant that generates concise, descriptive titles for documentation pages.
-The title should be:
-- Clear and descriptive (3-8 words)
-- Professional and suitable for technical documentation
-- Capture the main topic or purpose of the content
-- Not use quotes or special formatting
-- Return ONLY the title text, nothing else`,
+      system,
       prompt: `Based on this documentation content, generate a clear and concise title:
 
 ${content}
 
 ${
   currentTitle ? `Current title: "${currentTitle}"\n\n` : ""
-}Generate a better title that accurately describes this content.`,
+}Generate a better title that accurately describes this content, in at most ${guidelines.title.maxWords} words.`,
       temperature: config.temperature,
       maxOutputTokens: Math.min(config.maxTokens, 100), // Titles don't need many tokens
     });
 
-    const generatedTitle = text.trim();
+    const generatedTitle = text.trim().replace(/^["']|["']$/g, "");
 
     // Log usage for tracking
     await logAIUsage({

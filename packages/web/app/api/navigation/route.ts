@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
   `;
   const publishedSlugs = new Set(publishedDocs.map((d) => d.slug as string));
 
-  // Track which routes are sections (originally had children) so they stay visible
-  // even when all their child documents are unpublished
+  // Track which routes are sections (they originally had children), so a section
+  // can be judged differently from a standalone document below.
   const sectionIds = new Set(
     nav.routes
       .filter((route) => route.children && route.children.length > 0)
@@ -47,10 +47,22 @@ export async function GET(request: NextRequest) {
     })
     .filter((route) => {
       const routeKey = route.id ?? route.path ?? route.title;
-      // Sections (originally had children) are always visible even if all docs are unpublished
-      if (sectionIds.has(routeKey)) return true;
-      // Standalone top-level document routes: only show if published
       const slug = route.path?.replace(/^\/docs\//, "") ?? route.slug ?? "";
+
+      if (sectionIds.has(routeKey)) {
+        // A section is only worth showing if a visitor can actually reach
+        // something through it. Sections used to be kept unconditionally, so a
+        // section whose documents were all still drafts appeared on the public
+        // site as an empty, dead entry.
+        //
+        // `route.children` has already been narrowed to published documents
+        // above, so a non-empty list means there is something to click.
+        const hasPublishedChild = (route.children ?? []).length > 0;
+        const hasPublishedOverview = !!slug && publishedSlugs.has(slug);
+        return hasPublishedChild || hasPublishedOverview;
+      }
+
+      // Standalone top-level document routes: only show if published
       return !slug || publishedSlugs.has(slug);
     });
 
