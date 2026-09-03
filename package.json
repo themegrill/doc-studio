@@ -14,7 +14,9 @@
     "dev": "cd packages/web && pnpm dev",
     "build": "cd packages/web && pnpm build",
     "start": "cd packages/web && pnpm start",
-    "lint": "cd packages/web && pnpm lint"
+    "lint": "cd packages/web && pnpm lint",
+    "mcp:build": "pnpm --filter @doc-studio/mcp-server build",
+    "mcp:start": "pnpm --filter @doc-studio/mcp-server start"
   },
   "dependencies": {
     "domhandler": "^6.0.1",
