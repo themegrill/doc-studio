@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "pnpm --filter @doc-studio/core build",
+    "prebuild": "pnpm --filter @doc-studio/mcp-server build",
     "build": "node db/migrate-on-build.mjs && next build",
     "start": "next start",
     "lint": "eslint",
@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@doc-studio/core": "workspace:*",
+    "@doc-studio/mcp-server": "workspace:*",
     "@ai-sdk/anthropic": "^3.0.35",
     "@anthropic-ai/sdk": "^0.80.0",
     "@blocknote/core": "^0.46.2",

@@ -11,6 +11,12 @@
     "dist",
     "README.md"
   ],
+  "exports": {
+    "./http-handler": {
+      "types": "./src/http-handler.ts",
+      "default": "./dist/http-handler.js"
+    }
+  },
   "scripts": {
     "prebuild": "pnpm --filter @doc-studio/core build",
     "build": "tsc",
