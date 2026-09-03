@@ -1,0 +1,26 @@
+{
+  "name": "@doc-studio/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "dependencies": {
+    "postgres": "^3.4.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  },
+  "scripts": {
+    "build": "tsc --outDir dist --noEmit false --declaration true",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  }
+}
