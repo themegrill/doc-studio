@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "pnpm --filter @doc-studio/core build",
     "build": "node db/migrate-on-build.mjs && next build",
     "start": "next start",
     "lint": "eslint",
