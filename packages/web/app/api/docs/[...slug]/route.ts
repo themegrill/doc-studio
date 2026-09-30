@@ -38,17 +38,25 @@ export async function GET(
 
 		const project = await getProjectFromRequest(hostname, pathname);
 		if (!project) {
-			return NextResponse.json({ error: "Not found" }, { status: 404 });
+			return NextResponse.json(
+				{ error: "Not found" },
+				{ status: 404, headers: { "Cache-Control": "no-store" } },
+			);
 		}
 
 		const cm = ContentManager.create();
 		const docContent = await cm.getDoc(project.id, slug);
 
 		if (!docContent) {
-			return NextResponse.json({ error: "Not found" }, { status: 404 });
+			return NextResponse.json(
+				{ error: "Not found" },
+				{ status: 404, headers: { "Cache-Control": "no-store" } },
+			);
 		}
 
-		return NextResponse.json(docContent);
+		return NextResponse.json(docContent, {
+			headers: { "Cache-Control": "no-store" },
+		});
 	} catch (error: unknown) {
 		const err = error as Error;
 		const resolvedParams = await params;
@@ -57,7 +65,10 @@ export async function GET(
 			error: err.message,
 			stack: err.stack,
 		});
-		return NextResponse.json({ error: err.message }, { status: 500 });
+		return NextResponse.json(
+			{ error: err.message },
+			{ status: 500, headers: { "Cache-Control": "no-store" } },
+		);
 	}
 }
 

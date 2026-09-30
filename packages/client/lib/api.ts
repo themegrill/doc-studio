@@ -151,7 +151,7 @@ export async function getNavigation(): Promise<Navigation | null> {
   try {
     const res = await fetchWithRetry(
       `${API_BASE_URL}/api/navigation?projectSlug=${PROJECT_SLUG}`,
-      { next: { revalidate: 60 } }
+      { cache: "no-store" }
     );
 
     if (!res || !res.ok) return null;
@@ -188,7 +188,7 @@ export async function getDoc(slug: string): Promise<DocContent | null> {
   try {
     const res = await fetchWithRetry(
       `${API_BASE_URL}/api/docs/${slug}?projectSlug=${PROJECT_SLUG}`,
-      { next: { revalidate: 30 } }
+      { cache: "no-store" }
     );
     if (!res || !res.ok) return null;
     return res.json();

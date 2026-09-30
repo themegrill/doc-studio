@@ -13,7 +13,8 @@ interface SearchResult {
 
 interface NavRoute {
   title: string;
-  path: string;
+  path?: string;
+  slug?: string;
   children?: NavRoute[];
 }
 
@@ -24,7 +25,10 @@ export async function GET(request: NextRequest) {
     const projectSlugParam = searchParams.get("projectSlug");
 
     if (!query || query.trim().length === 0) {
-      return NextResponse.json({ results: [] });
+      return NextResponse.json(
+        { results: [] },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     // Get project context
@@ -36,7 +40,10 @@ export async function GET(request: NextRequest) {
     const project = await getProjectFromRequest(hostname, pathname);
 
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Project not found" },
+        { status: 404, headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     // Search in database
@@ -87,10 +94,20 @@ export async function GET(request: NextRequest) {
       // Search through sections (parent routes)
       routes.forEach((route) => {
         if (route.title?.toLowerCase().includes(lowerQuery)) {
-          // Extract section slug from path
-          const sectionSlug = route.path.replace(/^\/docs\//, '');
+          // Category-shaped routes may have only nested document paths.
+          const firstChild = route.children?.find(
+            (child) => child.slug || child.path
+          );
+          const sectionSlug =
+            route.slug ||
+            route.path?.replace(/^\/docs\//, "") ||
+            (
+              firstChild?.slug ||
+              firstChild?.path?.replace(/^\/docs\//, "")
+            )?.split("/")[0];
+          if (!sectionSlug) return;
           sectionResults.push({
-            id: `section-${route.path}`,
+            id: `section-${sectionSlug}`,
             title: route.title,
             slug: sectionSlug,
             description: `Section • ${route.children?.length || 0} documents`,
@@ -123,13 +140,16 @@ export async function GET(request: NextRequest) {
     // Combine results - sections first, then documents
     const formattedResults = [...sectionResults, ...formattedDocResults];
 
-    return NextResponse.json({ results: formattedResults });
+    return NextResponse.json(
+      { results: formattedResults },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error: unknown) {
     const err = error as Error;
     console.error("[Search API] Error:", err.message);
     return NextResponse.json(
       { error: "Search failed" },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

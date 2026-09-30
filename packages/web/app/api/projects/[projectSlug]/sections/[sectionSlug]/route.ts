@@ -1,6 +1,11 @@
 import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db/postgres";
 import { checkProjectAccess } from "@/lib/project-helpers";
+import {
+  documentService,
+  domainErrorResponse,
+  webActor,
+} from "@/lib/documents/service";
 import { NextRequest } from "next/server";
 
 /**
@@ -15,90 +20,27 @@ export async function PATCH(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { projectSlug, sectionSlug } = await params;
-  const { title } = await request.json();
+  try {
+    const { projectSlug, sectionSlug } = await params;
+    const { title } = await request.json();
 
-  if (!title) {
-    return Response.json(
-      { error: "Title is required" },
-      { status: 400 }
+    if (typeof title !== "string" || !title.trim() || title.length > 500) {
+      return Response.json(
+        { error: "Title is required (maximum 500 characters)" },
+        { status: 400 }
+      );
+    }
+
+    const section = await documentService().updateSection(
+      webActor(session.user.id),
+      projectSlug,
+      sectionSlug,
+      title
     );
+    return Response.json({ success: true, section });
+  } catch (error) {
+    return domainErrorResponse(error);
   }
-
-  const sql = getDb();
-
-  // Get project
-  const [project] = await sql`
-    SELECT id FROM projects WHERE slug = ${projectSlug}
-  `;
-
-  if (!project) {
-    return Response.json({ error: "Project not found" }, { status: 404 });
-  }
-
-  // Check access
-  const hasAccess = await checkProjectAccess(
-    session.user.id,
-    project.id,
-    "editor"
-  );
-  if (!hasAccess) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  // Get current navigation
-  const [nav] = await sql`
-    SELECT structure FROM navigation WHERE project_id = ${project.id}
-  `;
-
-  if (!nav) {
-    return Response.json({ error: "Navigation not found" }, { status: 404 });
-  }
-
-  let structure = nav.structure;
-
-  // Find and update the section
-  // Handle both sections with path (old format) and category sections (new format)
-  const sectionPath = `/docs/${sectionSlug}`;
-  const sectionIndex = structure.routes.findIndex((route: any) => {
-    // Check direct path match (old format)
-    if (route.path === sectionPath) {
-      return true;
-    }
-    // Check if this is a category section by checking children (new format)
-    if (route.children && route.children.length > 0) {
-      // Check if any child's path matches this section slug
-      return route.children.some((child: any) => {
-        const childSlug = child.slug || child.path?.replace('/docs/', '');
-        return childSlug === sectionSlug || childSlug?.startsWith(sectionSlug + '/');
-      });
-    }
-    return false;
-  });
-
-  if (sectionIndex === -1) {
-    return Response.json({ error: "Section not found" }, { status: 404 });
-  }
-
-  // Update the section title
-  structure.routes[sectionIndex].title = title;
-
-  // Update navigation in database
-  await sql`
-    UPDATE navigation
-    SET structure = ${sql.json(structure)}
-    WHERE project_id = ${project.id}
-  `;
-
-  // Also update the section overview document title if it exists
-  await sql`
-    UPDATE documents
-    SET title = ${title}
-    WHERE project_id = ${project.id}
-      AND slug = ${sectionSlug}
-  `;
-
-  return Response.json({ success: true, section: structure.routes[sectionIndex] });
 }
 
 /**

@@ -10,7 +10,10 @@ export async function GET(request: NextRequest) {
   const [project] = await sql`SELECT id FROM projects WHERE slug = ${projectSlug} LIMIT 1`;
 
   if (!project) {
-    return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Project not found" },
+      { status: 404, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   const cm = ContentManager.create();
@@ -66,5 +69,5 @@ export async function GET(request: NextRequest) {
       return !slug || publishedSlugs.has(slug);
     });
 
-  return NextResponse.json(nav);
+  return NextResponse.json(nav, { headers: { "Cache-Control": "no-store" } });
 }
