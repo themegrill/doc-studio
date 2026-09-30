@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsc --outDir dist --noEmit false --declaration true",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "test:integration": "tsx --test test/revisions.integration.ts"
   }
 }

@@ -13,6 +13,7 @@
  * skips quietly if it is not available at build time.
  */
 import postgres from "postgres";
+import { readFileSync } from "node:fs";
 
 const url = process.env.DATABASE_URL;
 
@@ -41,6 +42,13 @@ const steps = [
           ON documents ((seo->>'metaDescription'))
           WHERE deleted_at IS NULL AND seo->>'metaDescription' IS NOT NULL;
     `,
+  },
+  {
+    name: "document revisions and version tokens (db/14)",
+    sql: readFileSync(
+      new URL("./14-document-revisions.sql", import.meta.url),
+      "utf8"
+    ),
   },
 ];
 

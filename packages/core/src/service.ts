@@ -1,3 +1,25 @@
+import {
+	boundedText,
+	captureCurrent,
+	checkEdit,
+	closeLiveIntervals,
+	currentDto,
+	nextRevisionNumber,
+	recordCurrentChange,
+	revisionDto,
+	revisionSummary,
+	revisionUuid,
+	validateRevisionInput,
+	versionToken,
+	type RevisionCreate,
+	type RevisionDetail,
+	type RevisionList,
+	type RevisionPatch,
+	type RevisionPublishInput,
+	type RevisionPublishResult,
+	type RevisionRow,
+	type RevisionVersionInput,
+} from "./revisions.js";
 import postgres from "postgres";
 import { createHash, timingSafeEqual } from "node:crypto";
 import {
@@ -85,6 +107,8 @@ export function assertActorScope(actor: ActorContext, required: string) {
 }
 
 export function validateBlocks(blocks: Block[]) {
+	if (!Array.isArray(blocks))
+		throw new DomainError("INVALID_INPUT", "blocks must be an array");
 	if (blocks.length > 500)
 		throw new DomainError(
 			"INVALID_INPUT",
@@ -103,6 +127,17 @@ export function validateBlocks(blocks: Block[]) {
 				"Block nesting exceeds 10 levels",
 			);
 		for (const block of items) {
+			if (
+				!block ||
+				typeof block !== "object" ||
+				typeof block.id !== "string" ||
+				typeof block.type !== "string" ||
+				(block.children !== undefined && !Array.isArray(block.children))
+			)
+				throw new DomainError(
+					"INVALID_INPUT",
+					"Invalid block structure",
+				);
 			total += 1;
 			if (total > 2_000)
 				throw new DomainError(
@@ -202,6 +237,370 @@ export class DocumentService {
 				`Project ${role} access required`,
 			);
 		return project;
+	}
+
+	private async revisionPermissions(
+		actor: ActorContext,
+		projectSlug: string,
+		db: Db,
+	) {
+		let canEdit = false;
+		try {
+			this.scope(actor, "docs:write");
+			await this.project(actor, projectSlug, "editor", db);
+			canEdit = true;
+		} catch (error) {
+			if (!(error instanceof DomainError) || error.code !== "FORBIDDEN")
+				throw error;
+		}
+		let canPublish = canEdit;
+		try {
+			this.scope(actor, "docs:publish");
+		} catch {
+			canPublish = false;
+		}
+		return { canEdit, canPublish };
+	}
+	private async revisionDocument(
+		db: Db,
+		projectId: unknown,
+		documentId: string,
+		lock = false,
+	) {
+		revisionUuid(documentId, "documentId");
+		const rows = lock
+			? await db`SELECT * FROM documents WHERE id=${documentId} AND project_id=${projectId} AND deleted_at IS NULL FOR UPDATE`
+			: await db`SELECT * FROM documents WHERE id=${documentId} AND project_id=${projectId} AND deleted_at IS NULL`;
+		if (!rows[0]) throw new DomainError("NOT_FOUND", "Document not found");
+		return rows[0];
+	}
+	private async revisionRow(
+		db: Db,
+		documentId: string,
+		revisionId: string,
+		lock = false,
+	) {
+		revisionUuid(revisionId, "revisionId");
+		const rows = lock
+			? await db`SELECT * FROM document_revisions WHERE id=${revisionId} AND document_id=${documentId} FOR UPDATE`
+			: await db`SELECT * FROM document_revisions WHERE id=${revisionId} AND document_id=${documentId}`;
+		if (!rows[0]) throw new DomainError("NOT_FOUND", "Revision not found");
+		return rows[0];
+	}
+	private async revisionDetail(
+		db: Db,
+		actor: ActorContext,
+		projectSlug: string,
+		doc: RevisionRow,
+		row: RevisionRow,
+	): Promise<RevisionDetail> {
+		return {
+			...revisionDto(row),
+			currentDocumentVersion: String(doc.content_version),
+			currentSlug: doc.slug,
+			currentPublished: doc.published === true,
+			...(await this.revisionPermissions(actor, projectSlug, db)),
+		};
+	}
+	async listRevisions(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		pagination: {
+			limit?: number;
+			offset?: number;
+		} = {},
+	): Promise<RevisionList> {
+		this.scope(actor, "docs:read");
+		const p = await this.project(actor, projectSlug, "viewer");
+		const doc = await this.revisionDocument(this.sql, p.id, documentId);
+		const limit = pagination.limit ?? 30,
+			offset = pagination.offset ?? 0;
+		if (
+			!Number.isInteger(limit) ||
+			limit < 1 ||
+			limit > 100 ||
+			!Number.isInteger(offset) ||
+			offset < 0
+		)
+			throw new DomainError("INVALID_INPUT", "Invalid pagination");
+		const rows = await this
+			.sql`SELECT id, document_id, revision_number, title, description, status, product_version, release_note, source_revision_id, base_document_version, edit_version, applied_document_version, was_published, captured_slug, created_by, updated_by, released_by, created_at, updated_at, released_at, superseded_at, captured_at FROM document_revisions WHERE document_id=${documentId} ORDER BY revision_number DESC LIMIT ${limit} OFFSET ${offset}`;
+		const [count] = await this
+			.sql`SELECT COUNT(*) AS total FROM document_revisions WHERE document_id=${documentId}`;
+		return {
+			current: currentDto(doc),
+			revisions: rows.map(revisionSummary),
+			total: Number(count.total),
+			limit,
+			offset,
+			...(await this.revisionPermissions(actor, projectSlug, this.sql)),
+		};
+	}
+	async getRevision(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		revisionId: string,
+	): Promise<RevisionDetail> {
+		this.scope(actor, "docs:read");
+		const p = await this.project(actor, projectSlug, "viewer");
+		const doc = await this.revisionDocument(this.sql, p.id, documentId);
+		return this.revisionDetail(
+			this.sql,
+			actor,
+			projectSlug,
+			doc,
+			await this.revisionRow(this.sql, documentId, revisionId),
+		);
+	}
+	async createRevision(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		input: RevisionCreate = {},
+	): Promise<RevisionDetail> {
+		this.scope(actor, "docs:write");
+		validateRevisionInput(input);
+		if (input.sourceRevisionId !== undefined)
+			revisionUuid(input.sourceRevisionId, "sourceRevisionId");
+		return this.sql.begin(async (db) => {
+			const p = await this.project(actor, projectSlug, "editor", db);
+			const doc = await this.revisionDocument(db, p.id, documentId, true);
+			const source = input.sourceRevisionId
+				? await this.revisionRow(db, documentId, input.sourceRevisionId)
+				: doc;
+			if (
+				input.sourceRevisionId &&
+				!["released", "historical"].includes(String(source.status))
+			)
+				throw new DomainError(
+					"CONFLICT",
+					"Only released or historical snapshots can be forked",
+				);
+			await captureCurrent(db, doc, actor.userId);
+			const number = await nextRevisionNumber(db, documentId);
+			const [row] =
+				await db`INSERT INTO document_revisions (document_id,revision_number,title,description,blocks,seo,status,product_version,release_note,source_revision_id,base_document_version,captured_slug,created_by,updated_by) VALUES (${documentId},${number},${source.title},${source.description},${db.json((source.blocks ?? []) as never)},${db.json((source.seo ?? {}) as never)},'draft',${input.productVersion ?? null},${input.releaseNote ?? null},${input.sourceRevisionId ?? null},${doc.content_version},${doc.slug},${actor.userId},${actor.userId}) RETURNING *`;
+			return this.revisionDetail(db, actor, projectSlug, doc, row);
+		});
+	}
+	async patchRevision(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		revisionId: string,
+		patch: RevisionPatch,
+	): Promise<RevisionDetail> {
+		this.scope(actor, "docs:write");
+		validateRevisionInput(patch);
+		versionToken(patch.expectedEditVersion, "expectedEditVersion");
+		if (patch.blocks !== undefined) {
+			if (!Array.isArray(patch.blocks))
+				throw new DomainError(
+					"INVALID_INPUT",
+					"blocks must be an array",
+				);
+			validateBlocks(patch.blocks);
+		}
+		if (
+			!Object.keys(patch).some((key) =>
+				[
+					"title",
+					"description",
+					"blocks",
+					"seo",
+					"productVersion",
+					"releaseNote",
+				].includes(key),
+			)
+		)
+			throw new DomainError("INVALID_INPUT", "Patch is empty");
+		return this.sql.begin(async (db) => {
+			const p = await this.project(actor, projectSlug, "editor", db);
+			const doc = await this.revisionDocument(db, p.id, documentId, true);
+			const current = await this.revisionRow(
+				db,
+				documentId,
+				revisionId,
+				true,
+			);
+			checkEdit(current, patch.expectedEditVersion);
+			const seo =
+				patch.seo === undefined
+					? current.seo
+					: deepMerge(
+							(current.seo ?? {}) as Record<string, unknown>,
+							patch.seo as Record<string, unknown>,
+						);
+			const [row] =
+				await db`UPDATE document_revisions SET title=${patch.title ?? current.title},description=${patch.description === undefined ? current.description : patch.description},blocks=${db.json((patch.blocks ?? current.blocks) as never)},seo=${db.json(seo as never)},product_version=${patch.productVersion === undefined ? current.product_version : patch.productVersion},release_note=${patch.releaseNote === undefined ? current.release_note : patch.releaseNote},status='draft',edit_version=edit_version+1,updated_by=${actor.userId},updated_at=NOW() WHERE id=${revisionId} RETURNING *`;
+			return this.revisionDetail(db, actor, projectSlug, doc, row);
+		});
+	}
+	private async changeRevisionStatus(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		revisionId: string,
+		input: RevisionVersionInput,
+		status: "draft" | "ready" | "discarded",
+	): Promise<RevisionDetail> {
+		this.scope(actor, "docs:write");
+		versionToken(input.expectedEditVersion, "expectedEditVersion");
+		return this.sql.begin(async (db) => {
+			const p = await this.project(actor, projectSlug, "editor", db);
+			const doc = await this.revisionDocument(db, p.id, documentId, true);
+			const current = await this.revisionRow(
+				db,
+				documentId,
+				revisionId,
+				true,
+			);
+			checkEdit(current, input.expectedEditVersion);
+			const [row] =
+				await db`UPDATE document_revisions SET status=${status},edit_version=edit_version+1,updated_by=${actor.userId},updated_at=NOW() WHERE id=${revisionId} RETURNING *`;
+			return this.revisionDetail(db, actor, projectSlug, doc, row);
+		});
+	}
+	async setRevisionReady(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		revisionId: string,
+		input: RevisionVersionInput & {
+			ready: boolean;
+		},
+	): Promise<RevisionDetail> {
+		if (typeof input.ready !== "boolean")
+			throw new DomainError("INVALID_INPUT", "ready must be a boolean");
+		return this.changeRevisionStatus(
+			actor,
+			projectSlug,
+			documentId,
+			revisionId,
+			input,
+			input.ready ? "ready" : "draft",
+		);
+	}
+	async discardRevision(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		revisionId: string,
+		input: RevisionVersionInput,
+	): Promise<RevisionDetail> {
+		return this.changeRevisionStatus(
+			actor,
+			projectSlug,
+			documentId,
+			revisionId,
+			input,
+			"discarded",
+		);
+	}
+	async publishRevision(
+		actor: ActorContext,
+		projectSlug: string,
+		documentId: string,
+		revisionId: string,
+		input: RevisionPublishInput,
+	): Promise<RevisionPublishResult> {
+		this.scope(actor, "docs:write");
+		this.scope(actor, "docs:publish");
+		versionToken(input.expectedEditVersion, "expectedEditVersion");
+		versionToken(input.expectedDocumentVersion, "expectedDocumentVersion");
+		return this.sql.begin(async (db) => {
+			const p = await this.project(actor, projectSlug, "editor", db);
+			const locked = await this.lockNavigation(db, p.id);
+			const doc = await this.revisionDocument(db, p.id, documentId, true);
+			const current = await this.revisionRow(
+				db,
+				documentId,
+				revisionId,
+				true,
+			);
+			if (current.status === "released")
+				return {
+					revision: revisionDto(current),
+					currentDocument: {
+						id: documentId,
+						slug: String(doc.slug),
+						contentVersion: String(doc.content_version),
+					},
+					alreadyReleased: true,
+					isCurrent:
+						String(current.applied_document_version) ===
+						String(doc.content_version),
+				};
+			checkEdit(current, input.expectedEditVersion);
+			if (
+				String(doc.content_version) !== input.expectedDocumentVersion ||
+				String(current.base_document_version) !==
+					input.expectedDocumentVersion
+			)
+				throw new DomainError(
+					"STALE_VERSION",
+					"Current document has changed; create a fresh revision and reapply your changes",
+					{
+						currentDocumentVersion: String(doc.content_version),
+						baseDocumentVersion: String(
+							current.base_document_version,
+						),
+					},
+				);
+			validateBlocks(current.blocks as Block[]);
+			validateRevisionInput({
+				title: current.title as string,
+				seo: current.seo as SeoData,
+				expectedEditVersion: input.expectedEditVersion,
+			});
+			await captureCurrent(db, doc, actor.userId);
+			await closeLiveIntervals(db, documentId);
+			const [updated] =
+				await db`UPDATE documents SET title=${current.title},description=${current.description},blocks=${db.json(current.blocks as never)},seo=${db.json(current.seo as never)},published=true,content_version=content_version+1,updated_by=${actor.userId},updated_at=NOW() WHERE id=${documentId} RETURNING *`;
+			this.updateNavigationTitle(
+				locked.nav,
+				documentId,
+				String(doc.slug),
+				String(current.title),
+			);
+			await db`UPDATE navigation SET structure=${db.json(locked.nav as never)},updated_by=${actor.userId} WHERE id=${locked.id}`;
+			const [released] =
+				await db`UPDATE document_revisions SET status='released',applied_document_version=${updated.content_version},was_published=true,captured_slug=${doc.slug},released_by=${actor.userId},released_at=NOW(),updated_by=${actor.userId},updated_at=NOW(),edit_version=edit_version+1 WHERE id=${revisionId} RETURNING *`;
+			return {
+				revision: revisionDto(released),
+				currentDocument: {
+					id: documentId,
+					slug: String(updated.slug),
+					contentVersion: String(updated.content_version),
+				},
+				alreadyReleased: false,
+				isCurrent: true,
+			};
+		});
+	}
+	private updateNavigationTitle(
+		nav: Navigation,
+		documentId: string,
+		slug: string,
+		title: string,
+	) {
+		for (const route of nav.routes) {
+			for (const child of [route, ...(route.children ?? [])])
+				if (child.id === documentId || routeSlug(child) === slug)
+					child.title = title;
+			// Category-shaped navigation has no parent path. Its overview is a child.
+			if (
+				!slug.includes("/") &&
+				(route.children ?? []).some(
+					(child) =>
+						routeSlug(child) === slug ||
+						routeSlug(child).startsWith(slug + "/"),
+				)
+			)
+				route.title = title;
+		}
 	}
 
 	async listProjects(actor: ActorContext) {
@@ -351,9 +750,11 @@ export class DocumentService {
 		if (!Object.keys(patch).some((k) => k !== "expectedUpdatedAt"))
 			throw new DomainError("INVALID_INPUT", "Patch is empty");
 		if (patch.published !== undefined) this.scope(actor, "docs:publish");
+		boundedText(patch.title, "title", 500, false, true);
 		if (patch.blocks) validateBlocks(patch.blocks);
 		return this.sql.begin(async (db) => {
 			const p = await this.project(actor, projectSlug, "editor", db);
+			const locked = await this.lockNavigation(db, p.id);
 			const [current] =
 				await db`SELECT * FROM documents WHERE id=${documentId} AND project_id=${p.id} AND deleted_at IS NULL FOR UPDATE`;
 			if (!current)
@@ -394,9 +795,17 @@ export class DocumentService {
 							patch.seo as unknown as Record<string, unknown>,
 						);
 			const [doc] =
-				await db`UPDATE documents SET title=${patch.title === undefined ? current.title : patch.title}, description=${patch.description === undefined ? current.description : patch.description}, blocks=${patch.blocks === undefined ? current.blocks : db.json(patch.blocks as never)}, seo=${patch.seo === undefined ? current.seo : db.json(mergedSeo as never)}, published=${patch.published === undefined ? current.published : patch.published}, slug=${nextSlug}, updated_by=${actor.userId}, updated_at=NOW() WHERE id=${documentId} RETURNING id, slug, title, description, published, seo, updated_at`;
+				await db`UPDATE documents SET title=${patch.title === undefined ? current.title : patch.title}, description=${patch.description === undefined ? current.description : patch.description}, blocks=${patch.blocks === undefined ? current.blocks : db.json(patch.blocks as never)}, seo=${patch.seo === undefined ? current.seo : db.json(mergedSeo as never)}, published=${patch.published === undefined ? current.published : patch.published}, slug=${nextSlug}, updated_by=${actor.userId}, updated_at=NOW() WHERE id=${documentId} RETURNING *`;
+			await recordCurrentChange(db, current, doc, actor.userId);
 			if (patch.title !== undefined || nextSlug !== oldSlug) {
-				const locked = await this.lockNavigation(db, p.id);
+				if (patch.title !== undefined)
+					this.updateNavigationTitle(
+						locked.nav,
+						documentId,
+						oldSlug,
+						patch.title,
+					);
+
 				for (const r of locked.nav.routes)
 					for (const c of [r, ...(r.children ?? [])])
 						if (c.id === documentId || routeSlug(c) === oldSlug) {
@@ -424,6 +833,7 @@ export class DocumentService {
 				published: doc.published,
 				seo: doc.seo,
 				updated_at: doc.updated_at,
+				contentVersion: String(doc.content_version),
 				...(nextSlug !== oldSlug
 					? { redirect: { from: `/${oldSlug}`, to: `/${nextSlug}` } }
 					: {}),
@@ -474,10 +884,11 @@ export class DocumentService {
 		this.scope(actor, "docs:write");
 		return this.sql.begin(async (db) => {
 			const p = await this.project(actor, projectSlug, "editor", db);
+			const locked = await this.lockNavigation(db, p.id);
 			const [doc] =
 				await db`SELECT id, slug, title FROM documents WHERE id=${documentId} AND project_id=${p.id} AND deleted_at IS NULL FOR UPDATE`;
 			if (!doc) throw new DomainError("NOT_FOUND", "Document not found");
-			const locked = await this.lockNavigation(db, p.id);
+
 			const target = findSection(locked.nav, targetSection);
 			if (!target)
 				throw new DomainError("NOT_FOUND", "Target section not found");
@@ -629,6 +1040,7 @@ export class DocumentService {
 		title: string,
 	) {
 		this.scope(actor, "docs:write");
+		boundedText(title, "title", 500, false, true);
 		return this.sql.begin(async (db) => {
 			const p = await this.project(actor, projectSlug, "editor", db);
 			const locked = await this.lockNavigation(db, p.id);
@@ -636,8 +1048,17 @@ export class DocumentService {
 			if (!section)
 				throw new DomainError("NOT_FOUND", "Section not found");
 			section.title = title;
+			for (const child of section.children ?? [])
+				if (routeSlug(child) === sectionPrefix(section))
+					child.title = title;
 			await db`UPDATE navigation SET structure=${db.json(locked.nav as never)}, updated_by=${actor.userId} WHERE id=${locked.id}`;
-			await db`UPDATE documents SET title=${title}, updated_by=${actor.userId} WHERE project_id=${p.id} AND slug=${sectionSlug(section)}`;
+			const [before] =
+				await db`SELECT * FROM documents WHERE project_id=${p.id} AND slug=${sectionPrefix(section)} AND deleted_at IS NULL FOR UPDATE`;
+			if (before) {
+				const [after] =
+					await db`UPDATE documents SET title=${title}, updated_by=${actor.userId}, updated_at=NOW() WHERE id=${before.id} RETURNING *`;
+				await recordCurrentChange(db, before, after, actor.userId);
+			}
 			return section;
 		});
 	}
@@ -897,11 +1318,20 @@ export class DocumentService {
 		documentId: string,
 	) {
 		this.scope(actor, "docs:delete");
-		const p = await this.project(actor, projectSlug, "editor");
-		const [doc] = await this
-			.sql`UPDATE documents SET deleted_at=NOW(), deleted_by=${actor.userId}, updated_by=${actor.userId} WHERE id=${documentId} AND project_id=${p.id} AND deleted_at IS NULL RETURNING id, slug, deleted_at`;
-		if (!doc) throw new DomainError("NOT_FOUND", "Document not found");
-		return doc;
+		return this.sql.begin(async (db) => {
+			const p = await this.project(actor, projectSlug, "editor", db);
+			const before = await this.revisionDocument(
+				db,
+				p.id,
+				documentId,
+				true,
+			);
+			await captureCurrent(db, before, actor.userId);
+			await closeLiveIntervals(db, documentId);
+			const [doc] =
+				await db`UPDATE documents SET deleted_at=NOW(),deleted_by=${actor.userId},updated_by=${actor.userId} WHERE id=${documentId} RETURNING id,slug,deleted_at`;
+			return doc;
+		});
 	}
 	async restoreDocument(
 		actor: ActorContext,
@@ -912,14 +1342,15 @@ export class DocumentService {
 		this.scope(actor, "docs:delete");
 		return this.sql.begin(async (db) => {
 			const p = await this.project(actor, projectSlug, "editor", db);
+			const locked = await this.lockNavigation(db, p.id);
 			const [doc] =
-				await db`SELECT id, slug, title FROM documents WHERE id=${documentId} AND project_id=${p.id} AND deleted_at IS NOT NULL FOR UPDATE`;
+				await db`SELECT * FROM documents WHERE id=${documentId} AND project_id=${p.id} AND deleted_at IS NOT NULL FOR UPDATE`;
 			if (!doc)
 				throw new DomainError(
 					"NOT_FOUND",
 					"Document not found in trash",
 				);
-			const locked = await this.lockNavigation(db, p.id);
+
 			const section = locked.nav.routes.find((route) =>
 				(route.children ?? []).some(
 					(child) =>
@@ -956,8 +1387,14 @@ export class DocumentService {
 				await db`UPDATE navigation SET structure=${db.json(locked.nav as never)}, updated_by=${actor.userId} WHERE id=${locked.id}`;
 			}
 			const [updated] =
-				await db`UPDATE documents SET deleted_at=NULL, deleted_by=NULL, updated_by=${actor.userId}, updated_at=NOW() WHERE id=${documentId} RETURNING id, slug, updated_at`;
-			return { ...updated, position };
+				await db`UPDATE documents SET deleted_at=NULL, deleted_by=NULL, updated_by=${actor.userId}, updated_at=NOW() WHERE id=${documentId} RETURNING *`;
+			await recordCurrentChange(db, doc, updated, actor.userId);
+			return {
+				id: updated.id,
+				slug: updated.slug,
+				updated_at: updated.updated_at,
+				position,
+			};
 		});
 	}
 	private token(
