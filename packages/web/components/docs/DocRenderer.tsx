@@ -1,4 +1,5 @@
 "use client";
+import DocumentRevisionActions from "./DocumentRevisionActions";
 
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import { useRouter } from "next/navigation";
@@ -228,11 +229,18 @@ const SuggestionMenuWithAI = memo(function SuggestionMenuWithAI({ editor }: { ed
   );
 });
 
+export interface RevisionEditorAdapter {
+  onReady?: (ready: boolean) => void;
+  save: (snapshot: Pick<DocContent, "title" | "description" | "blocks" | "seo">) => Promise<void>;
+}
+
 interface Props {
   doc: DocContent;
   slug: string;
   projectSlug?: string;
   isSectionOverview?: boolean;
+  readOnly?: boolean;
+  revisionAdapter?: RevisionEditorAdapter;
 }
 
 interface EditorState {
@@ -277,7 +285,7 @@ interface ImproveTextState {
 /** Stable reference — a fresh [] each render would re-run the lint memo. */
 const NO_REVIEW_FINDINGS: Finding[] = [];
 
-export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview = false }: Props) {
+export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview = false, readOnly = false, revisionAdapter }: Props) {
   const router = useRouter();
   const editingContext = useEditing();
   // Destructure ALL stable setters so callbacks never depend on the editingContext object.
@@ -342,7 +350,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   } | null>(null);
 
   const { data: session } = useSession();
-  const isAuthenticated = !!session?.user;
+  const isAuthenticated = !!session?.user && !readOnly;
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   // ── Editorial guidelines (DOCSTUDIO-45) ─────────────────────────────────────
@@ -393,7 +401,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     if (editingContext.isEditing !== editorState.isEditing) {
       setEditorState((prev) => ({
 		...prev,
-		isEditing: editingContext.isEditing,
+		isEditing: editingContext.isEditing && !readOnly,
 		...(editingContext.isEditing && isSectionOverview
 			? {
 				isEditingSectionTitle: true,
@@ -1193,6 +1201,10 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     } as any,
   });
 
+  // BlockNote may emit onChange during its initial editable transition.
+  const [initialRevisionBlocks] = useState(() => revisionAdapter ? JSON.stringify(editor.document) : "");
+  const lastRevisionBlocks = useRef(initialRevisionBlocks);
+
   // Update editor ref when editor is created
   useEffect(() => {
     editorRef.current = editor;
@@ -1550,6 +1562,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     const currentEditor = editorRef.current;
 
     if (!currentEditor) {
+      if (revisionAdapter) throw new Error("Editor is still loading");
       console.error("[handleSave] Editor not initialized");
       return;
     }
@@ -1560,6 +1573,20 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
     setSaveState({ isSaving: true, success: false, error: "" });
 
     try {
+      if (readOnly) throw new Error("This revision is read-only");
+      if (revisionAdapter) {
+        await revisionAdapter.save({
+          title: currentEditorState.sectionTitle ?? currentEditorState.title,
+          description: currentEditorState.description,
+          blocks: normalizeLegacyMarkdownBlocks(currentEditor.document),
+          seo: currentEditorState.seo,
+        });
+        contextSetIsDirty(false);
+        contextSetIsSaving(false);
+        contextSetSaveSuccess(true);
+        setSaveState({isSaving:false,success:true,error:""});
+        return;
+      }
       // Save section title if editing a section overview
       if (
         currentEditorState.isEditingSectionTitle &&
@@ -1677,8 +1704,9 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         success: false,
         error: errorMsg,
       });
+      if (revisionAdapter) throw error;
     }
-  }, [slug, projectSlug, isSectionOverview, doc.slug, router,
+  }, [slug, projectSlug, isSectionOverview, doc.slug, router, revisionAdapter, readOnly,
       contextSetIsSaving, contextSetSaveSuccess, contextSetSaveError,
       contextSetIsEditing, contextSetIsDirty]);
 
@@ -1748,6 +1776,11 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   // BlockNote to re-subscribe its listener, potentially firing onChange and cascading.
   // contextSetIsEditing/contextSetIsDirty are React state setters (stable references).
   const handleEditorChange = useCallback(() => {
+    if (revisionAdapter) {
+      const blocks = JSON.stringify(editor.document);
+      if (blocks === lastRevisionBlocks.current) return;
+      lastRevisionBlocks.current = blocks;
+    }
     // When editable transitions true→false, BlockNote fires onChange internally.
     // Skip entirely: this isn't a user edit, so don't re-enter edit mode or mark dirty.
     if (!editorStateRef.current.isEditing && !editor.isEditable) return;
@@ -1782,27 +1815,29 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         isTransformingRef.current = false;
       }
     }
-  }, [isAuthenticated, contextSetIsEditing, contextSetIsDirty, editor]);
+  }, [isAuthenticated, contextSetIsEditing, contextSetIsDirty, editor, revisionAdapter]);
 
   // Register save and cancel handlers. All setters here are stable React refs so
   // this effect only re-runs when the handlers themselves change (i.e. when route
   // props like slug change), never just because context state (isDirty, etc.) changed.
   useEffect(() => {
-    contextSetDraftEnabled(!isSectionOverview);
+    contextSetDraftEnabled(!isSectionOverview && !revisionAdapter && !readOnly);
     contextSetIsPublished(doc.published === true);
     contextSetOnSave(handleSave);
-    if (!isSectionOverview) contextSetOnSaveDraft(handleSaveDraft);
+    revisionAdapter?.onReady?.(true);
+    if (!isSectionOverview && !revisionAdapter && !readOnly) contextSetOnSaveDraft(handleSaveDraft);
     contextSetOnCancel(handleCancel);
 
     return () => {
       // Only clear the ref-based handlers — do NOT reset state flags like draftEnabled/
       // isPublished here. Those state setters would trigger a context update → DocRenderer
       // re-render → handleSave recreated → this effect re-runs → infinite cascade.
+      revisionAdapter?.onReady?.(false);
       contextSetOnSave(null);
       contextSetOnSaveDraft(null);
       contextSetOnCancel(null);
     };
-  }, [handleSave, handleSaveDraft, handleCancel, isSectionOverview, doc.published,
+  }, [handleSave, handleSaveDraft, handleCancel, isSectionOverview, doc.published, revisionAdapter, readOnly,
       contextSetDraftEnabled, contextSetIsPublished,
       contextSetOnSave, contextSetOnSaveDraft, contextSetOnCancel]);
 
@@ -1811,11 +1846,13 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
   // unmount — not on every dependency change — avoiding re-render cascades.
   useEffect(() => {
     return () => {
+      // Revision pages own an isolated provider; StrictMode replay must not
+      // clear their parent-controlled edit mode after the dynamic editor mounts.
+      if (revisionAdapter) return;
       contextSetIsEditing(false);
       contextSetIsDirty(false);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [revisionAdapter, contextSetIsEditing, contextSetIsDirty]);
 
   return (
     <DocContextProvider projectSlug={projectSlug}>
@@ -2071,8 +2108,8 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
                 docTitle={editorState.title}
                 docDescription={editorState.description}
                 contentPreview={documentContext.blocksPreview}
-                slug={!isSectionOverview ? editorState.slug : undefined}
-                onSlugChange={!isSectionOverview ? (newSlug) => {
+                slug={!isSectionOverview && !revisionAdapter ? editorState.slug : undefined}
+                onSlugChange={!isSectionOverview && !revisionAdapter ? (newSlug) => {
                   setEditorState((prev) => ({ ...prev, slug: newSlug }));
                   editingContext.setIsDirty(true);
                 } : undefined}
@@ -2139,7 +2176,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
           )}
         </div>
 
-        {isAuthenticated && projectSlug && !editorState.isEditing && (
+        {isAuthenticated && projectSlug && !editorState.isEditing && !revisionAdapter && (
           <DeleteDocumentButton
             projectSlug={projectSlug}
             documentSlug={slug}
@@ -2149,6 +2186,9 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         )}
       </div>
 
+      {isAuthenticated && projectSlug && doc.id && !revisionAdapter && !readOnly && (
+        <DocumentRevisionActions projectSlug={projectSlug} documentId={doc.id} />
+      )}
       {/* Editor */}
       <div
         className={`${editorState.isEditing ? "border rounded-lg p-6 bg-white" : ""}`}
@@ -2193,7 +2233,7 @@ export default function DocRenderer({ doc, slug, projectSlug, isSectionOverview 
         `}</style>
         <BlockNoteView
           editor={editor}
-          editable={editorState.isEditing}
+          editable={editorState.isEditing && !readOnly}
           theme="light"
           formattingToolbar={false}
           linkToolbar={false}

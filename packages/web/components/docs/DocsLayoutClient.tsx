@@ -142,7 +142,7 @@ function EditControls() {
             className="flex items-center gap-2"
           >
             <FileEdit size={16} />
-            <span className="hidden sm:inline">Move to draft</span>
+            <span className="hidden sm:inline">Unpublish</span>
           </Button>
         )}
         <Button
@@ -159,7 +159,7 @@ function EditControls() {
           ) : (
             <>
               <Save size={16} />
-              <span className="hidden sm:inline">Update</span>
+              <span className="hidden sm:inline">Update current</span>
             </>
           )}
         </Button>

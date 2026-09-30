@@ -5,6 +5,7 @@ AI-powered documentation builder with rich text editing, authentication, and Pos
 ## Features
 
 - 📝 Rich text editing with BlockNote
+- 📚 [Staged document revisions and publication history](docs/document-revisions.md)
 - 🔐 Authentication with NextAuth 5.0
 - 🗄️ PostgreSQL database with JSONB storage
 - 🎨 Clean, Notion-like UI

@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import type { RevisionEditorAdapter } from "./DocRenderer";
 import type { DocContent } from "@/lib/db/ContentManager";
 
 // Dynamic import with no SSR
@@ -26,8 +27,10 @@ interface Props {
   slug: string;
   projectSlug?: string;
   isSectionOverview?: boolean;
+  readOnly?: boolean;
+  revisionAdapter?: RevisionEditorAdapter;
 }
 
-export default function DocRendererClient({ doc, slug, projectSlug, isSectionOverview }: Props) {
-  return <DocRenderer doc={doc} slug={slug} projectSlug={projectSlug} isSectionOverview={isSectionOverview} />;
+export default function DocRendererClient(props: Props) {
+  return <DocRenderer {...props} />;
 }
