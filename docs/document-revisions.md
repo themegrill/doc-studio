@@ -60,27 +60,24 @@ Every revision response is private and `no-store`, and carries `X-Robots-Tag: no
 
 ## Use MCP with document history
 
-The current MCP server has no revision-specific tools: it cannot create, list, preview, or publish a staged revision. Its document tools keep their existing **current-document** behavior. Use the web workflow above when work must remain private until a later release.
+MCP supports the staged workflow end to end with `docs_revisions_list`, `docs_revision_get`, `docs_revision_create`, `docs_revision_update`, `docs_revision_ready`, `docs_revision_discard`, and `docs_revision_publish`. These use the same core revision service, role checks, scopes, and concurrency protection as the web app. Read tools require `docs:read`; create, update, ready, and discard require `docs:write`; publish requires both `docs:write` and `docs:publish`.
 
-MCP edits still go through the shared document service. Content-changing MCP operations record current-document history, and a concurrent MCP edit changes the document version so an older staged revision cannot silently overwrite it. The edit itself remains live immediately; history is a record of the change, not a staging area.
+To prepare a private change, first call `docs_get` with `{ "projectSlug": "your-project", "slug": "guide/install", "includeBlocks": true }` and note the document UUID. Call `docs_revision_create` with the project slug and document UUID; optionally include `productVersion` and `releaseNote`. To fork an earlier released snapshot, include its `sourceRevisionId`. Then call `docs_revision_update` with the draft's `revisionId`, the changed fields, and `expectedEditVersion` from the most recent revision result. For example:
 
-For an immediate current-document update, use this sequence in an MCP client connected to Doc Studio:
+```json
+{
+  "projectSlug": "your-project",
+  "documentId": "00000000-0000-0000-0000-000000000000",
+  "revisionId": "11111111-1111-4111-8111-111111111111",
+  "expectedEditVersion": "1",
+  "title": "Install the product",
+  "releaseNote": "Clarify the installation steps"
+}
+```
 
-1. Call `docs_get` with `{ "projectSlug": "your-project", "slug": "guide/install", "includeBlocks": true }` and note the document `id` and `updatedAt`.
-2. Call `docs_update` with the document UUID and only the changed fields. Include `expectedUpdatedAt` from the read when available, for example:
+Use `docs_revision_get` or `docs_revisions_list` to review saved work. The latest `editVersion` and `currentDocumentVersion` returned by those tools are decimal strings. To mark ready, call `docs_revision_ready` with `{ "expectedEditVersion": "2", "ready": true }`. To discard, call `docs_revision_discard` with the current edit token. To release, call `docs_revision_publish` with both the latest `expectedEditVersion` and `expectedDocumentVersion`; publishing makes the staged content live and obeys `docs:publish`. A stale token fails with a conflict, so fetch the revision again and reconcile rather than retrying with old tokens.
 
-   ```json
-   {
-     "projectSlug": "your-project",
-     "documentId": "00000000-0000-0000-0000-000000000000",
-     "title": "Install the product",
-     "expectedUpdatedAt": "2026-09-30T10:00:00.000Z"
-   }
-   ```
-
-   This updates the live document immediately and captures its prior/current state in history.
-3. For SEO changes, use `seo_get` and `seo_update`; these also update the current document immediately. Use `docs_publish` or `docs_unpublish` only when you intend to change public visibility now.
-4. Open the document’s **Revisions & history** page in Doc Studio to inspect snapshots. To prepare a private future release, create and publish a revision through the web editor instead.
+MCP can inspect and modify all structured revision fields, including title, description, BlockNote blocks, SEO, product version, and release note. The private visual preview remains available in the authenticated web app; MCP clients can inspect full revision data with `docs_revision_get` before publishing. Existing `docs_update`, `seo_update`, `docs_publish`, and `docs_unpublish` tools retain their immediate current-document behavior, so use the `docs_revision_*` tools whenever edits should remain staged.
 
 MCP supports creating an unpublished document with `docs_create` and `published: false`, then publishing that document later. That is the document’s current unpublished state; it is different from a staged revision of an existing document.
 
@@ -88,7 +85,7 @@ MCP supports creating an unpublished document with `docs_create` and `published:
 
 Project viewers can inspect revisions and previews; editors can create and edit drafts; publishing requires publish permission. API scope checks also apply to programmatic actors. Released, historical, and discarded snapshots are read-only. Trashing a document retains its revisions; permanent deletion removes them. Restoring a published document records a new live history occurrence.
 
-The public document API, navigation, search, sitemap, metadata, and structured data read only the current published document. Draft revisions are never included in those queries. Existing MCP tools edit current content and participate in history; they do not manage staged revisions.
+The public document API, navigation, search, sitemap, metadata, and structured data read only the current published document. Draft revisions are never included in those queries.
 
 ## Deployment and configuration
 

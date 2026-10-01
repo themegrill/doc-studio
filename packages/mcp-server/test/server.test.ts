@@ -28,9 +28,16 @@ test("advertises the complete narrow tool surface with JSON schemas", async () =
 		"seo_update",
 		"sitemap_preview",
 		"docs_purge",
+		"docs_revisions_list",
+		"docs_revision_get",
+		"docs_revision_create",
+		"docs_revision_update",
+		"docs_revision_ready",
+		"docs_revision_discard",
+		"docs_revision_publish",
 	])
 		assert.ok(names.includes(required), `missing ${required}`);
-	assert.equal(names.length, 27);
+	assert.equal(names.length, 34);
 	assert.ok(
 		response.tools.every((tool) => tool.inputSchema.type === "object"),
 	);

@@ -11,6 +11,7 @@ const project = z.object({
 	projectSlug: z.string().min(1).describe("Stable project slug"),
 });
 const docRef = project.extend({ documentId: z.uuid() });
+const revisionRef = docRef.extend({ revisionId: z.uuid() });
 const placement = {
 	position: z.int().nonnegative().optional(),
 	beforeDocumentId: z.uuid().optional(),
@@ -257,6 +258,119 @@ export function buildServer(service: DocumentService, actor: ActorContext) {
 			expectedUpdatedAt: z.iso.datetime().optional(),
 		}),
 		(a) => service.updateDocument(actor, a.projectSlug, a.documentId, a),
+	);
+	tool(
+		"docs_revisions_list",
+		"List document revisions",
+		"List staged revisions and released history for a document.",
+		docRef.extend({
+			limit: z.int().min(1).max(100).default(30),
+			offset: z.int().nonnegative().default(0),
+		}),
+		(a) =>
+			service.listRevisions(actor, a.projectSlug, a.documentId, {
+				limit: a.limit,
+				offset: a.offset,
+			}),
+		{ readOnlyHint: true },
+	);
+	tool(
+		"docs_revision_get",
+		"Get document revision",
+		"Read the complete staged revision, including its blocks, SEO, and version tokens.",
+		revisionRef,
+		(a) =>
+			service.getRevision(
+				actor,
+				a.projectSlug,
+				a.documentId,
+				a.revisionId,
+			),
+		{ readOnlyHint: true },
+	);
+	tool(
+		"docs_revision_create",
+		"Create document revision",
+		"Create a private draft from the current document or fork a released/history revision.",
+		docRef.extend({
+			sourceRevisionId: z.uuid().optional(),
+			productVersion: z.string().max(200).nullable().optional(),
+			releaseNote: z.string().max(10_000).nullable().optional(),
+		}),
+		(a) => service.createRevision(actor, a.projectSlug, a.documentId, a),
+	);
+	tool(
+		"docs_revision_update",
+		"Update document revision",
+		"Patch a private draft. Pass expectedEditVersion from the latest revision response; omitted fields are preserved.",
+		revisionRef.extend({
+			expectedEditVersion: z.string().regex(/^[1-9]\d{0,18}$/),
+			title: z.string().trim().min(1).max(500).optional(),
+			description: z.string().max(10_000).nullable().optional(),
+			blocks: z.array(block).max(500).optional(),
+			seo: seo.optional(),
+			productVersion: z.string().max(200).nullable().optional(),
+			releaseNote: z.string().max(10_000).nullable().optional(),
+		}),
+		(a) =>
+			service.patchRevision(
+				actor,
+				a.projectSlug,
+				a.documentId,
+				a.revisionId,
+				a,
+			),
+	);
+	tool(
+		"docs_revision_ready",
+		"Set document revision readiness",
+		"Mark a draft ready or return it to draft, using the latest expectedEditVersion.",
+		revisionRef.extend({
+			expectedEditVersion: z.string().regex(/^[1-9]\d{0,18}$/),
+			ready: z.boolean(),
+		}),
+		(a) =>
+			service.setRevisionReady(
+				actor,
+				a.projectSlug,
+				a.documentId,
+				a.revisionId,
+				a,
+			),
+	);
+	tool(
+		"docs_revision_discard",
+		"Discard document revision",
+		"Discard a staged revision without changing the live document.",
+		revisionRef.extend({
+			expectedEditVersion: z.string().regex(/^[1-9]\d{0,18}$/),
+		}),
+		(a) =>
+			service.discardRevision(
+				actor,
+				a.projectSlug,
+				a.documentId,
+				a.revisionId,
+				a,
+			),
+		{ destructiveHint: true },
+	);
+	tool(
+		"docs_revision_publish",
+		"Publish document revision",
+		"Publish a staged revision as the live document. Requires the latest edit and current-document version tokens plus docs:publish scope.",
+		revisionRef.extend({
+			expectedEditVersion: z.string().regex(/^[1-9]\d{0,18}$/),
+			expectedDocumentVersion: z.string().regex(/^[1-9]\d{0,18}$/),
+		}),
+		(a) =>
+			service.publishRevision(
+				actor,
+				a.projectSlug,
+				a.documentId,
+				a.revisionId,
+				a,
+			),
 	);
 	tool(
 		"docs_rename",
