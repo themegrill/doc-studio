@@ -16,11 +16,79 @@ Multiple drafts can exist. **Revisions & history** shows current content, staged
 
 If another editor saves the same revision, or current content changes after the revision was created, the conflicting operation fails without overwriting content. Keep or copy unsaved work, create a fresh revision from current content, and reapply changes. There is no automatic merge or overwrite bypass. A successful publish retried after a newer release does not restore the older release.
 
+## Use revisions in the web app
+
+Sign in to Doc Studio, open the project, and open the document. Choose **Create revision** to start from the saved current content. If you have unsaved current-document edits, save or cancel them first; those edits are not copied into the revision.
+
+On the revision page, edit the title, description, BlockNote content, SEO fields, product version, and release note. Choose **Save revision** to store a private copy without changing what readers see. **Preview** saves pending edits, then opens the revision in a private, noindex view. Choose **Mark ready** when it is ready for release; any later edit moves it back to draft. **Publish revision** asks for confirmation, saves pending edits, and replaces the current content at the same URL. **Discard** makes a draft read-only without changing the current document.
+
+Use **Revisions & history** on the current document to see staged work and past snapshots. From a released or historical snapshot, choose **Create revision from this version** to start a new draft based on that content. Restoring an old version is done by publishing this new draft; history entries themselves cannot be edited.
+
+## Use the revision API manually
+
+The API uses the same signed-in Doc Studio session and project permissions as the web editor. It is not authenticated by the MCP bearer token. Substitute your project slug, document UUID, and revision UUID in the paths below. For brevity, `{R}` means `/api/projects/{projectSlug}/documents/{documentId}/revisions`:
+
+| Operation | Request |
+| --- | --- |
+| Operation | Request |
+| --- | --- |
+| List revisions and current state | `GET {R}` |
+| Create a draft from current content | `POST {R}` with `{}` |
+| Fork a historical snapshot | `POST {R}` with `{"sourceRevisionId":"released-revision-uuid"}` |
+| Read a revision | `GET {R}/{revisionId}` |
+| Open the private browser preview | `/projects/{projectSlug}/revisions/{documentId}/{revisionId}/preview` |
+| Save revision fields | `PATCH {R}/{revisionId}` |
+| Mark ready or return to draft | `POST {R}/{revisionId}/ready` |
+| Publish | `POST {R}/{revisionId}/publish` |
+| Discard | `POST {R}/{revisionId}/discard` |
+
+Creation accepts optional `productVersion` and `releaseNote`. A save must include the current `expectedEditVersion`; include only fields being changed:
+
+```json
+{
+  "expectedEditVersion": "1",
+  "title": "Install the product",
+  "description": "Updated installation steps",
+  "productVersion": "3.0",
+  "releaseNote": "Documents the new setup flow"
+}
+```
+
+To mark a revision ready, send `{"expectedEditVersion":"2","ready":true}`. To publish, send both tokens returned by the latest revision response: `{"expectedEditVersion":"3","expectedDocumentVersion":"7"}`. To discard, send `{"expectedEditVersion":"3"}`. Version values are decimal strings; use the latest returned values rather than incrementing them yourself. A stale token returns a conflict (`409`); fetch the latest revision state before retrying. If the current document changed after the draft was created, publishing is blocked until you create a fresh revision and reapply the changes.
+
+Every revision response is private and `no-store`, and carries `X-Robots-Tag: noindex, nofollow`. Revision pages and previews require project membership. Viewers can read; editors can create and edit; publishing also requires publish permission.
+
+## Use MCP with document history
+
+The current MCP server has no revision-specific tools: it cannot create, list, preview, or publish a staged revision. Its document tools keep their existing **current-document** behavior. Use the web workflow above when work must remain private until a later release.
+
+MCP edits still go through the shared document service. Content-changing MCP operations record current-document history, and a concurrent MCP edit changes the document version so an older staged revision cannot silently overwrite it. The edit itself remains live immediately; history is a record of the change, not a staging area.
+
+For an immediate current-document update, use this sequence in an MCP client connected to Doc Studio:
+
+1. Call `docs_get` with `{ "projectSlug": "your-project", "slug": "guide/install", "includeBlocks": true }` and note the document `id` and `updatedAt`.
+2. Call `docs_update` with the document UUID and only the changed fields. Include `expectedUpdatedAt` from the read when available, for example:
+
+   ```json
+   {
+     "projectSlug": "your-project",
+     "documentId": "00000000-0000-0000-0000-000000000000",
+     "title": "Install the product",
+     "expectedUpdatedAt": "2026-09-30T10:00:00.000Z"
+   }
+   ```
+
+   This updates the live document immediately and captures its prior/current state in history.
+3. For SEO changes, use `seo_get` and `seo_update`; these also update the current document immediately. Use `docs_publish` or `docs_unpublish` only when you intend to change public visibility now.
+4. Open the document’s **Revisions & history** page in Doc Studio to inspect snapshots. To prepare a private future release, create and publish a revision through the web editor instead.
+
+MCP supports creating an unpublished document with `docs_create` and `published: false`, then publishing that document later. That is the document’s current unpublished state; it is different from a staged revision of an existing document.
+
 ## Access and visibility
 
-Project viewers can inspect revisions and previews; editors can create, edit, and publish them. API scope checks also apply to programmatic actors. Released, historical, and discarded snapshots are read-only. Trashing a document retains its revisions; permanent deletion removes them. Restoring a published document records a new live history occurrence.
+Project viewers can inspect revisions and previews; editors can create and edit drafts; publishing requires publish permission. API scope checks also apply to programmatic actors. Released, historical, and discarded snapshots are read-only. Trashing a document retains its revisions; permanent deletion removes them. Restoring a published document records a new live history occurrence.
 
-The public document API, navigation, search, sitemap, metadata, and structured data read only the current published document. Draft revisions are never included in those queries. Existing MCP tools continue editing current content and participate in history; dedicated MCP revision tools are not included.
+The public document API, navigation, search, sitemap, metadata, and structured data read only the current published document. Draft revisions are never included in those queries. Existing MCP tools edit current content and participate in history; they do not manage staged revisions.
 
 ## Deployment and configuration
 

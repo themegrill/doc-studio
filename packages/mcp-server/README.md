@@ -179,6 +179,10 @@ Build with `pnpm --filter @doc-studio/mcp-server build`, then configure an MCP c
 
 The configured user must exist and have the required project role. Viewer is required for reads, editor for normal writes, and admin for permanent purge. Slugs locate projects; document UUIDs are required for mutation.
 
+## Document revisions
+
+MCP document and SEO edits update the current document immediately. Content-changing operations participate in document history, but the current MCP tool set has no staged-revision create, list, preview, or publish tools. To prepare content privately and release it later, use the [Doc Studio revisions guide](../../docs/document-revisions.md#use-revisions-in-the-web-app). For the available MCP tools and their existing current-document behavior, see the [MCP usage guide](../../docs/document-revisions.md#use-mcp-with-document-history).
+
 Scope checks fail closed: a defined empty scope list grants nothing. Undefined scopes are trusted only for the in-process `web` transport; stdio and future HTTP actors must always provide an explicit list. Creating an already-published document requires both `docs:write` and `docs:publish`. Reading trash requires `docs:read`, `docs:delete`, and editor project access.
 
 Document/section slug segments are canonical lowercase kebab-case. MCP BlockNote payloads are strict objects bounded to 500 top-level blocks, 2,000 total blocks, 10 child levels, 20 JSON levels, and 1 MB serialized data.
