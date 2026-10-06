@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db/postgres";
 import { auth } from "@/lib/auth";
 import type { JSONValue } from "postgres";
+import type { TableContent } from "@doc-studio/core";
 
 export interface SeoData {
   metaTitle?: string;
@@ -50,7 +51,7 @@ export interface Block {
   id: string;
   type: string;
   props?: any;
-  content?: any[];
+  content?: any[] | TableContent;
   children?: Block[];
 }
 

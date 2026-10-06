@@ -4,6 +4,7 @@ import {
 	DocumentService,
 	DomainError,
 	type ActorContext,
+	type Block,
 	type SeoData,
 } from "@doc-studio/core";
 
@@ -55,21 +56,37 @@ const inlineContent = z.union([
 	z.string().max(100_000),
 	textContent,
 	linkContent,
+	z.object({
+		type: z.literal("proBadge"),
+		props: props.optional(),
+	}).strict(),
 ]);
-type BlockInput = {
-	id: string;
-	type: string;
-	props?: Record<string, unknown>;
-	content?: unknown[];
-	children?: BlockInput[];
-};
-const block: z.ZodType<BlockInput> = z.lazy(() =>
+const inlineArray = z.array(inlineContent).max(5_000);
+// BlockNote supports legacy inline arrays and styled/merged tableCell objects.
+// JSON persistence converts undefined column widths to null.
+const tableContent = z.object({
+	type: z.literal("tableContent"),
+	columnWidths: z.array(z.number().finite().nonnegative().nullable()).max(500).optional(),
+	headerRows: z.int().nonnegative().optional(),
+	headerCols: z.int().nonnegative().optional(),
+	rows: z.array(z.object({
+		cells: z.array(z.union([
+			inlineArray,
+			z.object({
+				type: z.literal("tableCell"),
+				props: props.optional(),
+				content: inlineArray,
+			}).strict(),
+		])).max(500),
+	}).strict()).max(500),
+}).strict();
+const block: z.ZodType<Block> = z.lazy(() =>
 	z
 		.object({
 			id: z.string().min(1).max(128),
 			type: z.string().min(1).max(64),
 			props: props.optional(),
-			content: z.array(inlineContent).max(5_000).optional(),
+			content: z.union([inlineArray, tableContent]).optional(),
 			children: z.array(block).max(500).optional(),
 		})
 		.strict(),

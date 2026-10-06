@@ -38,11 +38,25 @@ export interface SeoData {
 	focusKeyword?: string;
 }
 
+export interface TableContent {
+	type: "tableContent";
+	columnWidths?: (number | null)[];
+	headerRows?: number;
+	headerCols?: number;
+	rows: {
+		cells: (unknown[] | {
+			type: "tableCell";
+			props?: unknown;
+			content: unknown[];
+		})[];
+	}[];
+}
+
 export interface Block {
 	id: string;
 	type: string;
 	props?: unknown;
-	content?: unknown[];
+	content?: unknown[] | TableContent;
 	children?: Block[];
 }
 export interface NavRoute {
