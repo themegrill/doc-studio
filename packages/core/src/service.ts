@@ -1329,7 +1329,7 @@ export class DocumentService {
 			await captureCurrent(db, before, actor.userId);
 			await closeLiveIntervals(db, documentId);
 			const [doc] =
-				await db`UPDATE documents SET deleted_at=NOW(),deleted_by=${actor.userId},updated_by=${actor.userId} WHERE id=${documentId} RETURNING id,slug,deleted_at`;
+				await db`UPDATE documents SET published=false,deleted_at=NOW(),deleted_by=${actor.userId},updated_by=${actor.userId} WHERE id=${documentId} RETURNING id,slug,deleted_at`;
 			return doc;
 		});
 	}
@@ -1387,7 +1387,7 @@ export class DocumentService {
 				await db`UPDATE navigation SET structure=${db.json(locked.nav as never)}, updated_by=${actor.userId} WHERE id=${locked.id}`;
 			}
 			const [updated] =
-				await db`UPDATE documents SET deleted_at=NULL, deleted_by=NULL, updated_by=${actor.userId}, updated_at=NOW() WHERE id=${documentId} RETURNING *`;
+				await db`UPDATE documents SET published=false, deleted_at=NULL, deleted_by=NULL, updated_by=${actor.userId}, updated_at=NOW() WHERE id=${documentId} RETURNING *`;
 			await recordCurrentChange(db, doc, updated, actor.userId);
 			return {
 				id: updated.id,

@@ -50,6 +50,13 @@ const steps = [
       "utf8"
     ),
   },
+  {
+    name: "unpublish existing trash (db/15)",
+    sql: readFileSync(
+      new URL("./15-unpublish-trash.sql", import.meta.url),
+      "utf8"
+    ),
+  },
 ];
 
 // Silence "already exists, skipping" NOTICEs — expected on repeat runs.

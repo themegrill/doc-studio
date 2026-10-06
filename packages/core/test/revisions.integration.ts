@@ -614,16 +614,27 @@ test("navigation failure rolls back document promotion and history together", as
 	assert.equal(historyAfter.n, historyBefore.n);
 });
 
-test("restoring a published trashed document records a new live interval", async () => {
+test("trashing unpublishes a document; restoring keeps it out of the sitemap until republished", async () => {
 	const f = await fixture();
 	const revision = await draft(f);
 	const release = await publish(f, revision);
+	assert.ok((await service.sitemapPreview(f.actor, f.projectSlug)).some((row) => row.documentId === f.documentId));
 	await service.trashDocument(f.actor, f.projectSlug, f.documentId);
+	const trashed = await current(f);
+	assert.equal(trashed.published, false);
+	assert.ok(trashed.deleted_at);
+	assert.equal((await service.listDocuments(f.actor, f.projectSlug, { includeTrash: true }))[0].published, false);
+	await rejectsCode(service.getDocument(f.actor, f.projectSlug, { documentId: f.documentId }), "NOT_FOUND");
+	assert.deepEqual(await service.sitemapPreview(f.actor, f.projectSlug), []);
 	const [closed] =
 		await sql`SELECT * FROM document_revisions WHERE id=${revision.id}`;
 	assert.ok(closed.superseded_at);
 	await service.restoreDocument(f.actor, f.projectSlug, f.documentId);
 	const doc = await current(f);
+	assert.equal(doc.published, false);
+	assert.equal(doc.deleted_at, null);
+	assert.deepEqual(doc.blocks, f.blocks);
+	assert.deepEqual(await service.sitemapPreview(f.actor, f.projectSlug), []);
 	const history = await service.listRevisions(
 		f.actor,
 		f.projectSlug,
@@ -633,9 +644,9 @@ test("restoring a published trashed document records a new live interval", async
 	const restored = history.revisions.find(
 		(row) => row.appliedDocumentVersion === String(doc.content_version),
 	)!;
-	assert.equal(restored.status, "released");
-	assert.equal(restored.wasPublished, true);
-	assert.ok(restored.releasedAt);
+	assert.equal(restored.status, "historical");
+	assert.equal(restored.wasPublished, false);
+	assert.equal(restored.releasedAt, null);
 	assert.equal(restored.supersededAt, null);
 	assert.notEqual(restored.id, release.revision.id);
 	const original = await service.getRevision(
@@ -653,6 +664,31 @@ test("restoring a published trashed document records a new live interval", async
 	assert.equal(
 		history.revisions.filter((row) => row.wasPublished && !row.supersededAt)
 			.length,
-		1,
+		0,
 	);
+	await publish(f, await draft(f));
+	assert.equal((await current(f)).published, true);
+	assert.ok((await service.sitemapPreview(f.actor, f.projectSlug)).some((row) => row.documentId === f.documentId));
+});
+
+test("restoring legacy published trash still produces a draft", async () => {
+	const f = await fixture();
+	await sql`UPDATE documents SET deleted_at=NOW() WHERE id=${f.documentId}`;
+	await service.restoreDocument(f.actor, f.projectSlug, f.documentId);
+	assert.equal((await current(f)).published, false);
+	assert.deepEqual(await service.sitemapPreview(f.actor, f.projectSlug), []);
+});
+
+test("trash backfill unpublishes legacy trash without changing active docs and is repeatable", async () => {
+	const trashed = await fixture();
+	const active = await fixture();
+	await sql`UPDATE documents SET deleted_at=NOW() WHERE id=${trashed.documentId}`;
+	const migration = await readFile(new URL("../../web/db/15-unpublish-trash.sql", import.meta.url), "utf8");
+	await sql.unsafe(migration);
+	const repaired = await current(trashed);
+	assert.equal(repaired.published, false);
+	assert.ok(repaired.deleted_at);
+	assert.equal((await current(active)).published, true);
+	await sql.unsafe(migration);
+	assert.deepEqual(await current(trashed), repaired);
 });

@@ -329,8 +329,8 @@ export class ContentManager {
 
   /**
    * Soft delete: move a document to the trash. The row and its navigation
-   * entry are kept so the document can be restored. Visibility is driven by
-   * the `deleted_at IS NULL` filter applied across read queries.
+   * entry are kept so the document can be restored as a draft. Public reads
+   * also require `deleted_at IS NULL` as a safeguard for legacy trash entries.
    */
   async deleteDoc(projectId: string, slug: string): Promise<boolean> {
     try {
@@ -344,7 +344,8 @@ export class ContentManager {
 
       await this.sql`
         UPDATE documents
-        SET deleted_at = NOW(), deleted_by = ${session.user.id}
+        SET published = false, deleted_at = NOW(), deleted_by = ${session.user.id},
+            updated_by = ${session.user.id}
         WHERE project_id = ${projectId} AND slug = ${slug}
           AND deleted_at IS NULL
       `;
@@ -356,7 +357,7 @@ export class ContentManager {
     }
   }
 
-  /** Restore a trashed document (its navigation entry was preserved). */
+  /** Restore a trashed document as a draft (its navigation entry was preserved). */
   async restoreDoc(projectId: string, slug: string): Promise<boolean> {
     try {
       const session = await auth();
@@ -368,7 +369,7 @@ export class ContentManager {
 
       await this.sql`
         UPDATE documents
-        SET deleted_at = NULL, deleted_by = NULL, updated_by = ${session.user.id}
+        SET published = false, deleted_at = NULL, deleted_by = NULL, updated_by = ${session.user.id}
         WHERE project_id = ${projectId} AND slug = ${slug}
           AND deleted_at IS NOT NULL
       `;
